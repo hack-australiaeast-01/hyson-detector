@@ -305,6 +305,9 @@ streamlit run app.py
 
 ## 7. Technical coherence (15 %): architecture
 
+Full diagrams: **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** (global architecture, AI workflow, Le Procès, page workflow, demo path). PNGs for slides:
+[global](docs/img/1_global_architecture.png) · [AI copilot workflow](docs/img/2_ai_copilot_workflow.png) · [Le Procès](docs/img/3_le_proces_sequence.png) · [pages](docs/img/4_page_workflow.png) · [demo path](docs/img/5_demo_path.png)
+
 ```
 Azure SQL (source) ──Copy job──► Fabric Lakehouse lh_fraud (bronze, Delta)
         │  NB 01 (PySpark): silver_transactions → gold_features (73 past-only features)
