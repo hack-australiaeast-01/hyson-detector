@@ -3,17 +3,21 @@
 Run:  streamlit run app.py
 """
 import os
+import time
 from pathlib import Path
+from types import SimpleNamespace
 
 import pandas as pd
 import streamlit as st
 
 import copilot
 import data_access as da
+import features as fx
+import studio
 import tools
 import ui
 
-st.set_page_config(page_title="Copilote Fraude · Banque", page_icon="🛡️", layout="wide")
+st.set_page_config(page_title="Hyson Detector · Fraude", page_icon="🛡️", layout="wide")
 ui.inject()
 
 ICON_DIR = Path(__file__).parent / "static" / "icons"
@@ -25,11 +29,23 @@ def L(fr, en):
     return en if st.session_state.get("lang") == "en" else fr
 
 
-# internal page ids (stable across languages) -> labels
-PAGES = ["queue", "tx", "cust", "perf", "journal", "pbi"]
-PAGE_LABEL = {"queue": ("File d'alertes", "Alert queue"), "tx": ("Fiche transaction & copilote", "Transaction & copilot"),
-              "cust": ("Vue client 360", "Customer 360"), "perf": ("Performance du modèle", "Model performance"),
+# internal page ids (stable across languages) -> labels, grouped like a banking platform menu
+PAGES = ["guide", "queue", "tx", "cust", "proces", "replay", "contre", "galaxy", "impact", "perf", "pbi", "journal"]
+PAGE_LABEL = {"guide": ("Démarrer ici", "Start here"),
+              "queue": ("File d'alertes", "Alert queue"), "tx": ("Fiche transaction & copilote", "Transaction & copilot"),
+              "cust": ("Vue client 360", "Customer 360"),
+              "proces": ("Le Procès", "The Trial"), "replay": ("Reconstitution", "Crime-scene replay"),
+              "contre": ("Contre-enquête", "Counter-inquiry"), "galaxy": ("Constellation", "Constellation"),
+              "impact": ("Impact & processus", "Impact & process"), "perf": ("Performance du modèle", "Model performance"),
               "journal": ("Journal & traçabilité", "Audit log"), "pbi": ("Tableau de bord Power BI", "Power BI dashboard")}
+PAGE_ICON = {"guide": ":material/flag:", "queue": ":material/notifications_active:", "tx": ":material/manage_search:",
+             "cust": ":material/person:", "proces": ":material/gavel:", "replay": ":material/movie:",
+             "contre": ":material/alt_route:", "galaxy": ":material/hub:", "impact": ":material/insights:",
+             "perf": ":material/monitoring:", "pbi": ":material/dashboard:", "journal": ":material/fact_check:"}
+NAV_GROUPS = [(("Bienvenue", "Welcome"), ["guide"]),
+              (("Analyste", "Analyst"), ["queue", "tx", "cust"]),
+              (("Enquête IA", "AI investigation"), ["proces", "replay", "contre", "galaxy"]),
+              (("Pilotage", "Steering"), ["impact", "perf", "pbi", "journal"])]
 DEMO_LABEL = {"obvious_fraud": ("Fraude évidente", "Obvious fraud"), "subtle_fraud": ("Fraude subtile", "Subtle fraud"),
               "avoided_false_positive": ("Faux positif évité", "Avoided false positive")}
 SUGGESTIONS = copilot.SUGGESTIONS          # same strings as warmup.py -> pre-computed answers are cache hits
@@ -40,19 +56,20 @@ def tr(pair):
     return L(*pair)
 
 
-@st.cache_resource(show_spinner="Connexion à Microsoft Fabric (lh_fraud)…")
+@st.cache_resource(show_spinner=False)
 def connect():
     src = da.source()
     return src.mode
 
 
-@st.cache_data(show_spinner="Chargement des tables Gold…")
+@st.cache_data(show_spinner=False)
 def load(_mode):
     return da.queue(), da.explanations()
 
 
 def refresh():
     da.reset()
+    fx.reset()
     connect.clear()
     load.clear()
 
@@ -60,7 +77,17 @@ def refresh():
 def open_tx(tid, page="tx"):
     st.session_state.tx = tid
     st.session_state.tx_select = tid
+    for k in ("proces_tx", "replay_tx", "contre_tx"):
+        st.session_state[k] = tid
     st.session_state.goto = page
+
+
+def go(page):
+    st.session_state.goto = page
+
+
+def mark(step):
+    st.session_state.setdefault("done", set()).add(step)
 
 
 def money(x):
@@ -71,14 +98,25 @@ def nb(x):
     return f"{x:,}".replace(",", " ")
 
 
+_splash = st.empty()
+if "tx" not in st.session_state:                       # first load: branded, reassuring loading screen
+    _splash.markdown(
+        f'<div class="welcome" style="margin-top:12vh;text-align:center"><div style="display:flex;justify-content:center">{ui.LOGO}</div>'
+        f'<h1>Hyson Detector</h1><p style="margin:0 auto">{L("Connexion sécurisée à Microsoft Fabric et chargement des alertes du jour…",
+                                                           "Secure connection to Microsoft Fabric and loading today’s alerts…")}</p>'
+        f'<p style="margin:.8rem auto 0;color:#9FE3D7;font-size:.85rem">{L("Détecter · Expliquer · Décider", "Detect · Explain · Decide")}</p></div>',
+        unsafe_allow_html=True)
 queue, expl = load(connect())
+_splash.empty()
 demos = queue[queue.demo_case.notna()]
+DEMO_TX = dict(zip(demos.demo_case, demos.transaction_id))
 st.session_state.setdefault("tx", demos.transaction_id.iloc[0] if len(demos) else queue.transaction_id.iloc[0])
 st.session_state.setdefault("chat", {})
 if st.session_state.get("page") not in PAGES:
-    st.session_state.page = "queue"
+    st.session_state.page = "guide"
 if "goto" in st.session_state:
     st.session_state.page = st.session_state.pop("goto")
+page = st.session_state.page
 
 # ---------------------------------------------------------------- sidebar
 src = da.source()
@@ -95,11 +133,14 @@ def status_chips():
 
 
 with st.sidebar:
-    ui.brand(L("Banque de détail · Cellule anti-fraude", "Retail bank · Fraud unit"))
+    ui.brand(L("Détecter · Expliquer · Décider", "Detect · Explain · Decide"))
     st.segmented_control("Langue / Language", ["fr", "en"], key="lang", format_func=lambda x: {"fr": "Français", "en": "English"}[x],
                          label_visibility="collapsed")
-    ui.side_label(L("Navigation", "Navigation"))
-    page = st.radio("Navigation", PAGES, key="page", format_func=lambda p: tr(PAGE_LABEL[p]), label_visibility="collapsed")
+    for (fr, en), ids in NAV_GROUPS:
+        ui.side_label(L(fr, en))
+        for pid in ids:
+            st.button(tr(PAGE_LABEL[pid]), key=f"nav_{pid}", on_click=go, args=(pid,), icon=PAGE_ICON[pid], width="stretch",
+                      type="primary" if pid == page else "secondary")
     ui.side_label(L("Cas de démo", "Demo cases"))
     for _, d in demos.iterrows():
         st.button(f"{d.risk_icon}  {tr(DEMO_LABEL.get(d.demo_case, (d.demo_case, d.demo_case)))} · {d.transaction_id}",
@@ -199,6 +240,10 @@ def page_transaction():
             status_chips())
     tid = st.selectbox("Transaction", ids, key="tx_select", format_func=lambda t: f"{risk_of[t]} {t}")
     st.session_state.tx = tid
+    opened = st.session_state.setdefault("opened", {})
+    opened.setdefault(tid, time.time())             # stopwatch: alert opened -> decision saved
+    if tid == DEMO_TX.get("obvious_fraud"):
+        mark("open")
     t = tools.get_transaction(tid)
     r = queue[queue.transaction_id == tid].iloc[0]
     tx, s = t["transaction"], t["score"]
@@ -220,10 +265,12 @@ def page_transaction():
         a, b = st.columns(2)
         with a:
             ui.section(L("Facteurs de risque", "Risk factors"))
-            ui.factors(t["facteurs_modele_pour_fraude"] + t["regles_metier_declenchees"][:2], True)
+            ui.factors(t["facteurs_modele_pour_fraude"] + t["regles_metier_declenchees"][:2], True, L("habituel", "usual"),
+                       L("Aucun élément", "None"))
         with b:
             ui.section(L("Éléments rassurants", "Reassuring elements"))
-            ui.factors(t["facteurs_modele_rassurants"] + t["regles_rassurantes"], False)
+            ui.factors(t["facteurs_modele_rassurants"] + t["regles_rassurantes"], False, L("habituel", "usual"),
+                       L("Aucun élément", "None"))
         if r.period == "valid" and pd.notna(r.is_fraud):
             with st.expander(L("Vérité terrain (validation uniquement — jamais visible sur le flux du jour)",
                                "Ground truth (validation only — never shown on the live flow)")):
@@ -251,15 +298,29 @@ def page_transaction():
             conf = d2.select_slider(L("Confiance", "Confidence"), ["faible", "moyenne", "élevée"], value=rs.get("confiance", "moyenne"),
                                     format_func=lambda x: L(x, {"faible": "low", "moyenne": "medium", "élevée": "high"}[x]))
             comment = st.text_input(L("Commentaire", "Comment"))
+            elapsed = time.time() - opened.get(tid, time.time())
+            st.caption(L(f"⏱️ Dossier ouvert depuis {elapsed:.0f} s — objectif : décision en moins de 30 s",
+                         f"⏱️ Case open for {elapsed:.0f} s — target: decision in under 30 s"))
             if st.form_submit_button(L("Enregistrer la décision", "Save decision"), type="primary"):
-                res = tools.record_decision(tid, decision, conf, comment, source="interface")
-                (st.success(L(f"Décision {res['decision']} enregistrée", f"Decision {res['decision']} saved"))
-                 if res.get("enregistre") else st.error(res))
+                dur = time.time() - opened.get(tid, time.time())
+                res = tools.record_decision(tid, decision, conf, comment, source="interface", duration_s=dur)
+                if res.get("enregistre"):
+                    st.success(L(f"Décision {res['decision']} enregistrée en {dur:.0f} s", f"Decision {res['decision']} saved in {dur:.0f} s"))
+                    mark("decide")
+                else:
+                    st.error(res)
         past = tools.decisions()
         past = past[past.transaction_id == tid]
         if len(past):
             st.caption(L("Décisions précédentes : ", "Previous decisions: ") +
                        " · ".join(f"{x.decision} ({x.confidence}, {x.decided_at})" for x in past.itertuples()))
+        q1, q2, q3 = st.columns(3)
+        q1.button(L("⚖️ Le Procès", "⚖️ The Trial"), on_click=open_tx, args=(tid, "proces"), width="stretch")
+        q2.button(L("🎬 Reconstitution", "🎬 Replay"), on_click=open_tx, args=(tid, "replay"), width="stretch")
+        q3.download_button(L("🧾 Dossier (HTML)", "🧾 Case file (HTML)"), studio.case_file_html(ctx, tid).encode("utf-8"),
+                           f"dossier_{tid}.html", "text/html", width="stretch",
+                           help=L("Dossier d'investigation imprimable en PDF : faits, score, recommandation, Procès, échanges, décisions.",
+                                  "Investigation file, printable to PDF: facts, score, recommendation, Trial, exchanges, decisions."))
 
     with right:
         ui.section(L("Copilote · réponses ancrées dans les données", "Copilot · answers grounded in the data"))
@@ -303,6 +364,7 @@ def page_transaction():
                         f"tokens : {tok['total']}{cached_tok}{' · cache' if out.get('cached') else ''} · {out.get('latency_s', 0)} s")
                 st.caption(meta)
             history += [{"role": "user", "content": question}, {"role": "assistant", "content": out["answer"], "meta": meta}]
+            mark("ask")
         if st.session_state.get("lang") == "en" and not copilot.configured():
             st.caption("Offline mode answers in French (rule templates); the LLM answers in English.")
         st.button(tr(PAGE_LABEL["cust"]), on_click=open_tx, args=(tid, "cust"), icon=":material/person:")
@@ -503,9 +565,39 @@ def page_powerbi():
                  "(notebooks/03e_powerbi_dashboard.ipynb) · organisation sign-in required."))
 
 
-{"queue": page_queue, "tx": page_transaction, "cust": page_customer, "perf": page_performance,
+@st.dialog("Bienvenue sur Hyson Detector · Welcome", width="large")
+def welcome():
+    st.markdown(L(
+        "### Le copilote de l'analyste fraude\n"
+        "Hyson Detector **détecte** les transactions suspectes (modèle entraîné dans Microsoft Fabric), **explique** chaque alerte "
+        "avec les données de la banque (Azure OpenAI) et vous aide à **décider** : bloquer, escalader ou valider.\n\n"
+        "**Première visite ?** La visite guidée vous montre tout en 3 minutes, avec de vrais cas : une prise de contrôle de compte, "
+        "une fraude discrète et un client honnête que l'ancien moteur aurait bloqué.",
+        "### The fraud analyst's copilot\n"
+        "Hyson Detector **detects** suspicious transactions (model trained in Microsoft Fabric), **explains** every alert with the "
+        "bank's data (Azure OpenAI) and helps you **decide**: block, escalate or validate.\n\n"
+        "**First visit?** The guided tour shows you everything in 3 minutes with real cases: an account takeover, a discreet fraud "
+        "and an honest customer the old engine would have blocked."))
+    a, b = st.columns(2)
+    if a.button(L("▶ Lancer la visite guidée (3 min)", "▶ Start the guided tour (3 min)"), type="primary", width="stretch"):
+        st.session_state.tour = True
+        st.session_state.goto = "guide"
+        st.rerun()
+    if b.button(L("Explorer librement", "Explore freely"), width="stretch"):
+        st.rerun()
+
+
+ctx = SimpleNamespace(L=L, lang=st.session_state.get("lang", "fr"), queue=queue, open_tx=open_tx, go=go, chips=status_chips,
+                      mark=mark, demos=DEMO_TX)
+if not st.session_state.get("welcomed"):
+    st.session_state.welcomed = True
+    welcome()
+studio.tour_hint(ctx, page)
+{"guide": lambda: studio.page_guide(ctx), "queue": page_queue, "tx": page_transaction, "cust": page_customer,
+ "proces": lambda: studio.page_proces(ctx), "replay": lambda: studio.page_replay(ctx), "contre": lambda: studio.page_contre(ctx),
+ "galaxy": lambda: studio.page_galaxy(ctx), "impact": lambda: studio.page_impact(ctx), "perf": page_performance,
  "journal": page_journal, "pbi": page_powerbi}[page]()
-ui.footer(L("Données 100 % synthétiques · Microsoft Fabric (Lakehouse lh_fraud) · Azure OpenAI · "
+ui.footer(L("Hyson Detector · données 100 % synthétiques · Microsoft Fabric (Lakehouse lh_fraud) · Azure OpenAI · "
             "le modèle score, l'IA explique, l'analyste décide",
-            "100% synthetic data · Microsoft Fabric (Lakehouse lh_fraud) · Azure OpenAI · "
+            "Hyson Detector · 100% synthetic data · Microsoft Fabric (Lakehouse lh_fraud) · Azure OpenAI · "
             "the model scores, AI explains, the analyst decides"))

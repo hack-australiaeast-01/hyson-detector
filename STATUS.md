@@ -211,3 +211,33 @@ Demo path: sidebar "Fraude évidente" → ask "Pourquoi … suspecte ?" → BLOQ
 | Pre-computed answers | 20 (FR) | **40 (FR + EN)** — `python warmup.py fr en` |
 
 Verified: 12 page renders (6 pages × FR/EN) without exception on live Fabric; FR chat (suggestion from cache 0.2 s, new question 8.5 s / 3,028 tokens with 2,432 cached); off-topic question refused in one sentence; unknown ID handled. Note: Streamlit `AppTest` cannot replay the EN decision radio (translated `format_func` labels) — harness limitation, not an app error.
+
+## 10. Hyson Detector — showcase features for bank judges (2026-11-06)
+
+Goal: go beyond "a chat on top of a model" and speak the bank's language (KPIs, process, governance), with a friendly first-time experience.
+
+### 10.1 What was added
+| Feature | File | What it shows | Honesty notes |
+|---|---|---|---|
+| Brand + light theme | `ui.py`, `.streamlit/config.toml`, `app.py` | "Hyson Detector" logo, bank-platform palette, grouped sidebar (Bienvenue/Analyste/Enquête IA/Pilotage), branded splash while Fabric loads | — |
+| Démarrer ici + guided tour | `studio.py` (TOUR, page_guide), `app.py` welcome dialog | 4 headline KPIs, 8-step tour, hint banner on every page | — |
+| Le Procès | `courtroom.py`, `studio.page_proces` | prosecutor + defence (parallel) then judge, on the same prefetched Fabric facts; analyst accepts/overrides → decision log (`source=proces`) | judge receives the deterministic rule recommendation; ~6k tokens, cached for demo cases |
+| Reconstitution | `features.replay_steps`, `studio.page_replay` | hours before the alert, step by step, risky signals in red, map, AI narration | — |
+| Contre-enquête | `features.counterfactual`, `studio.page_contre` | neutralise top SHAP factors (log-odds) one by one → robust / sensitive | only the top-5 stored SHAP factors are available |
+| Constellation | `features.constellation`, `studio.page_galaxy` | 29 points of compromise (lift ×2.5–×4.1, ≥ 8 victims, only frauds reported **before** the period), 294 exposed alerts, 13 networks | exposure **not predictive** in validation (41 % vs 40 %) → investigation lead, not in the score |
+| Impact & processus | `features.impact/drift`, `studio.page_impact` | fraud TND caught 78,059 (68 %) vs 25,462 (22 %); legitimate TND interrupted 97,857 vs 8,081,081; false alerts 1,061 vs 3,221 (−67 %); frauds 718 vs 117 (×6.1); analyst hours; process flow; reco mix; median decision time; AI cost/alert; PSI 0.0027 | workload assumptions editable on screen |
+| Stopwatch + case file | `app.py`, `tools.record_decision(duration_s)`, `studio.case_file_html` | alert → decision time; printable HTML dossier | old decisions.csv auto-upgraded with `duration_s` |
+
+### 10.2 Corrections made on the way
+- Legacy engine catches **117** frauds (exact recount from `silver_transactions`), not 116; `get_kpis` now uses `features.impact()` → 3,221 false alerts. Cached KPI answers regenerated (no more "3,222").
+- Plotly log funnel rendered "NaN×10^Infinity" → replaced by step cards (`ui.flow`).
+- Metric deltas with a unicode minus were shown red/up → ASCII "-".
+- Judge pasted raw JSON / wrote "BLOQUER" in English mode → plain-text recommendation + language rule (cache key `proces-p2`).
+
+### 10.3 Verification
+- AppTest: 24 renders (12 pages × FR/EN), 0 exceptions; interactions (hearing, accept verdict, replay, narrate, contre verdicts, stopwatch, dossier, tour, welcome dialog) OK.
+- Playwright (Edge) screenshots of every new page checked visually.
+- `python warmup.py fr en`: 40 copilot answers + 6 trials cached → demo is instant.
+
+### 10.4 Demo path (≈ 3 min)
+Démarrer ici → Fraude évidente TX01555470 → ask "Pourquoi suspecte ?" → Le Procès → Reconstitution → decide (< 30 s on the stopwatch) → Faux positif évité TX01575959 → Contre-enquête (robust clearance) → Constellation → Impact & processus.

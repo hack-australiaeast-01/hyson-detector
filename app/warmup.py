@@ -29,4 +29,12 @@ if __name__ == "__main__":
             total += out["tokens"]["total"]
             print(f"{lang} | {tid} | {question[:52]:52s} | {out.get('intent', ''):8s} | {status} | "
                   f"{out['tokens']['total']} tok ({out['tokens'].get('cached_prompt', 0)} cached) | {time.time() - t0:.1f} s")
+        if "--no-trial" not in sys.argv:
+            import courtroom
+            for tid in demos:                       # Le Procès: prosecutor + defence + judge for each demo case
+                t0 = time.time()
+                out = courtroom.trial(tid, lang)
+                total += out["tokens"].get("total", 0)
+                print(f"{lang} | {tid} | {'Le Procès (3 rôles)':52s} | proces   | {'cache' if out.get('cached') else 'ok'} | "
+                      f"{out['tokens'].get('total', 0)} tok | {time.time() - t0:.1f} s")
     print(f"Total tokens: {total}")

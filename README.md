@@ -21,7 +21,7 @@ SQL source ──copy job──► Fabric Lakehouse lh_fraud (bronze)
 
 | | Alerts | Frauds caught | Recall | Precision |
 |---|---|---|---|---|
-| Current rules engine | 3,338 | 116 / 1,013 | 11.5 % | 3.5 % |
+| Current rules engine | 3,338 | 117 / 1,013 | 11.6 % | 3.5 % |
 | Model, same alert volume | 3,338 | 787 | 77.7 % | 23.6 % |
 | **Model, top 1 % (analyst capacity)** | **1,779** | **718** | **70.9 %** | **40.4 %** |
 
@@ -45,11 +45,21 @@ If Azure OpenAI is not configured or unavailable, the copilot switches to a **de
 
 ## Pages
 
+The app is branded **Hyson Detector** (light, bank-platform theme; FR/EN). The sidebar groups pages as *Bienvenue · Analyste · Enquête IA · Pilotage*, plus one-click demo cases.
+
+0. **Démarrer ici** (guide): headline KPIs and an 8-step guided tour for a first-time user (welcome dialog on first visit, a hint on each page).
 1. **File d'alertes** (alert queue): filters on period, date, channel, risk level and fraud type; risk colours; alerts per day.
 2. **Fiche transaction + copilote** (transaction view): score, risk factors (observed vs usual value), reassuring factors, decision with confidence and comment, and the chat with suggested questions (brief §9.7).
 3. **Vue client 360** (customer view): profile, habits, timeline of transactions and digital events, and a map when coordinates were exported.
 4. **Performance**: model vs current engine, recall per fraud type, top drivers, champion vs challengers.
 5. **Journal**: analyst decisions (the feedback loop) and copilot traceability (questions, tools, tokens, cache).
+6. **Le Procès** (`courtroom.py`): an AI prosecutor and an AI defence argue the same Fabric facts in parallel, an AI judge rules; the analyst accepts or overrides the verdict (logged as a decision).
+7. **Reconstitution**: replays the hours before the alert step by step (transactions + digital events, risky signals in red, map, AI narration).
+8. **Contre-enquête**: counterfactual — neutralises the top SHAP factors one by one; "robust" if the alert survives, "sensitive" if it flips.
+9. **Constellation**: points of compromise (ATMs/merchants where fraud victims passed in the 30 days before fraud, lift ×2.5–×4.1) with today's alerts orbiting them. Shown as an investigation lead only: exposure was **not** predictive in validation (41 % vs 40 % precision), so it is not in the score.
+10. **Impact & processus**: risk-committee view — fraud TND intercepted, legitimate TND not blocked, false alerts avoided, analyst hours (editable assumptions), transaction → decision process, recommendation mix, median alert → decision time, AI cost per alert, PSI drift.
+
+The transaction page also has a stopwatch (alert opened → decision saved, stored as `duration_s`) and a printable HTML case file.
 
 ## Rules followed
 

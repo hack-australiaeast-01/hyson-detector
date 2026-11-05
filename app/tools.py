@@ -342,6 +342,14 @@ def find_related_cases(transaction_id, days=30):
 def get_kpis():
     m = da.metrics()
     rt = da.recall_by_type()
+    legacy_alerts, legacy_tp = int(m["legacy_alerts"]), int(m["frauds_caught_legacy"])
+    try:                                    # exact legacy counts from Fabric (metrics table rounds recall × frauds)
+        import features
+        imp = features.impact()
+        if imp:
+            legacy_alerts, legacy_tp = imp["moteur"]["alertes"], imp["moteur"]["fraudes"]
+    except Exception:
+        pass
     # exact counts from the validation alert list (same numbers as the Power BI report), metrics as fallback
     va = da.queue()
     va = va[(va.period == "valid") & (va.risk_level != "FAIBLE")]   # alerts only (a demo row below threshold is not an alert)
@@ -351,9 +359,10 @@ def get_kpis():
         budget = int(m["valid_rows"] * 0.01)
         model_tp = round(m["model_top1pct_precision"] * budget)
     return {"periode_validation": "juin → juillet 2026 (hors échantillon)",
-            "moteur_regles_actuel": {"alertes": int(m["legacy_alerts"]), "fraudes_detectees": int(m["frauds_caught_legacy"]),
-                                     "precision": m["legacy_precision"], "rappel": m["legacy_recall"],
-                                     "fausses_alertes": int(m["legacy_alerts"] - m["frauds_caught_legacy"])},
+            "moteur_regles_actuel": {"alertes": legacy_alerts, "fraudes_detectees": legacy_tp,
+                                     "precision": round(legacy_tp / max(legacy_alerts, 1), 4),
+                                     "rappel": round(legacy_tp / m["valid_frauds"], 4),
+                                     "fausses_alertes": legacy_alerts - legacy_tp},
             "modele_meme_volume": {"alertes": int(m["legacy_alerts"]), "fraudes_detectees": int(m["frauds_caught_model_same_budget"]),
                                    "precision": m["model_same_budget_as_legacy_precision"],
                                    "rappel": m["model_same_budget_as_legacy_recall"]},
@@ -363,20 +372,32 @@ def get_kpis():
             "rappel_par_typologie": [_row(x, ["fraud_scenario", "frauds", "recall_model", "recall_legacy"]) for _, x in rt.iterrows()]}
 
 
-def record_decision(transaction_id, decision, confidence="moyenne", comment="", analyst="analyste", source="copilote"):
+DECISION_COLS = ["decided_at", "transaction_id", "decision", "confidence", "comment", "analyst", "source", "duration_s"]
+
+
+def record_decision(transaction_id, decision, confidence="moyenne", comment="", analyst="analyste", source="copilote",
+                    duration_s=None):
     decision = str(decision).upper()
     if decision not in DECISIONS:
         return {"erreur": f"Décision invalide : {decision}. Valeurs : {sorted(DECISIONS)}"}
     if _tx_row(transaction_id) is None:
         return _not_found(transaction_id)
+    if DECISIONS_FILE.exists():                     # upgrade an older journal (no duration column) in place
+        head = DECISIONS_FILE.read_text(encoding="utf-8").splitlines()[:1]
+        if head and "duration_s" not in head[0]:
+            old = pd.read_csv(DECISIONS_FILE)
+            old["duration_s"] = None
+            old[DECISION_COLS].to_csv(DECISIONS_FILE, index=False)
     new = not DECISIONS_FILE.exists()
     with DECISIONS_FILE.open("a", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
         if new:
-            w.writerow(["decided_at", "transaction_id", "decision", "confidence", "comment", "analyst", "source"])
-        w.writerow([datetime.now().strftime("%Y-%m-%d %H:%M:%S"), transaction_id, decision, confidence, comment, analyst, source])
+            w.writerow(DECISION_COLS)
+        w.writerow([datetime.now().strftime("%Y-%m-%d %H:%M:%S"), transaction_id, decision, confidence, comment, analyst, source,
+                    None if duration_s is None else round(float(duration_s), 1)])
     da.source().push_feedback(DECISIONS_FILE)          # feedback loop: journal mirrored to OneLake
-    return {"enregistre": True, "transaction_id": transaction_id, "decision": decision, "confiance": confidence}
+    return {"enregistre": True, "transaction_id": transaction_id, "decision": decision, "confiance": confidence,
+            "duree_s": None if duration_s is None else round(float(duration_s), 1)}
 
 
 def decisions():
