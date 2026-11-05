@@ -1,7 +1,7 @@
 """Pre-compute copilot answers for the demo cases before the pitch.
 
     python warmup.py            # French (default)
-    python warmup.py fr en      # both languages
+    python warmup.py fr en      # both languages  (--no-trial / --no-deep to skip Le Procès / the deep searches)
 
 Uses exactly the same questions as the app buttons (copilot.SUGGESTIONS), so the live demo replies instantly.
 Any other question still goes to Azure OpenAI live. Answers are stored in data/copilot_cache.json.
@@ -36,5 +36,14 @@ if __name__ == "__main__":
                 out = courtroom.trial(tid, lang)
                 total += out["tokens"].get("total", 0)
                 print(f"{lang} | {tid} | {'Le Procès (3 rôles)':52s} | proces   | {'cache' if out.get('cached') else 'ok'} | "
+                      f"{out['tokens'].get('total', 0)} tok | {time.time() - t0:.1f} s")
+        if "--no-deep" not in sys.argv:
+            import deepsearch
+            # the 6 flagged alerts shown as buttons (the first one is the page's default) and the demo cases
+            for tid in dict.fromkeys(list(deepsearch.ranked("test").head(6).index) + demos):
+                t0 = time.time()
+                out = deepsearch.investigate(tid, lang)
+                total += out["tokens"].get("total", 0)
+                print(f"{lang} | {tid} | {'Enquête approfondie (1 appel)':52s} | deep     | {'cache' if out.get('cached') else 'ok'} | "
                       f"{out['tokens'].get('total', 0)} tok | {time.time() - t0:.1f} s")
     print(f"Total tokens: {total}")

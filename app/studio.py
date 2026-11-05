@@ -7,6 +7,7 @@ c.chips(), c.mark(step), c.demos (dict demo_case -> transaction_id).
 """
 import html
 import math
+import re
 import time
 from datetime import datetime
 
@@ -17,6 +18,7 @@ import streamlit as st
 import copilot
 import courtroom
 import data_access as da
+import deepsearch
 import features as fx
 import tools
 import ui
@@ -775,3 +777,144 @@ def case_file_html(c, tid):
                                        'traced tools), the analyst decides. AI call log: copilot_log.jsonl; decisions synced to OneLake '
                                        '(Files/app_feedback).')}</p></body></html>")
     return "".join(parts)
+
+
+# ================================================================= Enquête approfondie (deep search)
+DEEP_LEVEL = {"priorite": ("🔥 Priorité", "🔥 Priority"), "creuser": ("⚠ À creuser", "⚠ Dig deeper")}
+KIND_COLOR = {"risk": ui.RED, "calm": ui.GREEN, "info": "#64748B"}
+SOURCE_LABEL = {"score": ("score", "score"), "watch": ("alertes du client", "customer alerts"), "habits": ("habitudes", "habits"),
+                "digital": ("banque digitale", "digital banking"), "network": ("réseau", "network"),
+                "compromise": ("point de compromission", "point of compromise"), "counterfactual": ("contre-enquête", "counter-inquiry"),
+                "analogs": ("cas similaires", "similar cases"), "decisions": ("vos décisions", "your decisions")}
+
+
+def watch_buttons(c, n=6, key="wq"):
+    """Flagged medium alerts as buttons: hover = why (0 token), click = deep search."""
+    top = deepsearch.ranked("test").head(n)
+    if top.empty:
+        return
+    cols = st.columns(min(n, len(top)))
+    for col, (tid, r) in zip(cols, top.iterrows()):
+        col.button(f"{c.L(*DEEP_LEVEL[r.level])} · {tid}", key=f"{key}_{tid}", width="stretch",
+                   help=deepsearch.reason(tid, c.lang) + c.L(" — cliquez pour l'enquête approfondie.", " — click for the deep search."),
+                   on_click=c.open_tx, args=(tid, "deep"))
+
+
+def page_deep(c):
+    L = c.L
+    ui.hero(L("Enquête IA · alertes moyennes", "AI investigation · medium alerts"), L("Enquête approfondie", "Deep search"),
+            L("Pour les alertes « suspectes mais pas confirmées » : Python fouille toutes les données Fabric sans aucun token, "
+              "puis l'IA relie les preuves en un seul appel. L'analyste décide.",
+              "For “suspicious but not confirmed” alerts: Python digs through all the Fabric data with zero tokens, "
+              "then the AI connects the evidence in a single call. The analyst decides."), c.chips())
+    stt, w = deepsearch.watch_stats(), deepsearch.watch("test")
+    k = st.columns(4)
+    with k[0]:
+        ui.kpi(L("Alertes signalées aujourd'hui", "Alerts flagged today"), str(len(w)),
+               L(f"<b>{int((w.level == 'priorite').sum())}</b> priorité · <b>{int((w.level == 'creuser').sum())}</b> à creuser",
+                 f"<b>{int((w.level == 'priorite').sum())}</b> priority · <b>{int((w.level == 'creuser').sum())}</b> dig deeper"))
+    with k[1]:
+        ui.kpi(L("🔥 Priorité : fraudes mesurées", "🔥 Priority: measured fraud"), f"{stt['priorite'][1]:.0%}",
+               L(f"sur {stt['priorite'][0]} alertes validées", f"on {stt['priorite'][0]} validated alerts"),
+               f"×{stt['priorite'][1] / stt['other'][1]:.1f}")
+    with k[2]:
+        ui.kpi(L("⚠ À creuser : fraudes mesurées", "⚠ Dig deeper: measured fraud"), f"{stt['creuser'][1]:.0%}",
+               L(f"sur {stt['creuser'][0]} alertes validées", f"on {stt['creuser'][0]} validated alerts"),
+               f"×{stt['creuser'][1] / stt['other'][1]:.1f}")
+    with k[3]:
+        ui.kpi(L("Autres alertes moyennes", "Other medium alerts"), f"{stt['other'][1]:.0%}",
+               L(f"sur {stt['other'][0]} · coût du signalement : <b>0 token</b>", f"on {stt['other'][0]} · flagging cost: <b>0 tokens</b>"))
+    st.caption(L("Signal mesuré sur la validation juin–juillet 2026, sans information future : le client a déjà eu une alerte dans les "
+                 "72 h précédentes (🔥 = dans les 24 h avec une rafale d'activité). Survolez un bouton pour voir pourquoi.",
+                 "Signal measured on the Jun–Jul 2026 validation, with no future information: the customer already had an alert in the "
+                 "previous 72 h (🔥 = within 24 h with a burst of activity). Hover a button to see why."))
+    watch_buttons(c, key="wd")
+
+    ids = c.queue.transaction_id.tolist()
+    if st.session_state.get("deep_tx") not in ids:
+        rk = deepsearch.ranked("test")
+        st.session_state.deep_tx = rk.index[0] if len(rk) else st.session_state.get("tx", ids[0])
+    top = st.columns([2.2, 1, 1, 1.2])
+    with top[0]:
+        tid = _tx_picker(c, "deep_tx")
+    r = c.queue[c.queue.transaction_id == tid].iloc[0]
+    top[1].metric(L("Montant", "Amount"), _money(r.amount_tnd, 3))
+    top[2].metric(L("Percentile", "Percentile"), f"{r.score_pct:.2%}")
+    lvl = w.loc[tid, "level"] if tid in w.index else None
+    top[3].metric(L("Signal IA", "AI flag"), L(*DEEP_LEVEL[lvl]) if lvl else "—")
+    if lvl:
+        ui.hint("🔎 " + html.escape(deepsearch.reason(tid, c.lang)))
+
+    results = st.session_state.setdefault("deep_res", {})
+    key = f"{tid}|{c.lang}"
+    run = st.button(L("🔎  Lancer l'enquête approfondie", "🔎  Run the deep search"), type="primary")
+    left, right = st.columns([1.15, 1])
+    with left:
+        ui.section(L("Tableau des preuves · 0 token (Python sur Fabric)", "Evidence board · 0 tokens (Python on Fabric)"))
+        board = st.empty()
+    with right:
+        ui.section(L("Conclusion de l'enquêteur IA · 1 appel", "AI investigator's conclusion · 1 call"))
+        answer_ph, cost_ph = st.empty(), st.empty()
+
+    def show_board(lines):
+        rows = "".join(
+            f'<div style="display:flex;gap:.6rem;align-items:flex-start;padding:.45rem .2rem;border-bottom:1px solid #EEF1F6">'
+            f'<b style="min-width:2.1rem;color:{KIND_COLOR[x["kind"]]}">{x["id"]}</b>'
+            f'<span style="flex:1">{html.escape(x["text"])}</span>'
+            f'<span class="chip" style="white-space:nowrap">{html.escape(L(*SOURCE_LABEL.get(x["source"], (x["source"], x["source"]))))}</span>'
+            f'</div>' for x in lines)
+        legend = L("● rouge = risque · ● vert = rassurant · ● gris = contexte", "● red = risk · ● green = reassuring · ● grey = context")
+        board.markdown(f'<div style="background:#FFFFFF;border:1px solid #E3E8F0;border-radius:14px;box-shadow:0 1px 3px rgba(15,30,54,.06);padding:.6rem .9rem">{rows}<div style="color:#64748B;font-size:.8rem;'
+                       f'padding-top:.4rem">{legend}</div></div>', unsafe_allow_html=True)
+
+    def show_answer(text):
+        out = []
+        for line in html.escape(text.replace("**", "")).splitlines():
+            m = re.match(r"\s*([^:]{2,40}?)\s*:(.*)", line)
+            out.append(f"<b>{m.group(1)}</b> :{m.group(2)}" if m else line)
+        answer_ph.markdown(f'<div style="background:#FFFFFF;border:1px solid #E3E8F0;border-radius:14px;box-shadow:0 1px 3px '
+                           f'rgba(15,30,54,.06);border-top:4px solid {ui.NAVY};padding:1rem 1.1rem;line-height:1.6">'
+                           f'{"<br>".join(out)}</div>', unsafe_allow_html=True)
+
+    if run:
+        with st.spinner(L("Python fouille l'historique, la banque digitale, le réseau et les cas similaires…",
+                          "Python is digging through history, digital banking, the network and similar cases…")):
+            lines, _ = deepsearch.evidence(tid, c.lang)
+        show_board(lines)
+        buf = []
+        res = deepsearch.investigate(tid, c.lang, on_token=lambda t: (buf.clear() if t is None else buf.append(t),
+                                                                      show_answer("".join(buf))))
+        results[key] = res
+        c.mark("deep")
+    res = results.get(key)
+    if not res:
+        board.info(L("Cliquez « Lancer l'enquête approfondie » : les preuves s'affichent ici en quelques secondes.",
+                     "Click “Run the deep search”: the evidence appears here in a few seconds."), icon=":material/search:")
+        return
+    show_board(res["lines"])
+    show_answer(res["answer"])
+    t = res.get("tokens", {})
+    usd = t.get("prompt", 0) * 0.25e-6 + t.get("completion", 0) * 2e-6
+    cost_ph.caption(
+        (L("Réponse en cache · 0 token · instantané", "Cached answer · 0 tokens · instant") if res.get("cached") else
+         f"{res['mode']} · {t.get('total', 0)} tokens ({t.get('prompt', 0)} {L('entrée', 'in')} / {t.get('completion', 0)} "
+         f"{L('sortie', 'out')}) · ≈ {usd * 3.1:.4f} TND · {res.get('latency_s', 0):.1f} s · "
+         + L("une question copilote ≈ 3 300 tokens", "a copilot question ≈ 3,300 tokens")
+         + (L(" · incohérence détectée → 1 relance automatique", " · inconsistency detected → 1 automatic retry") if t.get("retry") else ""))
+        + f" · {res.get('n_evidence', len(res['lines']))} {L('preuves', 'pieces of evidence')}")
+    with right:
+        st.markdown(f"**{L('Votre décision', 'Your decision')}**")
+        d = st.columns(3)
+        for col, (dec, en) in zip(d, [("BLOQUER", "BLOCK"), ("ESCALADER", "ESCALATE"), ("VALIDER", "VALIDATE")]):
+            if col.button(L(dec, en), key=f"deep_dec_{dec}", width="stretch"):
+                opened = st.session_state.setdefault("opened", {}).get(tid)
+                out = tools.record_decision(tid, dec, "moyenne", L("après enquête approfondie", "after deep search"),
+                                            source="enquete_approfondie", duration_s=(time.time() - opened) if opened else None)
+                if out.get("enregistre"):
+                    st.success(L(f"Décision {dec} enregistrée (journal + OneLake).", f"Decision {en} saved (log + OneLake)."))
+                else:
+                    st.error(out)
+        n = st.columns(2)
+        n[0].button(L("⚖️ Le Procès", "⚖️ The Trial"), on_click=c.open_tx, args=(tid, "proces"), width="stretch", key="deep_proces")
+        n[1].button(L("📄 Fiche transaction", "📄 Transaction card"), on_click=c.open_tx, args=(tid, "tx"), width="stretch",
+                    key="deep_tx_btn")

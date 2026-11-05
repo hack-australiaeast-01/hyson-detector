@@ -25,6 +25,7 @@ _secrets_to_env()
 
 import copilot  # noqa: E402  (after the secrets bridge on purpose)
 import data_access as da
+import deepsearch
 import features as fx
 import market
 import studio
@@ -44,22 +45,23 @@ def L(fr, en):
 
 
 # internal page ids (stable across languages) -> labels, grouped like a banking platform menu
-PAGES = ["guide", "queue", "tx", "cust", "proces", "replay", "contre", "galaxy", "impact", "market", "perf", "pbi", "journal"]
+PAGES = ["guide", "queue", "tx", "cust", "deep", "proces", "replay", "contre", "galaxy", "impact", "market", "perf", "pbi", "journal"]
 PAGE_LABEL = {"guide": ("Démarrer ici", "Start here"),
               "queue": ("File d'alertes", "Alert queue"), "tx": ("Fiche transaction & copilote", "Transaction & copilot"),
               "cust": ("Vue client 360", "Customer 360"),
+              "deep": ("Enquête approfondie", "Deep search"),
               "proces": ("Le Procès", "The Trial"), "replay": ("Reconstitution", "Crime-scene replay"),
               "contre": ("Contre-enquête", "Counter-inquiry"), "galaxy": ("Constellation", "Constellation"),
               "impact": ("Impact & processus", "Impact & process"),
               "market": ("Marché & benchmarks", "Market & benchmarks"), "perf": ("Performance du modèle", "Model performance"),
               "journal": ("Journal & traçabilité", "Audit log"), "pbi": ("Tableau de bord Power BI", "Power BI dashboard")}
 PAGE_ICON = {"guide": ":material/flag:", "queue": ":material/notifications_active:", "tx": ":material/manage_search:",
-             "cust": ":material/person:", "proces": ":material/gavel:", "replay": ":material/movie:",
+             "cust": ":material/person:", "deep": ":material/troubleshoot:", "proces": ":material/gavel:", "replay": ":material/movie:",
              "contre": ":material/alt_route:", "galaxy": ":material/hub:", "impact": ":material/insights:", "market": ":material/public:",
              "perf": ":material/monitoring:", "pbi": ":material/dashboard:", "journal": ":material/fact_check:"}
 NAV_GROUPS = [(("Bienvenue", "Welcome"), ["guide"]),
               (("Analyste", "Analyst"), ["queue", "tx", "cust"]),
-              (("Enquête IA", "AI investigation"), ["proces", "replay", "contre", "galaxy"]),
+              (("Enquête IA", "AI investigation"), ["deep", "proces", "replay", "contre", "galaxy"]),
               (("Pilotage", "Steering"), ["impact", "market", "perf", "pbi", "journal"])]
 DEMO_LABEL = {"obvious_fraud": ("Fraude évidente", "Obvious fraud"), "subtle_fraud": ("Fraude subtile", "Subtle fraud"),
               "avoided_false_positive": ("Faux positif évité", "Avoided false positive")}
@@ -85,6 +87,7 @@ def load(_mode):
 def refresh():
     da.reset()
     fx.reset()
+    deepsearch.reset()
     connect.clear()
     load.clear()
 
@@ -92,7 +95,7 @@ def refresh():
 def open_tx(tid, page="tx"):
     st.session_state.tx = tid
     st.session_state.tx_select = tid
-    for k in ("proces_tx", "replay_tx", "contre_tx"):
+    for k in ("proces_tx", "replay_tx", "contre_tx", "deep_tx"):
         st.session_state[k] = tid
     st.session_state.goto = page
 
@@ -211,10 +214,18 @@ def page_queue():
         order = [x for x in ["ELEVE", "MOYEN", "FAIBLE"] if x in per_day.columns]
         st.bar_chart(per_day[order].rename(columns=lambda c: tr(RISK_TXT[c])), color=[ui.RISK[x][0] for x in order], height=240)
 
+    if period == "test":
+        nw = deepsearch.watch("test")
+        ui.section(L(f"🔎 L'IA signale {len(nw)} alertes moyennes à creuser · survolez pour voir pourquoi",
+                     f"🔎 AI flags {len(nw)} medium alerts to dig into · hover to see why"))
+        studio.watch_buttons(ctx, key="wq")
+
     ui.section(L(f"{nb(len(q))} alertes · triées par score", f"{nb(len(q))} alerts · sorted by score"))
     view = q.sort_values("score_model", ascending=False)[
         ["risk_icon", "transaction_id", "timestamp", "customer_id", "transaction_type", "channel", "merchant_category",
          "amount_tnd", "city", "country", "score_pct", "risk_level", "legacy_alert", "top_model_factors"]].copy()
+    flags = deepsearch.watch(period).level
+    view.insert(2, "flag", view.transaction_id.map(lambda t: L(*studio.DEEP_LEVEL[flags[t]]) if t in flags.index else ""))
     for c in ["merchant_category", "city", "top_model_factors"]:
         view[c] = view[c].fillna("—").replace({"None": "—", "": "—"})
     view["risk_level"] = view.risk_level.map(lambda r: tr(RISK_TXT.get(r, (r, r))))
@@ -223,6 +234,11 @@ def page_queue():
                       selection_mode="single-row", key=f"q_{period}",
                       column_config={"risk_icon": cc.TextColumn("", width="small"),
                                      "transaction_id": cc.TextColumn("Transaction"),
+                                     "flag": cc.TextColumn(L("Signal IA", "AI flag"),
+                                                           help=L("Alerte moyenne dont le client a déjà eu une alerte dans les 72 h : "
+                                                                  "38 à 75 % de fraudes mesurées (contre 15 %).",
+                                                                  "Medium alert whose customer already had an alert in the previous 72 h: "
+                                                                  "38–75% measured fraud (vs 15%).")),
                                      "timestamp": cc.DatetimeColumn("Date", format="DD/MM HH:mm"),
                                      "customer_id": cc.TextColumn(L("Client", "Customer")),
                                      "transaction_type": cc.TextColumn("Type"),
@@ -239,7 +255,10 @@ def page_queue():
     rows = ev.selection.rows if ev and ev.selection else []
     if rows:
         tid = view.iloc[rows[0]].transaction_id
-        st.button(L(f"Ouvrir {tid} →", f"Open {tid} →"), on_click=open_tx, args=(tid,), type="primary")
+        b1, b2, _ = st.columns([1, 1, 2])
+        b1.button(L(f"Ouvrir {tid} →", f"Open {tid} →"), on_click=open_tx, args=(tid,), type="primary", width="stretch")
+        b2.button(L("🔎 Enquête approfondie", "🔎 Deep search"), on_click=open_tx, args=(tid, "deep"), width="stretch",
+                  help=deepsearch.reason(tid, st.session_state.lang) or None)
 
 
 # ---------------------------------------------------------------- 2. transaction card + copilot
@@ -329,7 +348,10 @@ def page_transaction():
         if len(past):
             st.caption(L("Décisions précédentes : ", "Previous decisions: ") +
                        " · ".join(f"{x.decision} ({x.confidence}, {x.decided_at})" for x in past.itertuples()))
-        q1, q2, q3 = st.columns(3)
+        q0, q1, q2, q3 = st.columns(4)
+        q0.button(L("🔎 Enquête approfondie", "🔎 Deep search"), on_click=open_tx, args=(tid, "deep"), width="stretch",
+                  help=deepsearch.reason(tid, st.session_state.lang) or L("Preuves calculées sans token + 1 appel IA (~600 tokens).",
+                                                                          "Evidence computed with no tokens + 1 AI call (~600 tokens)."))
         q1.button(L("⚖️ Le Procès", "⚖️ The Trial"), on_click=open_tx, args=(tid, "proces"), width="stretch")
         q2.button(L("🎬 Reconstitution", "🎬 Replay"), on_click=open_tx, args=(tid, "replay"), width="stretch")
         q3.download_button(L("🧾 Dossier (HTML)", "🧾 Case file (HTML)"), studio.case_file_html(ctx, tid).encode("utf-8"),
@@ -609,7 +631,7 @@ if not st.session_state.get("welcomed"):
     welcome()
 studio.tour_hint(ctx, page)
 {"guide": lambda: studio.page_guide(ctx), "queue": page_queue, "tx": page_transaction, "cust": page_customer,
- "proces": lambda: studio.page_proces(ctx), "replay": lambda: studio.page_replay(ctx), "contre": lambda: studio.page_contre(ctx),
+ "deep": lambda: studio.page_deep(ctx), "proces": lambda: studio.page_proces(ctx), "replay": lambda: studio.page_replay(ctx), "contre": lambda: studio.page_contre(ctx),
  "galaxy": lambda: studio.page_galaxy(ctx), "impact": lambda: studio.page_impact(ctx),
  "market": lambda: market.page_market(ctx, src.mode), "perf": page_performance,
  "journal": page_journal, "pbi": page_powerbi}[page]()
