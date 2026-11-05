@@ -10,7 +10,8 @@ SQL source ──copy job──► Fabric Lakehouse lh_fraud (bronze)
                               │  notebooks/02_score_explain     rules + HGB / LightGBM / LambdaRank / blend → champion LightGBM
                               ▼
             Gold: gold_scores · gold_alert_queue · gold_alert_explanations (rules + SHAP) · gold_model_* · submission
-                              │  parquet export (Files/app_export)   [plan B of brief §11; plan A = SQL endpoint]
+                              │  live T-SQL via lh_fraud SQL analytics endpoint (brief §11 option A, Entra token)
+                              │  fallback: parquet snapshot in app/data (option B), refreshed on every live load
                               ▼
    app/ Streamlit ── tools.py (9 tools, compact JSON) ── copilot.py ── Azure OpenAI (function calling)
                      decisions.csv (feedback)            copilot_log.jsonl (questions, tools, tokens)
@@ -36,7 +37,9 @@ python test_aoai.py         # expected output: "OK copilote | tokens: ~25"
 streamlit run app.py
 ```
 
-The app reads `app/data/*.parquet`, which you download from `lh_fraud` › Files › `app_export`. Expected files: `gold_alert_queue`, `gold_alert_explanations`, `gold_model_metrics`, `gold_model_leaderboard`, `gold_model_recall_by_type`, `gold_model_importance`, `customer_history`, `customers`, `digital_events` (optional).
+**Data: live from Fabric.** With `DATA_SOURCE=auto` (default), the app connects to the `lh_fraud` SQL analytics endpoint using your Microsoft Entra login (`az login`, otherwise a browser window opens). Requires ODBC Driver 17 or 18 for SQL Server. Gold tables are loaded at startup; customer history (since 2025, with coordinates), digital events and related cases are queried on demand. Analyst decisions are written back to OneLake (`Files/app_feedback/decisions.csv`). If Fabric is unreachable, the app automatically falls back to the parquet snapshot in `app/data/`.
+
+Before the pitch: `python warmup.py` pre-computes the copilot's answers for the 3 demo cases (instant replies; any other question still goes live).
 
 If Azure OpenAI is not configured or unavailable, the copilot switches to a **deterministic offline mode** built on the same tools, so the demo always works.
 
@@ -52,4 +55,5 @@ If Azure OpenAI is not configured or unavailable, the copilot switches to a **de
 
 - Features use only data from before each transaction; the split is by time (never random); test labels are never used or shown.
 - `gender`, IDs, `fraud_scenario` and `fraud_reported_date` are never used as features. The only exception is graph features counting frauds already reported before the transaction.
-- No secrets in Git: `.env` is ignored. Token discipline: `max_tokens` 600, temperature 0.1, cache, and a log of every call.
+- No secrets in Git: `.env` is ignored; Fabric access uses the analyst's Entra login (no stored credential).
+- Token discipline: deployment `gpt-5-mini` (reasoning model) with `reasoning_effort=low` and `max_completion_tokens` capped (non-reasoning models: temperature 0.1, `max_tokens` 600); the open transaction is pre-injected (one tool round saved); tool outputs truncated; answers cached on disk; every call logged (question, tools, tokens, latency). Measured: ~5,200 tokens and ~12 s per question. `COPILOT_OFFLINE=1` forces the deterministic offline mode (tests, no paid calls).

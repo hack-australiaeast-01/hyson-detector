@@ -18,22 +18,31 @@ import tools
 APP_DIR = Path(__file__).parent
 load_dotenv(APP_DIR / ".env")
 LOG_FILE = APP_DIR / "data" / "copilot_log.jsonl"
+CACHE_FILE = APP_DIR / "data" / "copilot_cache.json"
 MAX_TOOL_ROUNDS = 4
 MAX_TOKENS = int(os.getenv("COPILOT_MAX_TOKENS", "600"))
-TOOL_RESULT_CHARS = 6000
+TOOL_RESULT_CHARS = 3500
 
 SYSTEM_PROMPT = """Tu es le copilote de l'analyste fraude de la Banque. Tu réponds en français, de façon concise, factuelle et structurée.
 Règles :
 - N'affirme que ce que les outils t'ont renvoyé. Cite montants (TND), dates et identifiants.
-- N'invente jamais un identifiant : appelle d'abord get_transaction, puis utilise le customer_id qu'il renvoie pour les autres outils.
+- Niveaux de risque à écrire tels quels : FAIBLE / MOYEN / ELEVE (tout en français).
+- N'invente jamais un identifiant : utilise get_transaction (fourni pour la transaction ouverte), puis utilise le customer_id qu'il renvoie pour les autres outils
+  (get_customer_profile avec before_transaction_id = la transaction analysée, pour n'utiliser que le passé).
 - Pour analyser une transaction, appelle get_transaction PUIS compare_to_habits (écarts au passé du client : pays, ville, commerçant, heure, mode de saisie).
+- Pour toute opération MOBILE/WEB ou VIREMENT, et pour toute question sur l'application, les connexions, l'appareil ou « ce qui s'est passé avant »,
+  appelle aussi get_digital_events(customer_id, around=transaction_id) et cite les événements (heure, type, statut, IP pays).
+- Pour les questions sur d'autres clients, commerçants, DAB ou appareils communs, appelle find_related_cases.
 - Si une information manque, dis-le en une phrase et propose la vérification à faire.
 - Ne calcule jamais toi-même un score : utilise celui fourni par le modèle (score_modele, percentile, niveau de risque).
 - Distingue les faits (données) de ton interprétation.
 - Si l'opération semble légitime, explique aussi pourquoi (puce, journée, ville et pays habituels, commerçant local, voyage cohérent...).
 - N'appelle record_decision que si l'analyste demande explicitement d'enregistrer une décision.
-- Recommandation : risque ELEVE avec plusieurs facteurs concordants → BLOQUER ; risque élevé mais facteurs ambigus ou MOYEN → ESCALADER ;
-  risque FAIBLE avec éléments rassurants → VALIDER. Donne un niveau de confiance. La décision finale appartient à l'analyste.
+- Un appareil ou bénéficiaire vu seulement dans les dernières 24 h n'est PAS rassurant (il peut appartenir au fraudeur) :
+  seul « connu_depuis_plus_de_24h = true » est rassurant.
+- Recommandation : risque ELEVE (percentile ≥ 0.99) avec au moins deux facteurs concordants (ex. échecs de connexion + bénéficiaire
+  récent, déplacement impossible, rafale) → BLOQUER ; risque élevé mais un seul facteur ou facteurs contradictoires, ou risque MOYEN
+  → ESCALADER ; risque FAIBLE avec éléments rassurants → VALIDER. Donne un niveau de confiance. La décision finale appartient à l'analyste.
 Pour l'analyse d'une transaction, réponds en EXACTEMENT 5 sections (titres en gras, 170 mots maximum) :
 1. **Verdict** : niveau de risque et score du modèle.
 2. **Facteurs principaux** : trois au maximum, chacun chiffré et comparé aux habitudes du client.
@@ -43,10 +52,11 @@ Pour l'analyse d'une transaction, réponds en EXACTEMENT 5 sections (titres en g
 Pour les autres questions (file d'alertes, KPI, comparaison au moteur de règles), réponds brièvement et chiffré, sans recommandation BLOQUER/ESCALADER/VALIDER.
 Pour un résumé d'investigation, rédige un paragraphe de dossier (faits, chronologie, conclusion) de 150 mots maximum."""
 
-_cache = {}
 
 
 def configured():
+    if os.getenv("COPILOT_OFFLINE", "0") == "1":      # force offline mode (tests, no paid calls)
+        return False
     return all(os.getenv(k) for k in ["AZURE_OPENAI_ENDPOINT", "AZURE_OPENAI_API_KEY", "AZURE_OPENAI_DEPLOYMENT"])
 
 
@@ -69,8 +79,26 @@ def _is_reasoning():
 def _complete(client, messages):
     kwargs = dict(model=os.environ["AZURE_OPENAI_DEPLOYMENT"], messages=messages, tools=tools.TOOL_SCHEMAS)
     if _is_reasoning():  # gpt-5 / o-series: no temperature, budget includes hidden reasoning tokens
-        return client.chat.completions.create(max_completion_tokens=MAX_TOKENS * 4, reasoning_effort="low", **kwargs)
+        return client.chat.completions.create(max_completion_tokens=MAX_TOKENS * 4, reasoning_effort=os.getenv("COPILOT_REASONING", "low"), **kwargs)
     return client.chat.completions.create(temperature=0.1, max_tokens=MAX_TOKENS, **kwargs)
+
+
+def _load_cache():
+    try:
+        return json.loads(CACHE_FILE.read_text(encoding="utf-8")) if CACHE_FILE.exists() else {}
+    except (ValueError, OSError):
+        return {}
+
+
+def _save_cache():
+    try:
+        CACHE_FILE.parent.mkdir(exist_ok=True)
+        CACHE_FILE.write_text(json.dumps(_cache, ensure_ascii=False, default=str), encoding="utf-8")
+    except OSError:
+        pass
+
+
+_cache = _load_cache()
 
 
 def ask(question, context_tx=None, history=None):
@@ -93,7 +121,9 @@ def ask(question, context_tx=None, history=None):
         out = _ask_offline(question, context_tx)
     out["latency_s"] = round(time.time() - start, 2)
     out["cached"] = False
-    _cache[key] = out
+    if not out.get("error") and "record_decision" not in str(out["tools"]):
+        _cache[key] = out
+        _save_cache()
     _log({"ts": datetime.now(), "question": question, "context_tx": context_tx, "mode": out["mode"], "cached": False,
           "tools": out["tools"], "tokens": out["tokens"], "latency_s": out["latency_s"], "answer": out["answer"],
           "error": out.get("error")})
@@ -103,14 +133,19 @@ def ask(question, context_tx=None, history=None):
 def _ask_llm(question, context_tx, history):
     client = _client()
     messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+    used = []
     if context_tx:
+        # Pre-inject the open transaction (saves one tool round, i.e. one full re-send of the prompt).
+        facts = tools.get_transaction(context_tx)
+        used.append({"name": "get_transaction", "args": json.dumps({"transaction_id": context_tx}), "prefetched": True})
         messages.append({"role": "system", "content": f"Transaction ouverte par l'analyste : {context_tx}. "
-                                                      "Utilise-la par défaut si la question ne précise pas d'identifiant."})
+                         "Utilise-la par défaut si la question ne précise pas d'identifiant. Résultat de get_transaction "
+                         "(déjà fourni, ne pas le redemander) : " + json.dumps(facts, ensure_ascii=False, default=str)})
     for m in history[-6:]:
         if m.get("role") in ("user", "assistant") and m.get("content"):
             messages.append({"role": m["role"], "content": m["content"]})
     messages.append({"role": "user", "content": question})
-    used, tokens = [], {"prompt": 0, "completion": 0, "total": 0}
+    tokens = {"prompt": 0, "completion": 0, "total": 0}
     answer = None
     for round_ in range(MAX_TOOL_ROUNDS + 1):
         resp = _complete(client, messages)
@@ -178,7 +213,7 @@ def _ask_offline(question, context_tx):
     c = call("compare_to_habits", transaction_id=context_tx)
     tx, s = t["transaction"], t.get("score", {})
     e = c.get("ecarts", {})
-    p = call("get_customer_profile", customer_id=tx["customer_id"]).get("profil", {})
+    p = call("get_customer_profile", customer_id=tx["customer_id"], before_transaction_id=context_tx).get("profil", {})
 
     if any(w in q for w in ["commerçant", "commercant", "dab", "appareil", "autres clients", "related", "même"]):
         r = call("find_related_cases", transaction_id=context_tx)
@@ -203,9 +238,12 @@ def _ask_offline(question, context_tx):
     risky = [f for f in t["facteurs_modele_pour_fraude"]] + t["regles_metier_declenchees"]
     calm = t["facteurs_modele_rassurants"] + t["regles_rassurantes"]
     facts = []
-    if "ratio_vs_moyenne_historique_complete" in c:
-        facts.append(f"Montant {_fmt(tx['amount_tnd'])} TND, soit {c['ratio_vs_moyenne_historique_complete']}× la moyenne "
-                     f"habituelle du client ({_fmt(c['montant_moyen_historique_complet'])} TND)")
+    if e.get("ratio_vs_moyenne"):
+        facts.append(f"Montant {_fmt(tx['amount_tnd'])} TND, soit {e['ratio_vs_moyenne']}× la moyenne "
+                     f"habituelle du client ({_fmt(e['montant_moyen'])} TND, {c['historique_avant']['nb_operations']} opérations passées)")
+    if e.get("vitesse_implicite_kmh", 0) > 900:
+        facts.append(f"Déplacement impossible : {e['distance_operation_precedente_km']} km depuis l'opération précédente "
+                     f"({e['vitesse_implicite_kmh']} km/h)")
     for f in risky:
         if len(facts) >= 3:
             break
@@ -231,13 +269,22 @@ def _ask_offline(question, context_tx):
     legacy = ""
     if s.get("alerte_moteur_regles_actuel"):
         legacy = " · alerte du moteur de règles actuel" + (" (probablement injustifiée)" if level == "FAIBLE" else "")
-    text = (f"1. **Verdict** : risque {level} — score modèle {s.get('score_modele')}, plus risquée que "
-            f"{format(pct, '.2%') if pct is not None else 'n/d'} des opérations de la période{legacy}.\n"
-            f"2. **Facteurs principaux** :\n" + "\n".join(f"   - {x}" for x in facts[:3]) + "\n"
-            f"3. **Contexte** : client {p.get('age', '?')} ans, {p.get('segment', '?')}, {p.get('home_city', '?')}, "
+    if pct is None:
+        rank = "n/d"
+    elif pct >= 0.5:
+        rank = f"parmi les {max(1 - pct, 0.0001):.2%} les plus risquées de la période".replace("0.01%", "< 0.01 %")
+    else:
+        rank = f"moins risquée que {max(1 - pct, 0):.2%} des opérations de la période"
+    if level == "FAIBLE":   # avoided false positive: lead with what reassures, keep the alarming fact as a point of attention
+        body = (f"2. **Éléments rassurants** : {', '.join(reassure) if reassure else 'aucun'}.\n"
+                f"3. **Point d'attention** : {facts[0] if facts else 'aucun'}.\n")
+    else:
+        body = (f"2. **Facteurs principaux** :\n" + "\n".join(f"   - {x}" for x in facts[:3]) + "\n"
+                f"3. **Éléments rassurants** : {', '.join(reassure) if reassure else 'aucun'}.\n")
+    text = (f"1. **Verdict** : risque {level} — score modèle {s.get('score_modele')}, {rank}{legacy}.\n" + body +
+            f"4. **Contexte** : client {p.get('age', '?')} ans, {p.get('segment', '?')}, {p.get('home_city', '?')}, "
             f"revenu {_fmt(p.get('monthly_income_tnd', 0))} TND ; {c.get('historique_avant', {}).get('nb_operations', 0)} "
             f"opérations depuis {c.get('historique_avant', {}).get('depuis')} ; {e.get('operations_24h_avant', 0)} dans les 24 h.\n"
-            f"4. **Éléments rassurants** : {', '.join(reassure) if reassure else 'aucun'}.\n"
             f"5. **Recommandation** : **{reco[0]}** (confiance {reco[1]}). La décision finale appartient à l'analyste.")
     if "résumé" in q or "resume" in q or "dossier" in q:
         text = f"**Résumé d'investigation — {context_tx}** ({datetime.now():%Y-%m-%d})\n\n" + text

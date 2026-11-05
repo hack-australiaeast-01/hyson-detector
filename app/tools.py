@@ -42,19 +42,17 @@ def _row(r, cols):
 
 
 def _tx_row(transaction_id):
-    """Transaction facts from the history extract, falling back to the alert queue."""
-    h = da.history()
-    if h is not None:
-        m = h[h.transaction_id == transaction_id]
-        if not m.empty:
-            return m.iloc[0]
+    """Transaction facts (Fabric silver_transactions or local extract), falling back to the alert queue."""
+    r = da.tx_by_id(transaction_id)
+    if r is not None:
+        return r
     q = da.queue()
     m = q[q.transaction_id == transaction_id]
     return None if m.empty else m.iloc[0]
 
 
 def _not_found(transaction_id):
-    return {"erreur": f"Transaction {transaction_id} introuvable dans la file d'alertes ni dans l'historique exporté."}
+    return {"erreur": f"Transaction {transaction_id} introuvable ({da.source().describe()})."}
 
 
 def _top(series, k=3):
@@ -118,7 +116,7 @@ def get_transaction(transaction_id):
     }
 
 
-def get_customer_profile(customer_id):
+def get_customer_profile(customer_id, before_transaction_id=None):
     c = da.customers()
     out = {"customer_id": customer_id}
     if c is not None:
@@ -128,23 +126,26 @@ def get_customer_profile(customer_id):
         out["profil"] = _row(m.iloc[0], ["age", "segment", "occupation", "home_city", "governorate", "customer_since",
                                          "monthly_income_tnd", "avg_monthly_balance_tnd", "kyc_risk_level",
                                          "digital_banking_user"])
-    h = da.history()
-    if h is not None:
-        t = h[h.customer_id == customer_id]
-        if not t.empty:
-            a = t.amount_tnd
-            phys = t[t.channel.isin(PHYSICAL)]
-            out["habitudes"] = {
-                "periode_observee": f"{t.timestamp.min():%Y-%m-%d} → {t.timestamp.max():%Y-%m-%d}",
-                "nb_operations": int(len(t)),
-                "montant_moyen": round(float(a.mean()), 3), "montant_median": round(float(a.median()), 3),
-                "montant_p95": round(float(a.quantile(0.95)), 3),
-                "pays_paiements_physiques": _top(phys.country, 4), "villes": _top(t.city, 4),
-                "canaux": _top(t.channel, 5), "categories": _top(t.merchant_category, 4),
-                "part_operations_nuit_0h_6h": round(float((t.timestamp.dt.hour < 6).mean()), 3),
-                "nb_appareils": int(t.device_id.nunique()), "nb_beneficiaires": int(t.beneficiary_id.nunique()),
-                "taux_refus": round(float((t.status == "REFUSEE").mean()), 3),
-            }
+    t = da.customer_tx(customer_id)
+    if before_transaction_id:
+        r = _tx_row(before_transaction_id)
+        if r is not None:
+            t = t[t.timestamp < r.timestamp]
+            out["habitudes_avant"] = before_transaction_id
+    if not t.empty:
+        a = t.amount_tnd
+        phys = t[t.channel.isin(PHYSICAL)]
+        out["habitudes"] = {
+            "periode_observee": f"{t.timestamp.min():%Y-%m-%d} → {t.timestamp.max():%Y-%m-%d}",
+            "nb_operations": int(len(t)),
+            "montant_moyen": round(float(a.mean()), 3), "montant_median": round(float(a.median()), 3),
+            "montant_p95": round(float(a.quantile(0.95)), 3),
+            "pays_paiements_physiques": _top(phys.country, 4), "villes": _top(t.city, 4),
+            "canaux": _top(t.channel, 5), "categories": _top(t.merchant_category, 4),
+            "part_operations_nuit_0h_6h": round(float((t.timestamp.dt.hour < 6).mean()), 3),
+            "nb_appareils": int(t.device_id.nunique()), "nb_beneficiaires": int(t.beneficiary_id.nunique()),
+            "taux_refus": round(float((t.status == "REFUSEE").mean()), 3),
+        }
     q = da.queue()
     out["nb_alertes_dans_file"] = int((q.customer_id == customer_id).sum())
     return out
@@ -154,38 +155,40 @@ def compare_to_habits(transaction_id):
     r = _tx_row(transaction_id)
     if r is None:
         return _not_found(transaction_id)
-    h = da.history()
-    if h is None:
-        return {"erreur": "Historique client non exporté."}
     ts = r.timestamp
-    past = h[(h.customer_id == r.customer_id) & (h.timestamp < ts)]
+    h = da.customer_tx(r.customer_id)
+    past = h[h.timestamp < ts]
     out = {"transaction": _row(r, ["transaction_id", "timestamp", "amount_tnd", "channel", "entry_mode", "country",
                                    "city", "merchant_category"]),
            "historique_avant": {"nb_operations": int(len(past)),
                                 "depuis": f"{past.timestamp.min():%Y-%m-%d}" if len(past) else None}}
-    e = da.explanations()
-    full = e[(e.transaction_id == transaction_id) & (e.feature == "f_amount") & e.usual.notna()]
-    if not full.empty:
-        out["montant_moyen_historique_complet"] = _v(full.usual.iloc[0])
-        out["ratio_vs_moyenne_historique_complete"] = round(float(r.amount_tnd / full.usual.iloc[0]), 2)
     if past.empty:
-        out["note"] = "Aucune opération antérieure dans l'extrait (historique exporté depuis juin 2026)."
+        out["note"] = "Aucune opération antérieure connue pour ce client."
         return out
     a = past.amount_tnd
     phys_past = past[past.channel.isin(PHYSICAL)]
     prev = past.iloc[-1]
     last24 = past[past.timestamp >= ts - timedelta(hours=24)]
     card1h = past[(past.card_id == r.card_id) & (past.timestamp >= ts - timedelta(hours=1))] if _v(r.card_id) else past.iloc[0:0]
+    is_phys = r.channel in PHYSICAL
     out["ecarts"] = {
-        "montant": float(r.amount_tnd), "montant_moyen": round(float(a.mean()), 3), "montant_p95": round(float(a.quantile(0.95)), 3),
+        "montant": float(r.amount_tnd), "montant_moyen": round(float(a.mean()), 3),
+        "montant_median": round(float(a.median()), 3), "montant_p95": round(float(a.quantile(0.95)), 3),
         "ratio_vs_moyenne": round(float(r.amount_tnd / a.mean()), 2) if a.mean() else None,
+        "part_operations_passees_inferieures": round(float((a < r.amount_tnd).mean()), 3),
         "au_dessus_du_max_passe": bool(r.amount_tnd > a.max()),
-        "pays_deja_vu_en_physique": bool(r.country in set(phys_past.country)) if r.channel in PHYSICAL else None,
+        "nb_operations_physiques_passees": int(len(phys_past)),
+        "pays_physiques_passes": sorted(phys_past.country.dropna().unique().tolist())[:8],
+        "pays_deja_vu_en_physique": bool(r.country in set(phys_past.country)) if is_phys else None,
         "ville_deja_vue": bool(r.city in set(past.city)) if _v(r.city) else None,
         "commercant_deja_vu": bool(r.merchant_id in set(past.merchant_id)) if _v(r.merchant_id) else None,
         "categorie_deja_vue": bool(r.merchant_category in set(past.merchant_category)) if _v(r.merchant_category) else None,
         "appareil_deja_vu": bool(r.device_id in set(past.device_id)) if _v(r.device_id) else None,
+        "appareil_connu_depuis_plus_de_24h": bool(r.device_id in set(past[past.timestamp < ts - timedelta(hours=24)].device_id))
+                                             if _v(r.device_id) else None,
         "beneficiaire_deja_vu": bool(r.beneficiary_id in set(past.beneficiary_id)) if _v(r.beneficiary_id) else None,
+        "beneficiaire_connu_depuis_plus_de_24h": bool(r.beneficiary_id in set(past[past.timestamp < ts - timedelta(hours=24)].beneficiary_id))
+                                                 if _v(r.beneficiary_id) else None,
         "mode_saisie_deja_vu": bool(r.entry_mode in set(past.entry_mode)),
         "heure": int(ts.hour), "part_nuit_passee": round(float((past.timestamp.dt.hour < 6).mean()), 3),
         "minutes_depuis_operation_precedente": round((ts - prev.timestamp).total_seconds() / 60, 1),
@@ -193,17 +196,21 @@ def compare_to_habits(transaction_id):
         "operations_24h_avant": int(len(last24)), "montant_24h_avant": round(float(last24.amount_tnd.sum()), 3),
         "operations_carte_1h_avant": int(len(card1h)), "refus_carte_1h_avant": int((card1h.status == "REFUSEE").sum()),
     }
+    if is_phys and _v(prev.get("latitude")) is not None and _v(r.get("latitude")) is not None:
+        lat1, lon1, lat2, lon2 = map(np.radians, [prev.latitude, prev.longitude, r.latitude, r.longitude])
+        km = 2 * 6371 * np.arcsin(np.sqrt(np.sin((lat2 - lat1) / 2) ** 2 +
+                                          np.cos(lat1) * np.cos(lat2) * np.sin((lon2 - lon1) / 2) ** 2))
+        hours = max((ts - prev.timestamp).total_seconds() / 3600, 0.05)
+        out["ecarts"]["distance_operation_precedente_km"] = round(float(km), 1)
+        out["ecarts"]["vitesse_implicite_kmh"] = round(float(km / hours), 1)
     out["ecarts"] = {k: v for k, v in out["ecarts"].items() if v is not None}
     return out
 
 
 def get_customer_history(customer_id, days=7, before_transaction_id=None):
-    h = da.history()
-    if h is None:
-        return {"erreur": "Historique client non exporté."}
-    t = h[h.customer_id == customer_id]
+    t = da.customer_tx(customer_id)
     if t.empty:
-        return {"erreur": f"Aucune opération pour {customer_id} dans l'historique exporté."}
+        return {"erreur": f"Aucune opération pour {customer_id}."}
     end = t.timestamp.max()
     if before_transaction_id:
         r = _tx_row(before_transaction_id)
@@ -224,13 +231,16 @@ def get_customer_history(customer_id, days=7, before_transaction_id=None):
 
 
 def get_digital_events(customer_id, around=None, hours_before=48, hours_after=2):
-    ev = da.digital_events()
+    hours_before = max(int(hours_before or 0), 24)      # at least the model's 24 h window (login failures, new device...)
     if around and str(around).startswith("TX"):
         r = _tx_row(around)
         around = r.timestamp if r is not None else None
     center = pd.to_datetime(around) if around else None
-    if ev is None:
-        out = {"disponible": False, "note": "Table digital_events non exportée vers l'application."}
+    start = center - timedelta(hours=int(hours_before)) if center is not None else None
+    end = center + timedelta(hours=int(hours_after)) if center is not None else None
+    t = da.events(customer_id, start, end)
+    if t is None:
+        out = {"disponible": False, "note": "Événements digitaux indisponibles (mode local sans export digital_events)."}
         if center is not None:
             q = da.queue()
             m = q[(q.customer_id == customer_id) & (q.timestamp == center)]
@@ -240,43 +250,49 @@ def get_digital_events(customer_id, around=None, hours_before=48, hours_after=2)
                           e.feature.fillna("").str.contains("login|device_added|benef|pwd|phone|branch")]
                 out["signaux_digitaux_du_modele"] = [{"facteur": f.factor, "valeur": _v(f.observed)} for f in feats.itertuples()]
         return out
-    t = ev[ev.customer_id == customer_id]
-    if center is not None:
-        t = t[(t.timestamp >= center - timedelta(hours=hours_before)) & (t.timestamp <= center + timedelta(hours=hours_after))]
     cols = ["timestamp", "event_type", "status", "channel", "device_id", "ip_country", "auth_method", "beneficiary_id"]
-    return {"disponible": True, "customer_id": customer_id, "nb_evenements": int(len(t)),
-            "echecs": int((t.status == "ECHEC").sum()) if "status" in t else None,
-            "evenements": [_row(r, cols) for _, r in t.sort_values("timestamp").tail(25).iterrows()]}
+    out = {"disponible": True, "customer_id": customer_id, "nb_evenements": int(len(t)),
+           "echecs": int((t.status == "ECHEC").sum()) if "status" in t else None,
+           "evenements": [_row(r, cols) for _, r in t.sort_values("timestamp").tail(25).iterrows()]}
+    if center is not None:
+        out["fenetre"] = f"{start:%Y-%m-%d %H:%M} → {end:%Y-%m-%d %H:%M}"
+    return out
 
 
 def find_related_cases(transaction_id, days=30):
     r = _tx_row(transaction_id)
     if r is None:
         return _not_found(transaction_id)
-    h = da.history()
-    if h is None:
-        return {"erreur": "Historique non exporté."}
-    q = da.queue()
-    alerted = q.set_index("transaction_id")
+    alerted = da.queue().set_index("transaction_id")
     ts = r.timestamp
-    window = h[(h.timestamp < ts) & (h.timestamp >= ts - timedelta(days=int(days))) & (h.customer_id != r.customer_id)]
+    start = ts - timedelta(days=int(days))
+    live = da.source().mode == "fabric"
     out = {"transaction_id": transaction_id, "fenetre_jours": int(days),
-           "perimetre": "clients présents dans la file d'alertes (extrait exporté)", "points_communs": []}
+           "perimetre": "toute la banque (Fabric)" if live else "clients de la file d'alertes (extrait local)",
+           "points_communs": []}
     for key, name in [("merchant_id", "commerçant / DAB"), ("device_id", "appareil"), ("beneficiary_id", "bénéficiaire")]:
         val = _v(r.get(key)) if hasattr(r, "get") else None
         if not val:
             continue
-        o = window[window[key] == val]
+        o = da.related(key, val, start.to_pydatetime(), ts.to_pydatetime(), r.customer_id)
+        if o.empty:
+            out["points_communs"].append({"type": name, "identifiant": val, "autres_clients": 0, "operations": 0})
+            continue
         hits = o[o.transaction_id.isin(alerted.index)]
+        rep = o[o.reported_fraud == 1]
         out["points_communs"].append({
             "type": name, "identifiant": val, "autres_clients": int(o.customer_id.nunique()),
             "autres_cartes": int(o.card_id.nunique()), "operations": int(len(o)),
+            "cartes_fraudees_deja_signalees": int(rep.card_id.nunique()),
+            "clients_fraudes_deja_signales": int(rep.customer_id.nunique()),
             "operations_en_alerte": int(len(hits)),
             "exemples_alertes": [{"transaction_id": t, "client": alerted.loc[t, "customer_id"],
                                   "date": _v(alerted.loc[t, "timestamp"]), "risque": alerted.loc[t, "risk_level"]}
                                  for t in hits.transaction_id.head(5)]})
     if not out["points_communs"]:
         out["note"] = "Aucun commerçant, appareil ou bénéficiaire identifiable sur cette opération."
+    else:
+        out["regle"] = "Seules les fraudes signalées AVANT la date de l'opération sont comptées (pas d'information future)."
     return out
 
 
@@ -310,6 +326,7 @@ def record_decision(transaction_id, decision, confidence="moyenne", comment="", 
         if new:
             w.writerow(["decided_at", "transaction_id", "decision", "confidence", "comment", "analyst", "source"])
         w.writerow([datetime.now().strftime("%Y-%m-%d %H:%M:%S"), transaction_id, decision, confidence, comment, analyst, source])
+    da.source().push_feedback(DECISIONS_FILE)          # feedback loop: journal mirrored to OneLake
     return {"enregistre": True, "transaction_id": transaction_id, "decision": decision, "confiance": confidence}
 
 
@@ -333,7 +350,9 @@ TOOL_SCHEMAS = [
          "risk_level": {"type": "string", "enum": ["ELEVE", "MOYEN", "FAIBLE"]}}),
     _fn("get_transaction", "Détail d'une transaction, son score modèle et ses facteurs de risque et rassurants.", _TX, ["transaction_id"]),
     _fn("get_customer_profile", "Profil et habitudes du client : montants, pays, villes, horaires, appareils, bénéficiaires.",
-        {"customer_id": {"type": "string", "description": "customer_id renvoyé par get_transaction (ex. C000488)"}}, ["customer_id"]),
+        {"customer_id": {"type": "string", "description": "customer_id renvoyé par get_transaction (ex. C000488)"},
+         "before_transaction_id": {"type": "string", "description": "habitudes calculées uniquement AVANT cette transaction"}},
+        ["customer_id"]),
     _fn("compare_to_habits", "Écarts chiffrés entre la transaction et l'historique du client AVANT elle.", _TX, ["transaction_id"]),
     _fn("get_customer_history", "Opérations récentes du client (et événements digitaux si disponibles).",
         {"customer_id": {"type": "string"}, "days": {"type": "integer"},

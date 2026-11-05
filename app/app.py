@@ -23,9 +23,21 @@ SUGGESTIONS = ["Pourquoi cette transaction est-elle suspecte ?",
                "Rédige le résumé d'investigation pour le dossier."]
 
 
-@st.cache_data
-def load():
+@st.cache_resource(show_spinner="Connexion à Microsoft Fabric (lh_fraud)…")
+def connect():
+    src = da.source()
+    return src.mode
+
+
+@st.cache_data(show_spinner="Chargement des tables Gold…")
+def load(_mode):
     return da.queue(), da.explanations()
+
+
+def refresh():
+    da.reset()
+    connect.clear()
+    load.clear()
 
 
 def open_tx(tid, page=PAGES[1]):
@@ -38,7 +50,7 @@ def money(x):
     return f"{x:,.3f} TND".replace(",", " ")
 
 
-queue, expl = load()
+queue, expl = load(connect())
 demos = queue[queue.demo_case.notna()]
 st.session_state.setdefault("tx", demos.transaction_id.iloc[0] if len(demos) else queue.transaction_id.iloc[0])
 st.session_state.setdefault("chat", {})
@@ -55,13 +67,17 @@ with st.sidebar:
         st.button(f"{d.risk_icon} {DEMO_LABEL.get(d.demo_case, d.demo_case)} · {d.transaction_id}",
                   key=f"demo_{d.transaction_id}", on_click=open_tx, args=(d.transaction_id,), width="stretch")
     st.divider()
+    src = da.source()
+    st.caption(f"Données : **{'🟢 ' if src.mode == 'fabric' else '🟡 '}{src.describe()}**")
+    if getattr(src, "feedback_synced", None):
+        st.caption(f"Journal synchronisé dans OneLake à {src.feedback_synced}")
+    if src.error:
+        st.caption(f"⚠️ {src.error}")
+    st.button("🔄 Rafraîchir depuis Fabric", on_click=refresh, width="stretch")
     mode = f"Azure OpenAI · {copilot.os.getenv('AZURE_OPENAI_DEPLOYMENT')}" if copilot.configured() else "hors-ligne (règles)"
     st.caption(f"Copilote : **{mode}**")
     u = copilot.usage_summary()
     st.caption(f"Appels LLM : {u['appels']} · tokens : {u['tokens']:,} · cache : {u['caches']}".replace(",", " "))
-    missing = [k for k, ok in da.data_status().items() if not ok]
-    if missing:
-        st.caption("⚠️ Non exporté : " + ", ".join(missing))
 
 
 # ---------------------------------------------------------------- 1. alert queue
@@ -235,38 +251,37 @@ def page_customer():
                    " · Canaux : " + ", ".join(f"{x['valeur']} ({x['part']:.0%})" for x in hab["canaux"]) +
                    " · Catégories : " + ", ".join(x["valeur"] for x in hab["categories"]))
 
-    hist = da.history()
-    if hist is None:
-        st.info("Historique client non exporté.")
-        return
-    t = hist[hist.customer_id == cust].copy()
+    t = da.customer_tx(cust).copy()
     if t.empty:
-        st.info("Aucune opération pour ce client dans l'historique exporté.")
+        st.info("Aucune opération pour ce client.")
         return
     anchor = r.timestamp if r.customer_id == cust else t.timestamp.max()
     days = st.slider("Fenêtre de la timeline (jours avant l'alerte)", 1, 30, 7)
-    w = t[(t.timestamp <= anchor + pd.Timedelta(hours=6)) & (t.timestamp >= anchor - pd.Timedelta(days=days))].copy()
+    lo, hi = anchor - pd.Timedelta(days=days), anchor + pd.Timedelta(hours=6)
+    w = t[(t.timestamp <= hi) & (t.timestamp >= lo)].copy()
     alerted = set(queue.transaction_id)
     w["⚑"] = w.transaction_id.map(lambda x: "🎯" if x == st.session_state.tx else ("🚨" if x in alerted else ""))
     st.subheader("Timeline")
     st.scatter_chart(w.assign(type=w["⚑"].replace({"": "normale", "🚨": "alerte", "🎯": "alerte ouverte"})),
                      x="timestamp", y="amount_tnd", color="type", height=260)
-    ev = da.digital_events()
-    if ev is not None:
-        e = ev[(ev.customer_id == cust) & (ev.timestamp <= anchor + pd.Timedelta(hours=6)) &
-               (ev.timestamp >= anchor - pd.Timedelta(days=days))]
+    e = da.events(cust, lo.to_pydatetime(), hi.to_pydatetime())
+    if e is not None and len(e):
         w = pd.concat([w, e.assign(**{"⚑": "📱", "transaction_type": e.event_type})], ignore_index=True)
+        st.caption(f"📱 {len(e)} événement(s) digital(aux) dans la fenêtre, dont {int((e.status == 'ECHEC').sum())} échec(s).")
     st.dataframe(w.sort_values("timestamp", ascending=False)[
         [c for c in ["⚑", "timestamp", "transaction_id", "transaction_type", "channel", "entry_mode", "merchant_category",
-                     "amount_tnd", "city", "country", "status", "decline_reason", "device_id", "beneficiary_id"] if c in w.columns]],
+                     "amount_tnd", "city", "country", "status", "decline_reason", "device_id", "ip_country", "beneficiary_id"]
+         if c in w.columns]],
         hide_index=True, width="stretch", height=360)
-    if {"latitude", "longitude"} <= set(t.columns):
-        geo = w.dropna(subset=["latitude", "longitude"])
-        geo = geo.assign(color=geo["⚑"].map({"🎯": "#d62728", "🚨": "#ff7f0e"}).fillna("#1f77b4"))
-        st.subheader("Carte des opérations")
-        st.map(geo, latitude="latitude", longitude="longitude", color="color", size=40)
+    geo = w.dropna(subset=["latitude", "longitude"]) if {"latitude", "longitude"} <= set(w.columns) else pd.DataFrame()
+    if len(geo):
+        geo = geo.assign(color=geo["⚑"].map({"🎯": "#d62728", "🚨": "#ff7f0e"}).fillna("#1f77b4"),
+                         size=geo["⚑"].map({"🎯": 400, "🚨": 250}).fillna(120))
+        st.subheader("Carte des opérations physiques")
+        st.map(geo, latitude="latitude", longitude="longitude", color="color", size="size")
+        st.caption("🔴 alerte ouverte · 🟠 autres alertes · 🔵 opérations habituelles")
     else:
-        st.caption("🗺️ Carte : coordonnées non exportées (ajouter latitude/longitude à customer_history).")
+        st.caption("🗺️ Carte : aucune opération géolocalisée dans la fenêtre (paiements en ligne / virements).")
 
 
 # ---------------------------------------------------------------- 4. performance
