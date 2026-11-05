@@ -100,7 +100,7 @@ def trial(transaction_id, lang="fr", on_stage=None):
     stage = on_stage or (lambda role, text: None)
     key = hashlib.sha256(f"proces-p2|{copilot.CACHE_VERSION}|{lang}|{transaction_id}".encode()).hexdigest()
     cache = copilot._cache
-    if key in cache and copilot.configured():
+    if key in cache and (copilot.configured() or os.getenv("COPILOT_OFFLINE", "0") != "1"):
         out = {**cache[key], "cached": True}
         for role in ("procureur", "defense", "juge"):
             stage(role, out[role])

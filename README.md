@@ -4,6 +4,8 @@ A copilot for a fraud analyst: it **detects** suspicious transactions (model sco
 
 ## Architecture
 
+Full diagrams (global architecture, AI workflow, Le Procès sequence, page workflow, demo path): **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** — PNG versions for slides in [docs/img/](docs/img/).
+
 ```
 SQL source ──copy job──► Fabric Lakehouse lh_fraud (bronze)
                               │  notebooks/01_silver_features   silver_transactions → gold_features (73 past-only features)
@@ -21,7 +23,7 @@ SQL source ──copy job──► Fabric Lakehouse lh_fraud (bronze)
 
 | | Alerts | Frauds caught | Recall | Precision |
 |---|---|---|---|---|
-| Current rules engine | 3,338 | 117 / 1,013 | 11.6 % | 3.5 % |
+| Current rules engine | 3,338 | 117 / 1,013 | 11.5 % | 3.5 % |
 | Model, same alert volume | 3,338 | 787 | 77.7 % | 23.6 % |
 | **Model, top 1 % (analyst capacity)** | **1,779** | **718** | **70.9 %** | **40.4 %** |
 
@@ -43,6 +45,15 @@ Before the pitch: `python warmup.py` pre-computes the copilot's answers for the 
 
 If Azure OpenAI is not configured or unavailable, the copilot switches to a **deterministic offline mode** built on the same tools, so the demo always works.
 
+### Hosted demo (Streamlit Community Cloud)
+
+Live link: **https://hyson-detector.streamlit.app**
+
+- Main file `app/app.py`, Python 3.12, dependencies from `app/requirements.txt`.
+- The cloud has no Entra login, so it reads the **Gold snapshot committed in `app/data/*.parquet`** (synthetic data exported from Fabric). Locally the app reads Fabric live.
+- Azure OpenAI: paste the values of [`app/.streamlit/secrets.toml.example`](app/.streamlit/secrets.toml.example) into the app's **Settings → Secrets** (never in Git). Without a key, the demo cases are answered from the pre-computed gpt-5-mini cache and other questions use offline mode.
+- Decisions recorded on the hosted app stay in its container (not written to OneLake).
+
 ## Pages
 
 The app is branded **Hyson Detector** (light, bank-platform theme; FR/EN). The sidebar groups pages as *Bienvenue · Analyste · Enquête IA · Pilotage*, plus one-click demo cases.
@@ -58,6 +69,7 @@ The app is branded **Hyson Detector** (light, bank-platform theme; FR/EN). The s
 8. **Contre-enquête**: counterfactual — neutralises the top SHAP factors one by one; "robust" if the alert survives, "sensitive" if it flips.
 9. **Constellation**: points of compromise (ATMs/merchants where fraud victims passed in the 30 days before fraud, lift ×2.5–×4.1) with today's alerts orbiting them. Shown as an investigation lead only: exposure was **not** predictive in validation (41 % vs 40 % precision), so it is not in the score.
 10. **Impact & processus**: risk-committee view — fraud TND intercepted, legitimate TND not blocked, false alerts avoided, analyst hours (editable assumptions), transaction → decision process, recommendation mix, median alert → decision time, AI cost per alert, PSI drift.
+11. **Marché & benchmarks** (`market.py`): our results next to **real public figures with their sources** (EBA/ECB, UK Finance, Banque Centrale de Tunisie, industry false-positive estimate); the same KPIs computed live on our data; a Tunisian-scale scenario with editable assumptions; fraud rate by channel and entry mode (3-D Secure lever); an **audit of the current rules engine** (which rules to switch off); and the **time to detect** (days between a fraud and its report).
 
 The transaction page also has a stopwatch (alert opened → decision saved, stored as `duration_s`) and a printable HTML case file.
 

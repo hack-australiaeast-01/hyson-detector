@@ -1,9 +1,12 @@
 # secrets
 .env
 **/.env
-# data exports and runtime logs (regenerated from Fabric)
-app/data/
+# data: the Gold snapshot (synthetic) + copilot cache are committed so the hosted app works without Fabric;
+# runtime logs and analyst decisions stay local
 *.parquet
+!app/data/*.parquet
+app/data/copilot_log*.jsonl
+app/data/decisions.csv
 *.zip
 # python
 __pycache__/
@@ -14,4 +17,12 @@ test/
 
 # third-party material (not ours to redistribute)
 ai bank for the future.*
+
+
+# Streamlit Cloud secrets (paste them in the Cloud UI)
+.streamlit/secrets.toml
+**/.streamlit/secrets.toml
+
+# organisers' brief (kept locally, not ours to republish)
+Hackathon_AI_Banking_Copilot_Brief_*
 

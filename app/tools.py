@@ -360,14 +360,14 @@ def get_kpis():
         model_tp = round(m["model_top1pct_precision"] * budget)
     return {"periode_validation": "juin → juillet 2026 (hors échantillon)",
             "moteur_regles_actuel": {"alertes": legacy_alerts, "fraudes_detectees": legacy_tp,
-                                     "precision": round(legacy_tp / max(legacy_alerts, 1), 4),
-                                     "rappel": round(legacy_tp / m["valid_frauds"], 4),
+                                     "precision": legacy_tp / max(legacy_alerts, 1),
+                                     "rappel": legacy_tp / m["valid_frauds"],
                                      "fausses_alertes": legacy_alerts - legacy_tp},
             "modele_meme_volume": {"alertes": int(m["legacy_alerts"]), "fraudes_detectees": int(m["frauds_caught_model_same_budget"]),
                                    "precision": m["model_same_budget_as_legacy_precision"],
                                    "rappel": m["model_same_budget_as_legacy_recall"]},
-            "modele_top_1pct": {"alertes": budget, "fraudes_detectees": model_tp, "precision": round(model_tp / budget, 4),
-                                "rappel": round(model_tp / m["valid_frauds"], 4), "fausses_alertes": budget - model_tp},
+            "modele_top_1pct": {"alertes": budget, "fraudes_detectees": model_tp, "precision": model_tp / budget,
+                                "rappel": model_tp / m["valid_frauds"], "fausses_alertes": budget - model_tp},
             "pr_auc_modele": m["pr_auc_model"], "fraudes_validation": int(m["valid_frauds"]),
             "rappel_par_typologie": [_row(x, ["fraud_scenario", "frauds", "recall_model", "recall_legacy"]) for _, x in rt.iterrows()]}
 

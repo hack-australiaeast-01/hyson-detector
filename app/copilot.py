@@ -272,7 +272,8 @@ def ask(question, context_tx=None, history=None, lang="fr", on_token=None, on_st
     question = question.strip()
     intent = detect_intent(question, context_tx)
     key = hashlib.sha256(f"{CACHE_VERSION}|{lang}|{context_tx}|{question.lower()}".encode()).hexdigest()
-    if key in _cache and (configured() or not _cache[key]["mode"].startswith("Azure")):
+    # cached Azure answers are pre-computed LLM output: serve them even without a key (hosted demo), unless forced offline
+    if key in _cache and (configured() or os.getenv("COPILOT_OFFLINE", "0") != "1" or not _cache[key]["mode"].startswith("Azure")):
         out = {**_cache[key], "cached": True}
         for t in out["tools"]:
             on_step and on_step(t["name"])

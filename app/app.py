@@ -10,9 +10,23 @@ from types import SimpleNamespace
 import pandas as pd
 import streamlit as st
 
-import copilot
+
+def _secrets_to_env():
+    """Streamlit Community Cloud: expose root-level secrets as env vars before the modules read them."""
+    try:
+        for k, v in st.secrets.items():
+            if isinstance(v, (str, int, float)) and not os.getenv(k):
+                os.environ[k] = str(v)
+    except Exception:          # no secrets.toml locally -> .env is used instead
+        pass
+
+
+_secrets_to_env()
+
+import copilot  # noqa: E402  (after the secrets bridge on purpose)
 import data_access as da
 import features as fx
+import market
 import studio
 import tools
 import ui
@@ -30,22 +44,23 @@ def L(fr, en):
 
 
 # internal page ids (stable across languages) -> labels, grouped like a banking platform menu
-PAGES = ["guide", "queue", "tx", "cust", "proces", "replay", "contre", "galaxy", "impact", "perf", "pbi", "journal"]
+PAGES = ["guide", "queue", "tx", "cust", "proces", "replay", "contre", "galaxy", "impact", "market", "perf", "pbi", "journal"]
 PAGE_LABEL = {"guide": ("Démarrer ici", "Start here"),
               "queue": ("File d'alertes", "Alert queue"), "tx": ("Fiche transaction & copilote", "Transaction & copilot"),
               "cust": ("Vue client 360", "Customer 360"),
               "proces": ("Le Procès", "The Trial"), "replay": ("Reconstitution", "Crime-scene replay"),
               "contre": ("Contre-enquête", "Counter-inquiry"), "galaxy": ("Constellation", "Constellation"),
-              "impact": ("Impact & processus", "Impact & process"), "perf": ("Performance du modèle", "Model performance"),
+              "impact": ("Impact & processus", "Impact & process"),
+              "market": ("Marché & benchmarks", "Market & benchmarks"), "perf": ("Performance du modèle", "Model performance"),
               "journal": ("Journal & traçabilité", "Audit log"), "pbi": ("Tableau de bord Power BI", "Power BI dashboard")}
 PAGE_ICON = {"guide": ":material/flag:", "queue": ":material/notifications_active:", "tx": ":material/manage_search:",
              "cust": ":material/person:", "proces": ":material/gavel:", "replay": ":material/movie:",
-             "contre": ":material/alt_route:", "galaxy": ":material/hub:", "impact": ":material/insights:",
+             "contre": ":material/alt_route:", "galaxy": ":material/hub:", "impact": ":material/insights:", "market": ":material/public:",
              "perf": ":material/monitoring:", "pbi": ":material/dashboard:", "journal": ":material/fact_check:"}
 NAV_GROUPS = [(("Bienvenue", "Welcome"), ["guide"]),
               (("Analyste", "Analyst"), ["queue", "tx", "cust"]),
               (("Enquête IA", "AI investigation"), ["proces", "replay", "contre", "galaxy"]),
-              (("Pilotage", "Steering"), ["impact", "perf", "pbi", "journal"])]
+              (("Pilotage", "Steering"), ["impact", "market", "perf", "pbi", "journal"])]
 DEMO_LABEL = {"obvious_fraud": ("Fraude évidente", "Obvious fraud"), "subtle_fraud": ("Fraude subtile", "Subtle fraud"),
               "avoided_false_positive": ("Faux positif évité", "Avoided false positive")}
 SUGGESTIONS = copilot.SUGGESTIONS          # same strings as warmup.py -> pre-computed answers are cache hits
@@ -595,7 +610,8 @@ if not st.session_state.get("welcomed"):
 studio.tour_hint(ctx, page)
 {"guide": lambda: studio.page_guide(ctx), "queue": page_queue, "tx": page_transaction, "cust": page_customer,
  "proces": lambda: studio.page_proces(ctx), "replay": lambda: studio.page_replay(ctx), "contre": lambda: studio.page_contre(ctx),
- "galaxy": lambda: studio.page_galaxy(ctx), "impact": lambda: studio.page_impact(ctx), "perf": page_performance,
+ "galaxy": lambda: studio.page_galaxy(ctx), "impact": lambda: studio.page_impact(ctx),
+ "market": lambda: market.page_market(ctx, src.mode), "perf": page_performance,
  "journal": page_journal, "pbi": page_powerbi}[page]()
 ui.footer(L("Hyson Detector · données 100 % synthétiques · Microsoft Fabric (Lakehouse lh_fraud) · Azure OpenAI · "
             "le modèle score, l'IA explique, l'analyste décide",

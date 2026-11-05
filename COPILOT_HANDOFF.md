@@ -1,4 +1,7 @@
-yo# Handoff for GitHub Copilot — AI Banking Copilot for Fraud Detection
+> ⚠️ **Historical (written 2026-11-05 ~11:40).** Tasks 1–7 below are **done**: split fixed, notebooks 01/02 run, model + Gold tables + app + copilot built.
+> Current state and next steps: **`STATUS.md`** (single source of truth). Keep this file only for the ground rules (§0) and the schema (§1).
+
+# Handoff for GitHub Copilot — AI Banking Copilot for Fraud Detection
 
 Give this whole file to GitHub Copilot (Chat / Agent mode) as context. Work through the tasks in order; each has an acceptance check. Full challenge brief in English: `BRIEF_SUMMARY.md` (same folder). Progress tracker: `STATUS.md`.
 

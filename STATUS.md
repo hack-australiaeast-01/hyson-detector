@@ -15,9 +15,9 @@ Updated: 2026-11-05 18:15 · ✅ done · 🟡 in progress · ❌ to do · Target
 ## 2. Results (validation Jun–Jul 2026, out-of-time, final)
 | | Alerts | Frauds caught | Recall | Precision |
 |---|---|---|---|---|
-| Current rules engine | 3,338 | 116 / 1,013 | 11.5 % | 3.5 % |
+| Current rules engine | 3,338 | 117 / 1,013 | 11.5 % | 3.5 % |
 | Model, same alert volume | 3,338 | 787 | 77.7 % | 23.6 % |
-| **Model, top 1 %** | **1,780** | **718** | **70.9 %** | **40.4 %** |
+| **Model, top 1 %** | **1,779** | **718** | **70.9 %** | **40.4 %** |
 | Model, top 0.5 % | ~890 | ~590 | 58.2 % | 66.4 % |
 
 - PR-AUC 0.646 (rules 0.014).
@@ -32,7 +32,7 @@ Updated: 2026-11-05 18:15 · ✅ done · 🟡 in progress · ❌ to do · Target
   | Card testing | 61 % | 0 % |
   | Cloned card abroad | 91 % | 100 % (legacy rule kept as a complement) |
 
-- Pitch line: "Half the alerts, about 6× more frauds caught, about 67 % fewer false alerts (1,062 vs 3,222)."
+- Pitch line: "Half the alerts, about 6× more frauds caught, about 67 % fewer false alerts (1,061 vs 3,221)."
 - Demo cases:
   - TX01555470, obvious fraud: 3 night-time web transfers in 4 h (00:54, 03:30, 04:49), 3 failed logins in the previous 24 h.
   - TX01585580, subtle fraud: 7.69 TND online at 02:03 at a new merchant, after 2 other micro-purchases (card testing).
@@ -54,9 +54,10 @@ Updated: 2026-11-05 18:15 · ✅ done · 🟡 in progress · ❌ to do · Target
 | 18 | Power BI report on Gold (manager view, complement) | ✅ | Built as code by `notebooks/03d_powerbi_dashboard.ipynb`: 8 `pbi_*` tables → Direct Lake model `sm_fraud_copilot` (25 DAX measures) → report "Fraud Copilot — Dashboard", 4 dark-theme pages (executive view, alert queue, why?, fraud types). 03d = final design pass (title line, slicer height, no "K" units, no "—" row, legend titles) — **run in Fabric and verified on all pages**. Local 03d also auto-attaches `lh_fraud` (`%%configure`). To do: delete old notebooks `03_`, `03b_`, `03c_` in Fabric |
 | 18a | Power BI icon navigation + FR/EN | 🟡 | `notebooks/03e_powerbi_dashboard.ipynb` (built, not yet run): 4 icons (files / warning / question / typologies) with the page title under each, both clickable; FR \| EN switch on every page; 4 hidden EN pages (`*_en`) with English label columns; icons uploaded with the report through the Fabric REST API. Import + Run all to apply |
 | 18c | App FR/EN + icon navigation | ✅ | Sidebar "Français / English" switch translates every page; Power BI page uses the same 4 icons + titles to change report page and opens the EN report pages in English. Tested in the browser (FR + EN) |
+| 18d | "Marché & benchmarks" page (FR/EN) | ✅ | `app/market.py`: 6 cited public benchmarks (EBA/ECB 2024 + Dec 2025, UK Finance 2025/2026, BCT 2024, PwC/McKinsey FP estimate) · same KPIs on our data (live Fabric SQL, snapshot `data/feat_market.parquet`) · Tunisia-scale scenario with editable assumptions · fraud rate by channel / entry mode, 3-D Secure lever · **rules-engine audit** (R04, R01, R05 to switch off: ≈ 17,483 fewer false alerts for 2 solo frauds) · **time to detect** (median 11 days, 32.8 % within 7 days). Snapshots `feat_legacy_rules`, `feat_time_to_detect`. Tested FR + EN (AppTest) and in the browser |
 | 18b | Power BI embedded in the app | ✅ | Page "📈 Tableau de bord Power BI" in `app.py`: secure embed (`reportEmbed`, viewer signs in with the org account, nothing public), page picker + "Ouvrir dans Power BI". IDs in `.env.example` (`PBI_REPORT_ID`, `PBI_TENANT_ID`). Tested: page renders, no errors |
 | 19 | GitHub: Fabric Git integration + push of the repo (README, requirements, .env.example, .gitignore ✅) | 🟡 | Local repo ✅ (commits `3ae7d57`, `2404a7d`, no secrets). Still to do: create the GitHub repo + `git push`, then Fabric Git integration (§13, §16.5) |
-| 20 | GitHub Copilot usage evidence (screenshots, time saved) | 🟡 | §13, §17 |
+| 20 | GitHub Copilot usage evidence (screenshots, time saved) | 🟡 | `docs/AI_TOOLS_USAGE.md` ready: Copilot log table to fill with real uses + screenshots in `docs/copilot_evidence/`; Claude Code and Azure OpenAI usage already declared (§13, §16.4, §17). Git commits/pushes = GitHub Copilot's job (not Claude) |
 | 21 | Slides: problem, demo, architecture, results, prototype → production, limits | ❌ | §17 |
 | 22 | Pitch 5 min ×3 rehearsals + backup video | ❌ | §10, §17 |
 
@@ -96,7 +97,7 @@ Checked by running the copilot: offline path on 4 cases, plus **one live call**.
 | R5 | README says "temperature 0.1"; with gpt-5-mini the code uses no temperature and `max_completion_tokens` 2,400 | Jury may read the repo | Update README to say which mode is used |
 | R6 | `copilot.py` silently goes live whenever `.env` exists | Accidental paid calls during tests (happened once) | Add `COPILOT_OFFLINE=1` env switch for tests |
 
-Verified OK: unknown ID handled ("TX99999999 introuvable"), KPI answer computed without LLM (2,162 false alerts avoided, 603 more frauds; exact counts from the alert list = 2,160 and 602, as on the dashboard; app rounds from recall), call logged in `data/copilot_log.jsonl` with tools, tokens and latency.
+Verified OK: unknown ID handled ("TX99999999 introuvable"), KPI answer computed without LLM (now from exact counts: 2,160 false alerts avoided, 601 more frauds), call logged in `data/copilot_log.jsonl` with tools, tokens and latency.
 
 ## 6. Fabric cell: complete customer export (run alone at the end of notebook 02, never "Run all")
 ```python
@@ -241,3 +242,47 @@ Goal: go beyond "a chat on top of a model" and speak the bank's language (KPIs, 
 
 ### 10.4 Demo path (≈ 3 min)
 Démarrer ici → Fraude évidente TX01555470 → ask "Pourquoi suspecte ?" → Le Procès → Reconstitution → decide (< 30 s on the stopwatch) → Faux positif évité TX01575959 → Contre-enquête (robust clearance) → Constellation → Impact & processus.
+
+## 11. Marché & benchmarks — the "killing blow" page (2026-11-06)
+
+**Why:** every team shows precision/recall on synthetic data; few answer the jury's real question, "how does it compare to real banks, and what does the bank do with it?" (business relevance = 20 %).
+
+**What (`app/market.py`, FR/EN, sidebar → Pilotage):**
+1. Six real public benchmarks with links (EBA/ECB 2024 and Dec 2025, UK Finance 2025/2026, BCT 2024, PwC/McKinsey false-positive estimate).
+2. The same KPIs computed live on our data (Fabric SQL; parquet snapshot offline): false alerts rules 96.5 % vs model 59.6 %; cross-border 15.0 % of fraud vs 1.2 % of value (EU: 28 % vs 4 %); fraud value stopped 67.7 % vs 22.1 %.
+3. Tunisian-scale scenario (BCT 2024 volume × editable fraud rate): ~TND 8.6 m exposure/yr, ~TND 3.9 m more fraud stopped/yr, ~2 m fewer false alerts/yr — labelled as a scenario.
+4. Fraud rate by channel and entry mode: ATMs 25 % of fraud for 10 % of value; online without 3-D Secure 1.8× riskier.
+5. Rules-engine audit: R04, R01, R05 have < 1 % precision → switch off = ≈ 17,483 fewer false alerts for 2 frauds caught by them alone; R02 (foreign country) catches 1,206 of 1,242 legacy frauds.
+6. Time to detect: median 11 days to report, 32.8 % within 7 days, TND 693,791 reported after a week; the model alerts at day 0.
+
+**Honesty rules:** every external figure has its source and year; our fraud rate (0.28 %) is shown as deliberately higher than the EU's (synthetic data, brief FAQ); "different scope" is stated where a comparison is only indicative; the 90–95 % figure is labelled an industry estimate; no public Tunisian fraud rate exists, so the scale-up uses the EU rate as an editable assumption.
+
+**Verification:** AppTest renders the page with no exception in FR and EN; checked visually in the browser on live Fabric data.
+
+**Pitch line (20 s):** "Real banks' rule engines generate 90–95 % false alerts; we measured 96.5 % on this bank's and cut it to 59.6 %. And without any AI, the bank can switch off three rules tomorrow: 17,000 fewer false alerts, two frauds lost."
+
+## 12. Fraud-number audit (2026-11-06) — Fabric = source of truth
+
+Read-only SQL on `lh_fraud`, then compared with the app (`tools.get_kpis`, `features.impact`, `market.py`), the Power BI tables and the docs.
+
+**Canonical numbers (validation Jun–Jul 2026, 177,953 transactions, 1,013 frauds):**
+
+| | Alerts | Frauds | False alerts | Precision | Recall |
+|---|---|---|---|---|---|
+| Current rules | 3,338 | 117 | 3,221 | 3.5 % | 11.5 % |
+| Model, same volume | 3,338 | 787 | 2,551 | 23.6 % | 77.7 % |
+| Model, top 1 % | 1,779 | 718 | 1,061 | 40.4 % | 70.9 % |
+
+→ 2,160 false alerts avoided · 601 more frauds · recall ×6.7 at equal volume · PR-AUC 0.646.
+
+**Checked OK:** silver 1,542,647 train + 177,953 valid + 187,628 test; 9,507 frauds = labels table; 0 test labels anywhere (silver, labels, queue); recall by type recomputed = `gold_model_recall_by_type`; legacy analyst verdicts = labels (0 mismatch); time-to-detect dates (0 negative, 0 missing); the target-encoded `f_*_risk` columns exist in `gold_features` but **never appear in 18,280 SHAP explanations** → not used by the model.
+
+**Fixed:**
+- `gold_model_metrics.frauds_caught_legacy` = 116 vs 117 in the data → the app already recounts (`features.impact`); **03e now recomputes legacy and top-1 % counts from `gold_scores` × labels** (Power BI showed 116 / 1,780 / 1,062 / 602).
+- `tools.get_kpis` rounded precision/recall to 4 decimals → 0.1155 displayed as 11.6 %; now exact (11.5 %).
+- Docs aligned (README, STATUS, JURY_HANDBOOK); market-page caption: legacy alerts cover Jan 2025 – Jul 2026, not training only.
+
+**Still to do (not code fixes, your steps):**
+1. Re-run `03e_powerbi_dashboard` in Fabric so Power BI shows 117 / 1,779 / 1,061 / 2,160 / 601 (plus icons + FR/EN).
+2. The repo's `notebooks/01_silver_features.ipynb` and `02_score_explain.ipynb` are **old versions** (01 is the 10:45 draft); export the versions that actually ran from Fabric (Download as .ipynb) before the jury reads the code (§13 "notebooks Fabric exportés").
+3. Optional, for code readability: in notebook 01, stop creating `f_merchant_risk`, `f_device_risk`, `f_beneficiary_risk` (or add a comment "not used: not point-in-time") so a reviewer does not flag them. Re-running 01/02 would change demo IDs, so only edit the code comment if the pipeline stays frozen.
