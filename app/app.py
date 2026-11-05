@@ -417,7 +417,8 @@ def page_transaction():
 def page_customer():
     r = queue[queue.transaction_id == st.session_state.tx].iloc[0]
     cust = st.text_input(L("Client", "Customer"), r.customer_id)
-    prof = tools.get_customer_profile(cust)
+    # habits = the customer's past at the time of the open alert (same rule as the copilot; never later operations)
+    prof = tools.get_customer_profile(cust, before_transaction_id=r.transaction_id if cust == r.customer_id else None)
     if "erreur" in prof:
         st.error(prof["erreur"])
         return
