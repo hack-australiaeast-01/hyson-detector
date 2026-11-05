@@ -1,0 +1,17 @@
+# secrets
+.env
+**/.env
+# data exports and runtime logs (regenerated from Fabric)
+app/data/
+*.parquet
+*.zip
+# python
+__pycache__/
+*.pyc
+.venv/
+# local scratch
+test/
+
+# third-party material (not ours to redistribute)
+ai bank for the future.*
+
