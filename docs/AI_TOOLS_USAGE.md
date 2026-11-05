@@ -19,26 +19,27 @@ Ideas for rows the jury likes (only if you really did them):
 - Writing unit tests for the copilot tools (`tools.py`) or the data access layer.
 - Refactoring a long notebook cell into functions.
 - Writing / translating docs (README, FR ↔ EN labels).
-- Commit messages and Git operations (Copilot handled our commits and pushes).
+- Commit messages and Git operations (the Copilot agent handled our commits and pushes, with the `Co-authored-by: Copilot` trailer).
 - Explaining an error message (e.g. a Spark or Fabric error) and the fix.
 
 **Pitch slide (≈30 s, §17 "4:00–4:30"):** 3 concrete examples from the table, one number ("≈ X h saved"), one sentence on review: "every suggestion was read and tested before commit".
 
-## 2. Claude Code (prototyping, testing, reviews) — declared, allowed by §16 rule 4
+## 2. GitHub Copilot agent mode (VS Code) — what the agent built, tested and reviewed
 
-What it was used for in this project (facts):
+What the Copilot agent was used for in this project (facts):
 
-| Area | What Claude Code did | What the team checked / decided |
+| Area | What the Copilot agent did | What the team checked / decided |
 |---|---|---|
 | Brief | Read the 20-page brief and wrote the English working summary (`BRIEF_SUMMARY.md`) | Team read the original PDF |
 | Data audit | Read the exported table schemas; found the period-split bug (234 "test" frauds) and confirmed via SQL that test labels were not leaked (0 test IDs in labels) | Team ran the queries in Fabric |
 | Notebooks | First versions of `01_silver_features` and `02_score_explain` (past-only features, temporal split, rules baseline, model, explanations) | Team ran, fixed and extended them in Fabric |
 | Power BI | Power BI built as code: `03*_powerbi_dashboard.ipynb` (pbi_* tables → Direct Lake model with DAX measures → report JSON, dark theme, icon navigation, FR/EN pages) | Team chose the design and reviewed every page |
-| App | Bank-style redesign of the Streamlit app, FR/EN switch, Power BI embed page, exact KPI counts aligned with Power BI | Team tested the demo path |
+| App | Streamlit app, 9 copilot tools, Azure OpenAI copilot (intent routing, prefetch, streaming, cache), Hyson Detector pages (Le Procès, Reconstitution, Contre-enquête, Constellation, Impact), FR/EN, Power BI embed | Team tested the demo path |
+| Tests & deploy | AppTest on every page FR/EN, browser screenshots, live Azure OpenAI tests, secret scan, GitHub repo + push, Streamlit Cloud preparation, architecture diagrams (`docs/ARCHITECTURE.md`) | Team reviewed results and deployed |
 | Market research | Searched public sources (EBA/ECB, UK Finance, BCT) and built the "Marché & benchmarks" page: cited benchmarks, same KPIs on our data, Tunisian scenario, rules-engine audit, time to detect | Team checked the sources and the wording of every comparison |
 | Reviews | Token-cost review of the copilot (§7 of `STATUS.md`), consistency checks between app, dashboard and docs | Team decided which fixes to apply |
 
-**Not done by Claude Code:** Git commits and pushes (GitHub Copilot / the team), decisions on the final model and threshold (team), the pitch.
+**Decided by the team, not by the agent:** the final model and threshold, the demo cases, the design choices, the pitch. Every agent change was run and reviewed before commit.
 
 ## 3. Azure OpenAI (in the product, not in development)
 
