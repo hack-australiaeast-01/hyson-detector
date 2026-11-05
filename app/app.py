@@ -39,7 +39,7 @@ import studio
 import tools
 import ui
 
-st.set_page_config(page_title="Hyson Detector · Fraude", page_icon="🛡️", layout="wide")
+st.set_page_config(page_title="Hyson Detector · Fraude", page_icon=ui.FAVICON, layout="wide")
 ui.inject()
 
 ICON_DIR = Path(__file__).parent / "static" / "icons"
@@ -126,7 +126,8 @@ def nb(x):
 _splash = st.empty()
 if "tx" not in st.session_state:                       # first load: branded, reassuring loading screen
     _splash.markdown(
-        f'<div class="welcome" style="margin-top:12vh;text-align:center"><div style="display:flex;justify-content:center">{ui.LOGO}</div>'
+        f'<div class="welcome" style="margin-top:12vh;text-align:center"><div style="display:flex;justify-content:center">'
+        f'{ui.logo("white", 92)}</div>'
         f'<h1>Hyson Detector</h1><p style="margin:0 auto">{L("Connexion sécurisée à Microsoft Fabric et chargement des alertes du jour…",
                                                            "Secure connection to Microsoft Fabric and loading today’s alerts…")}</p>'
         f'<p style="margin:.8rem auto 0;color:#9FE3D7;font-size:.85rem">{L("Détecter · Expliquer · Décider", "Detect · Explain · Decide")}</p></div>',
@@ -655,6 +656,8 @@ def page_powerbi():
 
 @st.dialog("Bienvenue sur Hyson Detector · Welcome", width="large")
 def welcome():
+    st.markdown(f'<div style="display:flex;justify-content:center;margin:-.4rem 0 .4rem">{ui.logo("blue", 84)}</div>',
+                unsafe_allow_html=True)
     st.markdown(L(
         "### Le copilote de l'analyste fraude\n"
         "Hyson Detector **détecte** les transactions suspectes (modèle entraîné dans Microsoft Fabric), **explique** chaque alerte "

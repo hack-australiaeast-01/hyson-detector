@@ -114,12 +114,13 @@ def tour_hint(c, page):
 def page_guide(c):
     done = st.session_state.setdefault("done", set())
     st.markdown(
-        f'<div class="welcome"><span class="tag">{c.L("Bienvenue", "Welcome")}</span>'
+        f'<div class="welcome" style="display:flex;gap:1.6rem;align-items:center">{ui.logo("white", 104)}'
+        f'<div><span class="tag">{c.L("Bienvenue", "Welcome")}</span>'
         f'<h1>Hyson Detector</h1><p>{html.escape(c.L(
             "Le copilote de l’analyste fraude : le modèle score chaque transaction, l’IA explique avec les données de la banque, "
             "l’analyste décide. Cette visite de 3 minutes vous montre tout le parcours, comme au premier jour.",
             "The fraud analyst's copilot: the model scores every transaction, AI explains with the bank's data, the analyst decides. "
-            "This 3-minute tour shows you the whole journey, just like on your first day."))}</p></div>', unsafe_allow_html=True)
+            "This 3-minute tour shows you the whole journey, just like on your first day."))}</p></div></div>', unsafe_allow_html=True)
     k = tools.get_kpis()
     imp = fx.impact()
     a, b, d, e = st.columns(4)
@@ -735,7 +736,8 @@ def case_file_html(c, tid):
            "th{background:#F4F6FA}.box{background:#F4F6FA;border-radius:10px;padding:10px 14px;white-space:pre-wrap}"
            ".muted{color:#5B6B82;font-size:12px}")
     parts = [f"<html><head><meta charset='utf-8'><title>Dossier {esc(tid)}</title><style>{css}</style></head><body>",
-             f"<h1>Hyson Detector — {L('Dossier d’investigation', 'Investigation file')} {esc(tid)}</h1>",
+             f"<div style='display:flex;gap:14px;align-items:center'>{ui.logo('blue', 56)}"
+             f"<h1>Hyson Detector — {L('Dossier d’investigation', 'Investigation file')} {esc(tid)}</h1></div>",
              f"<p class='muted'>{L('Généré le', 'Generated on')} {datetime.now():%Y-%m-%d %H:%M} · "
              f"{esc(da.source().describe())} · {L('données 100 % synthétiques', '100% synthetic data')}</p>",
              f"<h2>1. {L('Transaction', 'Transaction')}</h2><table>" +

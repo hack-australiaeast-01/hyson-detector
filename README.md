@@ -1,4 +1,8 @@
-# AI Banking Copilot for Fraud Detection — Microsoft Fabric + Azure OpenAI
+<p align="center"><img src="app/static/brand/logo_blue.png" width="110" alt="Hyson Detector logo"></p>
+
+# Hyson Detector — AI Banking Copilot for Fraud Detection (Microsoft Fabric + Azure OpenAI)
+
+**Live demo:** https://hyson-detector.streamlit.app
 
 A copilot for a fraud analyst: it **detects** suspicious transactions (model score), **explains** them (facts compared with the customer's own history), **answers questions** in natural language (Azure OpenAI with function calling over the Gold tables), and helps the analyst **decide** (BLOQUER / ESCALADER / VALIDER, with a decision log). The model scores, the LLM only explains, and the analyst decides.
 

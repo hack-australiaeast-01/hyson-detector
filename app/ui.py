@@ -15,13 +15,33 @@ RISK = {"ELEVE": (RED, "Risque élevé"), "MOYEN": (AMBER, "Risque moyen"), "FAI
 RISK_EN = {"ELEVE": "High risk", "MOYEN": "Medium risk", "FAIBLE": "Low risk"}
 DECISION = {"BLOQUER": RED, "ESCALADER": AMBER, "VALIDER": GREEN}
 
-LOGO = ('<svg width="38" height="38" viewBox="0 0 48 48" fill="none">'
-        '<defs><linearGradient id="hg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1E5BD8"/>'
-        '<stop offset="1" stop-color="#0E9F8A"/></linearGradient></defs>'
-        '<path d="M24 3 7 9v12c0 11 7.3 20.2 17 24 9.7-3.8 17-13 17-24V9L24 3Z" fill="url(#hg)"/>'
-        '<circle cx="24" cy="22" r="9" stroke="#fff" stroke-width="2.2" fill="none" opacity=".95"/>'
-        '<circle cx="24" cy="22" r="3.2" fill="#fff"/>'
-        '<path d="M24 13v-3M24 34v-3M15 22h-3M36 22h-3" stroke="#fff" stroke-width="2.2" stroke-linecap="round"/></svg>')
+LOGO_SVG = ('<svg width="38" height="38" viewBox="0 0 48 48" fill="none">'
+            '<defs><linearGradient id="hg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1E5BD8"/>'
+            '<stop offset="1" stop-color="#0E9F8A"/></linearGradient></defs>'
+            '<path d="M24 3 7 9v12c0 11 7.3 20.2 17 24 9.7-3.8 17-13 17-24V9L24 3Z" fill="url(#hg)"/>'
+            '<circle cx="24" cy="22" r="9" stroke="#fff" stroke-width="2.2" fill="none" opacity=".95"/>'
+            '<circle cx="24" cy="22" r="3.2" fill="#fff"/>'
+            '<path d="M24 13v-3M24 34v-3M15 22h-3M36 22h-3" stroke="#fff" stroke-width="2.2" stroke-linecap="round"/></svg>')
+
+BRAND_DIR = __import__("pathlib").Path(__file__).parent / "static" / "brand"
+FAVICON = str(BRAND_DIR / "favicon.png") if (BRAND_DIR / "favicon.png").exists() else "🛡️"
+
+
+def _logo_img(name, size):
+    """Team logo (PNG, embedded as base64 so no static server is needed); SVG shield if the file is missing."""
+    p = BRAND_DIR / name
+    if not p.exists():
+        return LOGO_SVG
+    b64 = base64.b64encode(p.read_bytes()).decode()
+    return f'<img src="data:image/png;base64,{b64}" width="{size}" height="{size}" alt="Hyson Detector" style="display:block">'
+
+
+LOGO = _logo_img("logo_white.png", 40)          # on the navy sidebar card
+
+
+def logo(variant="blue", size=96):
+    """'white' on navy backgrounds, 'blue' on light ones."""
+    return _logo_img(f"logo_{variant}.png", size)
 
 CSS = f"""
 <style>
