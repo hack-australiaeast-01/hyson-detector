@@ -40,7 +40,40 @@ FEATURE_FR = {
     "f_new_category": "Nouvelle catégorie de commerçant", "f_round_amount": "Montant rond",
     "f_benef_n_customers_before": "Clients ayant déjà payé ce bénéficiaire",
 }
+for _k, _v in {   # model drivers shown on the performance page (names aligned with the Power BI report)
+        "f_speed_kmh": "Vitesse de déplacement", "f_amount": "Montant", "merchant_category": "Catégorie marchande",
+        "channel": "Canal", "f_secs_since_prev": "Temps depuis l'opération précédente", "f_new_merchant": "Nouveau commerçant",
+        "transaction_type": "Type d'opération", "entry_mode": "Mode de saisie", "f_n_before": "Ancienneté (nb opérations)",
+        "f_key_contactless_24h": "Sans contact sur 24 h", "f_is_foreign": "Opération à l'étranger",
+        "merchant_type": "Type de commerçant", "f_same_country_7d": "Opérations dans ce pays (7 j)",
+        "f_dist_prev_km": "Distance depuis l'opération précédente", "f_amount_z": "Écart au montant habituel (z)",
+        "f_amount_over_limit": "Montant / plafond", "f_amount_ratio": "Montant / moyenne habituelle",
+        "f_merchant_frauds_30d": "Commerçant lié à des fraudes (30 j)",
+        "f_key_new_merchants_24h": "Nouveaux commerçants sur 24 h"}.items():
+    FEATURE_FR.setdefault(_k, _v)
+SCENARIO_EN = {"CARD_TESTING": "Card testing", "ACCOUNT_TAKEOVER": "Account takeover",
+               "CARTE_CLONEE_ETRANGER": "Card cloned abroad", "SKIMMING_DAB": "ATM skimming",
+               "CARTE_VOLEE_SANS_CONTACT": "Stolen card, contactless", "FRAUDE_EN_LIGNE_DISCRETE": "Discreet online fraud"}
+FEATURE_EN = {"f_speed_kmh": "Travel speed", "f_amount": "Amount", "merchant_category": "Merchant category", "channel": "Channel",
+              "f_secs_since_prev": "Time since previous operation", "f_new_merchant": "New merchant",
+              "transaction_type": "Operation type", "entry_mode": "Entry mode", "f_n_before": "History length (nb ops)",
+              "f_key_contactless_24h": "Contactless in 24 h", "f_is_foreign": "Operation abroad", "merchant_type": "Merchant type",
+              "f_same_country_7d": "Ops in this country (7 d)", "f_dist_prev_km": "Distance from previous op",
+              "f_amount_z": "Amount deviation (z)", "f_amount_over_limit": "Amount / limit", "f_amount_ratio": "Amount / usual average",
+              "f_merchant_frauds_30d": "Merchant linked to frauds (30 d)", "f_night_share_before": "Habit of night operations",
+              "f_key_new_merchants_24h": "New merchants in 24 h"}
+SCENARIO_FR = {"CARD_TESTING": "Test de carte", "ACCOUNT_TAKEOVER": "Prise de contrôle de compte",
+               "CARTE_CLONEE_ETRANGER": "Carte clonée à l'étranger", "SKIMMING_DAB": "Skimming DAB",
+               "CARTE_VOLEE_SANS_CONTACT": "Carte volée sans contact", "FRAUDE_EN_LIGNE_DISCRETE": "Fraude en ligne discrète"}
 RISK_ICON = {"ELEVE": "🔴", "MOYEN": "🟠", "FAIBLE": "🟢"}
+FACTOR_CLARIFY = {
+    "f_key_new_merchants_24h": "Nouveaux commerçants sur la carte dans les 24 h précédentes",
+    "f_amount_over_limit": "Montant / plafond journalier de la carte (> 1 = au-dessus du plafond)",
+    "f_amount_ratio": "Montant / moyenne habituelle (> 1 = au-dessus des habitudes)",
+    "f_amount_over_max": "Montant / plus gros montant passé (> 1 = record)",
+    "f_amount_over_income": "Montant / revenu mensuel",
+    "f_payday": "Période de paie (25 → 3 du mois)",
+}
 TX_COLS = ["transaction_id", "timestamp", "period", "customer_id", "card_id", "merchant_id", "beneficiary_id",
            "device_id", "session_id", "transaction_type", "channel", "entry_mode", "merchant_category", "amount_tnd",
            "city", "country", "latitude", "longitude", "ip_country", "status", "decline_reason"]
@@ -287,6 +320,8 @@ def queue():
 def explanations():
     e = source().gold("gold_alert_explanations").copy()
     e["factor"] = e.factor.map(label)
+    for feat, text in FACTOR_CLARIFY.items():      # unambiguous wording (avoids wrong readings by the LLM / analyst)
+        e.loc[e.feature == feat, "factor"] = text
     return e
 
 

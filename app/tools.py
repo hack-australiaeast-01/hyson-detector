@@ -65,17 +65,19 @@ def _top(series, k=3):
 def get_alert_queue(date=None, n=10, period="test", risk_level=None):
     q = da.queue()
     q = q[q.period == period] if period in ("test", "valid") else q
+    q = q[q.risk_level != "FAIBLE"]          # demo rows below the alert threshold are not alerts
     if date:
         q = q[q.date == pd.to_datetime(date).date()]
     if risk_level:
         q = q[q.risk_level == risk_level.upper()]
     days = sorted(q.date.unique())
-    out = q.sort_values("score_model", ascending=False).head(int(n))
-    cols = ["transaction_id", "timestamp", "customer_id", "transaction_type", "channel", "entry_mode",
-            "merchant_category", "amount_tnd", "city", "country", "risk_level", "score_pct", "top_model_factors"]
+    out = q.sort_values("score_model", ascending=False).head(max(1, min(int(n), 20)))
+    alerts = [{"id": r.transaction_id, "date": f"{r.timestamp:%Y-%m-%d %H:%M}", "client": r.customer_id,
+               "type": f"{r.transaction_type} {r.channel}", "montant_tnd": round(float(r.amount_tnd), 3),
+               "pays": _v(r.country), "niveau": r.risk_level, "percentile": round(float(r.score_pct), 4),
+               "facteurs": " | ".join(str(r.top_model_factors or "").split(" | ")[:3])} for r in out.itertuples()]
     return {"periode": period, "date": str(date) if date else "toutes", "nb_alertes": int(len(q)),
-            "jours_couverts": f"{days[0]} → {days[-1]}" if days else None,
-            "alertes": [_row(r, cols) for _, r in out.iterrows()]}
+            "jours_couverts": f"{days[0]} → {days[-1]}" if days else None, "alertes": alerts}
 
 
 def get_transaction(transaction_id):
@@ -102,6 +104,8 @@ def get_transaction(transaction_id):
                  if v is not None} for f in sub.itertuples()]
 
     rules = facts("rules", 5)
+    for_fraud = facts("model_for", 3)
+    triggered = [x for x in rules if x.get("contribution", 0) > 0]
     return {
         "transaction": _row(r, ["transaction_id", "timestamp", "customer_id", "card_id", "transaction_type", "channel",
                                 "entry_mode", "merchant_category", "amount_tnd", "city", "country", "status"]),
@@ -109,11 +113,50 @@ def get_transaction(transaction_id):
         "score": {"niveau_risque": r.risk_level, "score_modele": round(float(r.score_model), 4),
                   "percentile_risque_periode": _v(r.score_pct), "rang_dans_periode": int(r.rank_in_period),
                   "alerte_moteur_regles_actuel": bool(r.legacy_alert), "points_regles_metier": int(r.score_rules)},
-        "facteurs_modele_pour_fraude": facts("model_for", 3),
+        "facteurs_modele_pour_fraude": for_fraud,
         "facteurs_modele_rassurants": facts("model_against", 2),
-        "regles_metier_declenchees": [x for x in rules if x.get("contribution", 0) > 0],
+        "regles_metier_declenchees": triggered,
         "regles_rassurantes": [x for x in rules if x.get("contribution", 0) < 0],
+        "recommandation_systeme": recommend(r.risk_level, float(r.score_pct), for_fraud, triggered),
     }
+
+
+STRONG_CONTRIBUTION = 0.5   # SHAP log-odds; a model factor above this counts as a concordant risk signal
+TOP_BAND = 0.998            # percentile above which a block is recommended with high confidence
+
+
+def _band_precision():
+    """Precision of each decision band measured on the labelled validation alerts (Jun–Jul 2026)."""
+    if not hasattr(_band_precision, "cache"):
+        q = da.queue()
+        v = q[(q.period == "valid") & (q.risk_level != "FAIBLE") & q.is_fraud.notna()]
+
+        def p(m):
+            return round(float(v[m].is_fraud.mean()), 3) if m.any() else None
+        _band_precision.cache = {"percentile_ge_0998": p(v.score_pct >= TOP_BAND), "eleve": p(v.risk_level == "ELEVE"),
+                                 "moyen": p(v.risk_level == "MOYEN")}
+    return _band_precision.cache
+
+
+def recommend(level, pct, model_for, rules_triggered):
+    """Deterministic, documented decision rule backed by validation precision (the LLM explains it, it does not invent it)."""
+    strong = [f["facteur"] for f in model_for if (f.get("contribution") or 0) >= STRONG_CONTRIBUTION]
+    signals = list(dict.fromkeys(strong + [f["facteur"] for f in rules_triggered]))
+    bp = _band_precision()
+    if level == "ELEVE" and len(signals) >= 2 and (pct or 0) >= TOP_BAND:
+        decision, conf, prec = "BLOQUER", "élevée", bp["percentile_ge_0998"]
+    elif level == "ELEVE" and len(signals) >= 2:
+        decision, conf, prec = "BLOQUER", "moyenne", bp["eleve"]
+    elif level in ("ELEVE", "MOYEN"):
+        decision, conf, prec = "ESCALADER", "moyenne", bp["eleve"] if level == "ELEVE" else bp["moyen"]
+    else:
+        decision, conf, prec = "VALIDER", "élevée" if not rules_triggered else "moyenne", None
+    out = {"decision": decision, "confiance": conf, "signaux_concordants": signals[:4],
+           "regle": ("percentile ≥ 0.998 et ≥ 2 signaux → BLOQUER (confiance élevée) ; ELEVE et ≥ 2 signaux → BLOQUER (moyenne) ; "
+                     "ELEVE sinon ou MOYEN → ESCALADER ; FAIBLE → VALIDER (moyenne si une règle métier a quand même alerté).")}
+    if prec is not None:
+        out["precision_mesuree_validation"] = prec
+    return out
 
 
 def get_customer_profile(customer_id, before_transaction_id=None):
@@ -299,8 +342,14 @@ def find_related_cases(transaction_id, days=30):
 def get_kpis():
     m = da.metrics()
     rt = da.recall_by_type()
-    budget = int(m["valid_rows"] * 0.01)
-    model_tp = round(m["model_top1pct_precision"] * budget)
+    # exact counts from the validation alert list (same numbers as the Power BI report), metrics as fallback
+    va = da.queue()
+    va = va[(va.period == "valid") & (va.risk_level != "FAIBLE")]   # alerts only (a demo row below threshold is not an alert)
+    if len(va) and va.is_fraud.notna().any():
+        budget, model_tp = int(len(va)), int(va.is_fraud.fillna(0).sum())
+    else:
+        budget = int(m["valid_rows"] * 0.01)
+        model_tp = round(m["model_top1pct_precision"] * budget)
     return {"periode_validation": "juin → juillet 2026 (hors échantillon)",
             "moteur_regles_actuel": {"alertes": int(m["legacy_alerts"]), "fraudes_detectees": int(m["frauds_caught_legacy"]),
                                      "precision": m["legacy_precision"], "rappel": m["legacy_recall"],
@@ -308,8 +357,8 @@ def get_kpis():
             "modele_meme_volume": {"alertes": int(m["legacy_alerts"]), "fraudes_detectees": int(m["frauds_caught_model_same_budget"]),
                                    "precision": m["model_same_budget_as_legacy_precision"],
                                    "rappel": m["model_same_budget_as_legacy_recall"]},
-            "modele_top_1pct": {"alertes": budget, "fraudes_detectees": model_tp, "precision": m["model_top1pct_precision"],
-                                "rappel": m["model_top1pct_recall"], "fausses_alertes": budget - model_tp},
+            "modele_top_1pct": {"alertes": budget, "fraudes_detectees": model_tp, "precision": round(model_tp / budget, 4),
+                                "rappel": round(model_tp / m["valid_frauds"], 4), "fausses_alertes": budget - model_tp},
             "pr_auc_modele": m["pr_auc_model"], "fraudes_validation": int(m["valid_frauds"]),
             "rappel_par_typologie": [_row(x, ["fraud_scenario", "frauds", "recall_model", "recall_legacy"]) for _, x in rt.iterrows()]}
 

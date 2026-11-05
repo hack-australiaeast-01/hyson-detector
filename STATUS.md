@@ -45,13 +45,16 @@ Updated: 2026-11-05 18:15 · ✅ done · 🟡 in progress · ❌ to do · Target
 | 9 | Transaction view: score, risk and reassuring factors (observed vs usual), decision + confidence + comment, no scrolling (§10) | ✅ | |
 | 10 | Customer 360: profile, habits, timeline with digital events, map (§10) | ✅ | Live from Fabric |
 | 11 | 9 copilot tools (§9.2): get_alert_queue, get_transaction, get_customer_profile, compare_to_habits, get_customer_history, get_digital_events, find_related_cases, get_kpis, record_decision | ✅ | `tools.py`, compact JSON, unknown IDs handled |
-| 12 | Copilot: prompt §9.3, 5-part format §9.4, ≤ 4 tool rounds, cache (§9.8) | ✅ | `copilot.py` · gpt-5-mini: `reasoning_effort=low`, `max_completion_tokens` 2,400 (non-reasoning models: temperature 0.1, max_tokens 600) · offline fallback (demo always works) |
+| 12 | Copilot: prompt §9.3, 5-part format §9.4, function calling, cache, guardrails (§9.8) | ✅ | `copilot.py` v4: intent routing + prefetch (1 LLM round), streaming + live tool steps, deterministic recommendation (`recommandation_systeme`), FR/EN, off-topic & injection guardrails, prompt caching, timeout/retries, offline fallback |
 | 13 | Copilot traceability: question, tools, tokens, latency → `data/copilot_log.jsonl` + Journal page (§9.8) | ✅ | |
 | 14 | Decision journal + feedback (`data/decisions.csv`) (§10) | ✅ | |
 | 15 | KPI page: model vs current engine, recall per type, drivers, leaderboard (§10) | ✅ | |
-| 16 | Azure OpenAI: `app/.env` (endpoint, key, deployment) | ✅ | Deployment **gpt-5-mini** answers; `copilot.py` loads `.env` itself |
-| 17 | Tested live on the §9.7 questions (6 per demo case + 2 global = 20 answers) | ✅ | Pre-computed with `python warmup.py` (cache). Recommendations: TX01555470 BLOQUER · TX01585580 BLOQUER · TX01575959 VALIDER. Avg **5,224 tokens, 12 s** live, instant from cache |
-| 18 | Power BI report on Gold (manager view, complement) | ✅ | Built as code by `notebooks/03b_powerbi_dashboard.ipynb`: 8 `pbi_*` tables → Direct Lake model `sm_fraud_copilot` (24 DAX measures) → report "Fraud Copilot — Dashboard", 4 pages (executive view, alert queue, why?, fraud types). Polish left: theme not applied, raw column headers/decimals in the 2 tables, donut labels. Delete the broken old `03_powerbi_dashboard` notebook in Fabric |
+| 16 | Azure OpenAI: `app/.env` (endpoint, key, deployment) | ✅ | Deployment **gpt-5-mini**, API 2024-12-01-preview, `reasoning_effort=low`, `max_completion_tokens` 2,400, timeout 60 s, 2 retries |
+| 17 | Tested live on the §9.7 questions: 6 per demo case + 2 global, FR and EN = 40 answers | ✅ | `python warmup.py fr en` (cache). Recommendations 100 % consistent: TX01555470 BLOQUER · TX01585580 BLOQUER · TX01575959 VALIDER. Avg **3,300 tokens (≈1,400 from prompt cache), 7 s**, 1 round; instant from cache |
+| 18 | Power BI report on Gold (manager view, complement) | ✅ | Built as code by `notebooks/03d_powerbi_dashboard.ipynb`: 8 `pbi_*` tables → Direct Lake model `sm_fraud_copilot` (25 DAX measures) → report "Fraud Copilot — Dashboard", 4 dark-theme pages (executive view, alert queue, why?, fraud types). 03d = final design pass (title line, slicer height, no "K" units, no "—" row, legend titles) — **run in Fabric and verified on all pages**. Local 03d also auto-attaches `lh_fraud` (`%%configure`). To do: delete old notebooks `03_`, `03b_`, `03c_` in Fabric |
+| 18a | Power BI icon navigation + FR/EN | 🟡 | `notebooks/03e_powerbi_dashboard.ipynb` (built, not yet run): 4 icons (files / warning / question / typologies) with the page title under each, both clickable; FR \| EN switch on every page; 4 hidden EN pages (`*_en`) with English label columns; icons uploaded with the report through the Fabric REST API. Import + Run all to apply |
+| 18c | App FR/EN + icon navigation | ✅ | Sidebar "Français / English" switch translates every page; Power BI page uses the same 4 icons + titles to change report page and opens the EN report pages in English. Tested in the browser (FR + EN) |
+| 18b | Power BI embedded in the app | ✅ | Page "📈 Tableau de bord Power BI" in `app.py`: secure embed (`reportEmbed`, viewer signs in with the org account, nothing public), page picker + "Ouvrir dans Power BI". IDs in `.env.example` (`PBI_REPORT_ID`, `PBI_TENANT_ID`). Tested: page renders, no errors |
 | 19 | GitHub: Fabric Git integration + push of the repo (README, requirements, .env.example, .gitignore ✅) | 🟡 | Local repo ✅ (commits `3ae7d57`, `2404a7d`, no secrets). Still to do: create the GitHub repo + `git push`, then Fabric Git integration (§13, §16.5) |
 | 20 | GitHub Copilot usage evidence (screenshots, time saved) | 🟡 | §13, §17 |
 | 21 | Slides: problem, demo, architecture, results, prototype → production, limits | ❌ | §17 |
@@ -164,3 +167,47 @@ python warmup.py                          # optional: instant answers for the de
 streamlit run app.py                      # http://localhost:8501 — sidebar must show "🟢 Fabric live"
 ```
 Demo path: sidebar "Fraude évidente" → ask "Pourquoi … suspecte ?" → BLOQUER → "Faux positif évité" → "Pourquoi … pas une fraude ?" → VALIDER → Performance page.
+
+## 9. Copilot v4 — Azure OpenAI improvements (2026-11-05 evening)
+
+### 9.1 What was wrong (found in the real log `copilot_log_before_v3.jsonl` and the cached answers)
+| # | Problem | Evidence | Fix |
+|---|---|---|---|
+| C1 | "Top 10 most risky" answer broken | 10,410 tokens, 2 tool calls, JSON cut at 3,500 chars → "valeur partielle", "TX0190xxxx" | Compact `get_alert_queue` rows + `_compact()` trims lists item by item (never cuts JSON) |
+| C2 | Investigation summary without chronology | used only the transaction itself | prefetch habits + digital events + related cases for summaries |
+| C3 | 2–3 LLM rounds per question, every question re-sent the full transaction | ~5,200 tokens, 12–15 s | intent routing + prefetch → 1 round |
+| C4 | English mode appended "(Answer in English)" while the prompt said "réponds en français" | mixed languages | `lang` parameter + LANGUAGE line; cache key includes language |
+| C5 | Spinner for 10–15 s | — | streaming answer + live tool steps (`st.status`) |
+| C6 | Recommendation varied between questions (subtle fraud BLOQUER vs ESCALADER) | 2 of 6 answers differed | deterministic `recommandation_systeme` computed in `tools.recommend` |
+| C7 | Wrong reading "plafond non dépassé" for ratio 2.24; false "contradiction" on "Nouveaux commerçants (24 h)" | FP demo answer | prompt rule "ratio > 1 = above"; clarified labels (`FACTOR_CLARIFY`) |
+| C8 | Technical field / tool names in answers (`moteur_regles_actuel.fausses_alertes`, `get_digital_events`) | EN KPI answer | prompt rule + regenerated the 8 affected answers |
+| C9 | KPI counted 1,780 alerts | the avoided-false-positive demo row (FAIBLE) is not an alert | 1,779 alerts / 718 frauds / 1,061 false alerts (README fixed; **Power BI still shows 1,780 → filter `risk_level <> "FAIBLE"` in 03e**) |
+| C10 | No off-topic / injection guardrail, no timeout | brief §9.8 | prompt rules; client timeout 60 s, 2 retries |
+| C11 | Offline answers were written to the cache (served as if they were LLM answers) | 2 entries | only Azure answers are cached; offline answers recomputed |
+
+### 9.2 How the copilot works now (`app/copilot.py`)
+1. `detect_intent()` (FR + EN keywords): analyse · habits · before · related · summary · kpi · queue · general.
+2. `_prefetch()` calls the needed tools in Python (e.g. analyse = transaction + habits + digital events for MOBILE/WEB/VIREMENT) and gives them to the LLM as **FAITS**; the LLM can still call any of the 9 tools for missing facts (≤ 4 rounds).
+3. Static system prompt first (eligible for Azure prompt caching), then a dynamic message (language, intent, open transaction, facts), last 2 exchanges, question.
+4. Streaming (`stream=True`, usage included): tokens shown as written, tool steps shown live; all calls logged with intent, language, tokens (incl. cached), rounds, latency.
+5. Decision = `recommandation_systeme` (documented rule + measured validation precision); the LLM explains it and may flag a contradicting fact without changing it.
+
+### 9.3 Decision rule (`tools.recommend`, measured on Jun–Jul 2026 validation alerts)
+| Condition | Decision | Confidence | Validation precision | Alerts (valid + test) |
+|---|---|---|---|---|
+| percentile ≥ 0.998 and ≥ 2 concordant signals | BLOQUER | élevée | 94 % | 734 |
+| ELEVE and ≥ 2 signals | BLOQUER | moyenne | 87 % | 361 |
+| ELEVE otherwise, or MOYEN | ESCALADER | moyenne | 20 % (MOYEN) | 2,560 |
+| FAIBLE | VALIDER | élevée, or moyenne if a business rule still alerted | — | 1 (demo) |
+
+### 9.4 Results
+| | Before | After (v4) |
+|---|---|---|
+| Tokens per new question | ~5,200 (top 10: 10,410) | **~3,300**, of which ~1,400 served from Azure prompt cache |
+| LLM rounds | 2–3 | **1** |
+| Latency | 12–15 s, spinner | **~7 s**, text streams after ~3–8 s; cached demo answers instant |
+| Recommendation consistency (3 demo cases × 6 questions × 2 languages) | 4/6 on the subtle fraud | **100 %** |
+| Languages | FR (EN mixed) | FR + EN |
+| Pre-computed answers | 20 (FR) | **40 (FR + EN)** — `python warmup.py fr en` |
+
+Verified: 12 page renders (6 pages × FR/EN) without exception on live Fabric; FR chat (suggestion from cache 0.2 s, new question 8.5 s / 3,028 tokens with 2,432 cached); off-topic question refused in one sentence; unknown ID handled. Note: Streamlit `AppTest` cannot replay the EN decision radio (translated `format_func` labels) — harness limitation, not an app error.
