@@ -1,0 +1,5 @@
+decided_at,transaction_id,decision,confidence,comment,analyst,source,duration_s,risk_level,score_pct,period
+2026-11-05 22:33:19,TX01879820,VALIDER,moyenne,after deep search,analyste,enquete_approfondie,,MOYEN,0.99656,test
+2026-11-05 22:33:22,TX01879820,ESCALADER,moyenne,after deep search,analyste,enquete_approfondie,,MOYEN,0.99656,test
+2026-11-05 22:33:23,TX01879820,BLOQUER,moyenne,after deep search,analyste,enquete_approfondie,,MOYEN,0.99656,test
+2026-11-05 22:33:29,TX01879820,ESCALADER,moyenne,,analyste,interface,3.4,MOYEN,0.99656,test

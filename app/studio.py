@@ -178,14 +178,8 @@ def page_guide(c):
 @st.cache_data(show_spinner=False, ttl=3600)
 def _reco_distribution(_queue):
     """Vectorised version of tools.recommend over the live queue (same rule)."""
-    e = da.explanations()
-    strong = e[(e.source == "model_for") & (e.points >= tools.STRONG_CONTRIBUTION)].groupby("transaction_id").size()
-    rules = e[(e.source == "rules") & (e.points > 0)].groupby("transaction_id").size()
     q = _queue[(_queue.period == "test") & (_queue.risk_level != "FAIBLE")].copy()
-    sig = q.transaction_id.map(strong).fillna(0) + q.transaction_id.map(rules).fillna(0)
-    hi = q.risk_level == "ELEVE"
-    q["decision"] = np.where(hi & (sig >= 2), "BLOQUER", "ESCALADER")
-    q["conf"] = np.where(hi & (sig >= 2) & (q.score_pct >= tools.TOP_BAND), "élevée", "moyenne")
+    q["decision"], q["conf"] = tools.recommend_vector(q)
     return q.groupby(["decision", "conf"]).size().to_dict()
 
 

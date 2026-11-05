@@ -138,6 +138,51 @@ def _band_precision():
     return _band_precision.cache
 
 
+def _pav(rates, weights):
+    """Pool-adjacent-violators: make the per-bin fraud rates non-decreasing with the score."""
+    blocks = [[r, w, 1] for r, w in zip(rates, weights)]
+    i = 0
+    while i < len(blocks) - 1:
+        if blocks[i][0] > blocks[i + 1][0]:
+            r1, w1, n1 = blocks[i]
+            r2, w2, n2 = blocks.pop(i + 1)
+            blocks[i] = [(r1 * w1 + r2 * w2) / (w1 + w2), w1 + w2, n1 + n2]
+            i = max(i - 1, 0)
+        else:
+            i += 1
+    return [r for r, _, n in blocks for _ in range(n)]
+
+
+def measured_fraud_rate(scores):
+    """Share of real frauds measured in validation (Jun–Jul 2026 alerts) for alerts with a similar model score.
+
+    The model score is a ranking, not a probability: within the top 1 % a score of 0.70 meant ~11 % frauds,
+    0.97 meant ~87 %. Ten score bins on the 1,779 labelled validation alerts, made monotone (PAV).
+    """
+    if not hasattr(measured_fraud_rate, "table"):
+        q = da.queue()
+        v = q[(q.period == "valid") & (q.risk_level != "FAIBLE") & q.is_fraud.notna()]
+        edges = np.unique(np.quantile(v.score_model, np.linspace(0, 1, 11)))
+        b = np.clip(np.searchsorted(edges, v.score_model, side="right") - 1, 0, len(edges) - 2)
+        g = v.assign(b=b).groupby("b").is_fraud.agg(["mean", "size"]).reindex(range(len(edges) - 1)).fillna(0)
+        measured_fraud_rate.table = (edges, np.array(_pav(g["mean"].tolist(), g["size"].tolist())))
+    edges, rates = measured_fraud_rate.table
+    s = np.asarray(scores, dtype=float)
+    return rates[np.clip(np.searchsorted(edges, s, side="right") - 1, 0, len(rates) - 1)]
+
+
+def recommend_vector(q):
+    """tools.recommend applied to a whole queue (same rule, vectorised). Returns (decision, confidence) Series."""
+    e = da.explanations()
+    strong = e[(e.source == "model_for") & (e.points >= STRONG_CONTRIBUTION)].groupby("transaction_id").size()
+    rules = e[(e.source == "rules") & (e.points > 0)].groupby("transaction_id").size()
+    sig = q.transaction_id.map(strong).fillna(0) + q.transaction_id.map(rules).fillna(0)
+    hi = q.risk_level == "ELEVE"
+    block = hi & (sig >= 2)
+    dec = pd.Series(np.where(block, "BLOQUER", np.where(q.risk_level == "FAIBLE", "VALIDER", "ESCALADER")), index=q.index)
+    conf = pd.Series(np.where(block & (q.score_pct >= TOP_BAND), "élevée", "moyenne"), index=q.index)
+    return dec, conf
+
 def recommend(level, pct, model_for, rules_triggered):
     """Deterministic, documented decision rule backed by validation precision (the LLM explains it, it does not invent it)."""
     strong = [f["facteur"] for f in model_for if (f.get("contribution") or 0) >= STRONG_CONTRIBUTION]

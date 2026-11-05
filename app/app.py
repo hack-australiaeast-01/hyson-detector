@@ -7,6 +7,7 @@ import time
 from pathlib import Path
 from types import SimpleNamespace
 
+import numpy as np
 import pandas as pd
 import streamlit as st
 
@@ -227,9 +228,33 @@ def page_queue():
         studio.watch_buttons(ctx, key="wq")
 
     ui.section(L(f"{nb(len(q))} alertes · triées par score", f"{nb(len(q))} alerts · sorted by score"))
+    alerts_only = q[q.risk_level != "FAIBLE"]
+    if len(alerts_only):
+        total_ops = int(fx.impact()["flux_du_jour"]["operations"]) if period == "test" and fx.impact() else None
+        exp_fraud = float(tools.measured_fraud_rate(alerts_only.score_model).sum())
+        dec, _ = tools.recommend_vector(alerts_only)
+        n_block, n_esc = int((dec == "BLOQUER").sum()), int((dec == "ESCALADER").sum())
+        scope = (L(f"Sur <b>{nb(total_ops)}</b> opérations du flux, seules", f"Out of <b>{nb(total_ops)}</b> live operations, only")
+                 if total_ops else L("Seules", "Only"))
+        ui.hint(L(f"⚖️ <b>Une alerte n'est pas une fraude, c'est une opération à vérifier.</b> {scope} les 1 % les plus "
+                  f"risquées arrivent ici (99 % ne dérangent personne). Parmi ces {nb(len(alerts_only))} alertes, la validation "
+                  f"juin–juillet prédit <b>≈ {nb(round(exp_fraud))} vraies fraudes</b> : <b>{nb(n_block)}</b> à bloquer "
+                  f"(87 % de fraudes mesurées en moyenne) et <b>{nb(n_esc)}</b> à faire vérifier par un analyste, dont la plupart "
+                  "sont des clients légitimes à rassurer vite. La colonne « Fraudes mesurées » le montre ligne par ligne.",
+                  f"⚖️ <b>An alert is not a fraud, it is an operation to check.</b> {scope} the riskiest 1% reach this queue "
+                  f"(99% disturb nobody). Among these {nb(len(alerts_only))} alerts, the June–July validation predicts "
+                  f"<b>≈ {nb(round(exp_fraud))} real frauds</b>: <b>{nb(n_block)}</b> to block (87% measured fraud on average) and "
+                  f"<b>{nb(n_esc)}</b> for an analyst to check, most of them legitimate customers to clear quickly. "
+                  "The “Measured fraud” column shows it row by row."))
     view = q.sort_values("score_model", ascending=False)[
         ["risk_icon", "transaction_id", "timestamp", "customer_id", "transaction_type", "channel", "merchant_category",
-         "amount_tnd", "city", "country", "score_pct", "risk_level", "legacy_alert", "top_model_factors"]].copy()
+         "amount_tnd", "city", "country", "score_model", "score_pct", "risk_level", "legacy_alert", "top_model_factors"]].copy()
+    view["fraud_rate"] = np.where(view.risk_level != "FAIBLE", tools.measured_fraud_rate(view.score_model), np.nan)
+    dec, _ = tools.recommend_vector(view)
+    view["action"] = dec.map({"BLOQUER": L("Bloquer", "Block"), "ESCALADER": L("Vérifier", "Check"),
+                              "VALIDER": L("Valider", "Validate")})
+    view = view[["risk_icon", "transaction_id", "timestamp", "customer_id", "transaction_type", "channel", "merchant_category",
+                 "amount_tnd", "city", "country", "fraud_rate", "action", "risk_level", "legacy_alert", "top_model_factors"]]
     flags = deepsearch.watch(period).level
     view.insert(2, "flag", view.transaction_id.map(lambda t: L(*studio.DEEP_LEVEL[flags[t]]) if t in flags.index else ""))
     for c in ["merchant_category", "city", "top_model_factors"]:
@@ -253,8 +278,17 @@ def page_queue():
                                      "amount_tnd": cc.NumberColumn(L("Montant (TND)", "Amount (TND)"), format="%.3f"),
                                      "city": cc.TextColumn(L("Ville", "City")),
                                      "country": cc.TextColumn(L("Pays", "Country"), width="small"),
-                                     "score_pct": cc.ProgressColumn(L("Percentile de risque", "Risk percentile"), min_value=0,
-                                                                    max_value=1, format="percent"),
+                                     "fraud_rate": cc.ProgressColumn(L("Fraudes mesurées", "Measured fraud"), min_value=0,
+                                                                     max_value=1, format="percent",
+                                                                     help=L("Part de vraies fraudes parmi les alertes de score comparable "
+                                                                            "en validation (juin–juillet 2026). Le score est un classement, "
+                                                                            "pas une probabilité : un score de 0,70 ≈ 12 % de fraudes.",
+                                                                            "Share of real frauds among validation alerts (June–July 2026) "
+                                                                            "with a similar score. The score is a ranking, not a probability: "
+                                                                            "a 0.70 score ≈ 12% frauds.")),
+                                     "action": cc.TextColumn(L("Action conseillée", "Suggested action"),
+                                                             help=L("Règle documentée (tools.recommend) ; l'analyste décide.",
+                                                                    "Documented rule (tools.recommend); the analyst decides.")),
                                      "risk_level": cc.TextColumn(L("Risque", "Risk")),
                                      "legacy_alert": cc.CheckboxColumn(L("Règles actuelles", "Current rules")),
                                      "top_model_factors": cc.TextColumn(L("Facteurs principaux", "Main factors"), width="large")})
@@ -299,7 +333,17 @@ def page_transaction():
         ui.tx_card(tid, badges, meta + f"<br>{L('Client', 'Customer')} <b>{ui.esc(tx['customer_id'])}</b>")
         k1, k2, k3 = st.columns(3)
         k1.metric(L("Montant (TND)", "Amount (TND)"), f"{tx['amount_tnd']:,.3f}".replace(",", " "))
-        k2.metric(L("Percentile de risque", "Risk percentile"), f"{s['percentile_risque_periode']:.2%}")
+        if s["niveau_risque"] != "FAIBLE":
+            k2.metric(L("Fraudes mesurées à ce score", "Measured fraud at this score"),
+                      f"{float(tools.measured_fraud_rate([s['score_modele']])[0]):.0%}",
+                      help=L(f"Percentile de risque {s['percentile_risque_periode']:.2%}. Part de vraies fraudes parmi les alertes "
+                             "de score comparable en validation (juin–juillet 2026).",
+                             f"Risk percentile {s['percentile_risque_periode']:.2%}. Share of real frauds among validation alerts "
+                             "(June–July 2026) with a similar score."))
+        else:
+            k2.metric(L("Fraudes mesurées à ce score", "Measured fraud at this score"), L("sous le seuil", "below threshold"),
+                      help=L(f"Percentile de risque {s['percentile_risque_periode']:.2%} : pas une alerte du modèle.",
+                             f"Risk percentile {s['percentile_risque_periode']:.2%}: not a model alert."))
         k3.metric(L("Règles actuelles", "Current rules"),
                   L("Alerte", "Alert") if s["alerte_moteur_regles_actuel"] else L("Pas d'alerte", "No alert"))
         a, b = st.columns(2)
