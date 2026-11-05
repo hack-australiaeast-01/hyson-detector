@@ -350,7 +350,7 @@ Streamlit app ── tools.py (9 tools, JSON) ── copilot.py ── Azure Ope
 ## 8. GitHub and GitHub Copilot (§13, §16)
 
 - **Repository:** `README.md`, `app/` (code), `notebooks/` (Fabric exports), `requirements.txt`, `.env.example`, a `.gitignore` excluding `.env`, data and third-party material. Commits `3ae7d57`, `2404a7d`, `7f7e7bf`, and more.
-- **Public repo:** https://github.com/saitaflex/hyson-detector (pushed). Remaining: Fabric Git integration (Workspace settings → Git integration → GitHub, folder `fabric/`).
+- **Public repo:** https://github.com/hack-australiaeast-01/hyson-detector (pushed). Remaining: Fabric Git integration (Workspace settings → Git integration → GitHub, folder `fabric/`).
 
 **How Copilot was used (collect screenshots):**
 - **GitHub Copilot agent mode (VS Code)** — the only coding assistant used (details in [docs/AI_TOOLS_USAGE.md](docs/AI_TOOLS_USAGE.md)):
