@@ -26,3 +26,7 @@ ai bank for the future.*
 # organisers' brief (kept locally, not ours to republish)
 Hackathon_AI_Banking_Copilot_Brief_*
 
+
+# runtime decision logs written outside app/data
+/decisions.csv
+
