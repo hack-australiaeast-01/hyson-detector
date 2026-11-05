@@ -140,7 +140,7 @@ class Source:
 
     def __init__(self):
         self.mode, self.error, self.sql = "local", None, None
-        if MODE in ("auto", "fabric"):
+        if MODE in ("auto", "fabric") and (SQL_ENDPOINT or MODE == "fabric"):   # hosted demo: no endpoint -> snapshot, no error
             try:
                 t0 = time.time()
                 self.sql = FabricSQL()
@@ -176,7 +176,7 @@ class Source:
             return self.sql.query(f"SELECT {cols} FROM dbo.silver_transactions WHERE customer_id = ? ORDER BY timestamp",
                                   (customer_id,))
         h = _local_history()
-        return pd.DataFrame(columns=TX_COLS) if h is None else h[h.customer_id == customer_id].reset_index(drop=True)
+        return pd.DataFrame(columns=TX_COLS) if h is None else _plain(h[h.customer_id == customer_id], TX_COLS)
 
     def tx_by_id(self, transaction_id):
         if self.mode == "fabric":
@@ -187,7 +187,7 @@ class Source:
         if h is not None:
             m = h[h.transaction_id == transaction_id]
             if not m.empty:
-                return m.iloc[0]
+                return _plain(m, TX_COLS).iloc[0]
         return None
 
     def related(self, key, value, start, end, exclude_customer):
@@ -206,7 +206,9 @@ class Source:
         if h is None:
             return pd.DataFrame()
         o = h[(h[key] == value) & (h.timestamp >= start) & (h.timestamp < end) & (h.customer_id != exclude_customer)]
-        return o.assign(reported_fraud=0)
+        rep = (o.reported_date < pd.Timestamp(end).normalize()).astype(int) if "reported_date" in o.columns else 0
+        return _plain(o.assign(reported_fraud=rep),
+                      ["transaction_id", "timestamp", "customer_id", "card_id", "amount_tnd", "channel", "city", "reported_fraud"])
 
     def events(self, customer_id, start=None, end=None):
         if self.mode == "fabric":
@@ -224,7 +226,7 @@ class Source:
             t = t[t.timestamp >= start]
         if end is not None:
             t = t[t.timestamp <= end]
-        return t
+        return _plain(t.sort_values("timestamp"))
 
     def customers(self):
         if "customers" not in self._gold:
@@ -266,17 +268,35 @@ class Source:
     def describe(self):
         if self.mode == "fabric":
             return f"Fabric live · {SQL_DATABASE} (SQL endpoint)"
-        return "Fichiers locaux (parquet)" + (" · Fabric indisponible" if self.error else "")
+        if self.error:
+            return "Fichiers locaux (parquet) · Fabric indisponible"
+        return "Instantané Gold exporté de Fabric (parquet)"
 
 
 @lru_cache(maxsize=None)
 def _local_history():
+    """Snapshot of silver_transactions for every customer in the alert queue (full history since 2025, no labels).
+
+    Text columns are stored as categories to keep memory low; `reported_date` (train/valid frauds only, never test)
+    is kept solely for related() — the "already reported before the transaction" rule.
+    """
     p = DATA / "customer_history.parquet"
     if not p.exists():
         return None
     h = _clean(pd.read_parquet(p))
     h = h.drop(columns=[c for c in ["is_fraud", "fraud_scenario", "fraud_reported_date"] if c in h.columns])
+    if "reported_date" in h.columns:
+        h["reported_date"] = pd.to_datetime(h["reported_date"], errors="coerce")
     return h.sort_values("timestamp").reset_index(drop=True)
+
+
+def _plain(df, keep=None):
+    """Slice -> ordinary object columns (downstream code uses fillna / string ops on them)."""
+    df = df[[c for c in (keep or df.columns) if c in df.columns]].copy()
+    for c in df.columns:
+        if isinstance(df[c].dtype, pd.CategoricalDtype):
+            df[c] = df[c].astype(object).where(df[c].notna(), None)
+    return df.reset_index(drop=True)
 
 
 @lru_cache(maxsize=None)

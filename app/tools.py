@@ -238,7 +238,23 @@ def compare_to_habits(transaction_id):
         "operation_precedente": _row(prev, ["timestamp", "amount_tnd", "channel", "city", "country"]),
         "operations_24h_avant": int(len(last24)), "montant_24h_avant": round(float(last24.amount_tnd.sum()), 3),
         "operations_carte_1h_avant": int(len(card1h)), "refus_carte_1h_avant": int((card1h.status == "REFUSEE").sum()),
+        "statut": _v(r.get("status")), "motif_refus": _v(r.get("decline_reason")),
     }
+    if _v(r.card_id):
+        # same card, 24 h before + the operation itself: the pattern an analyst reads first (bursts, new shops, declines)
+        seq = pd.concat([past[(past.card_id == r.card_id) & (past.timestamp >= ts - timedelta(hours=24))], r.to_frame().T])
+        seen = set(past[past.timestamp < ts - timedelta(hours=24)].merchant_id.dropna())
+        out["sequence_carte_24h"] = {
+            "nb_operations": int(len(seq)),
+            "nb_commercants_distincts": int(seq.merchant_id.nunique()),
+            "nb_commercants_jamais_vus": int(len(set(seq.merchant_id.dropna()) - seen)),
+            "nb_sans_contact": int((seq.entry_mode == "SANS_CONTACT").sum()),
+            "nb_refus": int((seq.status == "REFUSEE").sum()),
+            "motifs_refus": sorted({str(x) for x in seq.decline_reason.dropna()})[:4],
+            "montant_total": round(float(pd.to_numeric(seq.amount_tnd).sum()), 3),
+            "operations": [f"{pd.Timestamp(x.timestamp):%m-%d %H:%M} {x.entry_mode} {_v(x.merchant_category) or x.transaction_type} "
+                           f"{float(x.amount_tnd):.0f} TND {x.status}" for x in seq.tail(6).itertuples()],
+        }
     if is_phys and _v(prev.get("latitude")) is not None and _v(r.get("latitude")) is not None:
         lat1, lon1, lat2, lon2 = map(np.radians, [prev.latitude, prev.longitude, r.latitude, r.longitude])
         km = 2 * 6371 * np.arcsin(np.sqrt(np.sin((lat2 - lat1) / 2) ** 2 +

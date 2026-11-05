@@ -50,7 +50,7 @@ Everything needed to present the solution and answer the jury's questions, organ
 | Model, top 0.5 % | ~890 | ~590 | 58.2 % | 66.4 % | ~300 |
 
 - **≈ 6× more frauds** caught (718 vs 117) with **47 % fewer alerts** and **2,160 fewer false alerts**.
-- Analyst capacity: the brief's guide is ~1,000 alerts over two months, which is why the budget is set at **1 % per period**.
+- Analyst capacity: the brief's ~1,000 alerts over two months is 1 % of its 101,730 test transactions, so we keep the **1 % rule** (1,876 alerts on our 187,628). If the team really caps at ~1,000, use the top 0.5 % (≈ 900 alerts, 58 % recall, 66 % precision).
 - Customer trust: the false positive avoided in the demo (TX01575959, a retired customer, 3,361 TND chip purchase in Tunis) would not be blocked.
 
 **Strategic fit (McKinsey "AI bank of the future"):**
@@ -402,11 +402,11 @@ Streamlit app ── tools.py (9 tools, JSON) ── copilot.py ── Azure Ope
 | Why not a random split? | It would mix the same fraud episode between train and validation and overstate performance (§8.3) |
 | Why PR-AUC and not accuracy? | At 0.55 % fraud, a model that never flags anything already has 99.4 % accuracy |
 | How do you know there's no leak? | Past-only windows, labels excluded, `LEAKY` assert, test check = 0, graph features use only reported frauds; we found and removed a leak ourselves (target encoding) |
-| Why 1 %? | Analyst capacity (~1,000 alerts over 2 months in the brief); 1,779 alerts in valid |
+| Why 1 %? | The brief's ~1,000 alerts / 2 months = 1 % of its 101,730 test rows; same 1 % on our 187,628 rows = 1,876. At ~1,000 strict capacity: top 0.5 % (≈ 900 alerts, 58 % recall, 66 % precision) |
 | Why LightGBM? | Best trade-off on tabular data, native categoricals, exact SHAP, ties the blend within a point |
 | Why does the LLM not decide? | Not reproducible and a hallucination risk: the decision follows a documented rule backed by measured precision, and the analyst decides |
 | How do you avoid hallucinations? | Facts come only from tools, the rule is fixed, IDs are never invented, missing information is stated, temperature is low / reasoning effort is low |
-| How much does one question cost? | ~5–6k tokens, a large share served by the prompt cache, 7–15 s; answers cached; every call logged |
+| How much does one question cost? | ~3,300 tokens (≈ 1,400 served by the Azure prompt cache), 1 LLM round, 7–15 s; demo answers cached; every call logged; public demo capped at 60 live calls / hour |
 | What if Azure OpenAI or Fabric goes down? | Deterministic offline copilot + local parquet snapshot: the demo keeps working |
 | Fairness? | `gender` is never used; age / income are kept as profile features (a choice to document) |
 | What does the analyst's decision feed into? | `decisions.csv` → OneLake → new labels for the next retraining |

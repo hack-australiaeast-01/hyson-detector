@@ -12,13 +12,19 @@ import streamlit as st
 
 
 def _secrets_to_env():
-    """Streamlit Community Cloud: expose root-level secrets as env vars before the modules read them."""
+    """Streamlit Community Cloud: expose secrets as env vars before the modules read them.
+
+    Accepts root-level keys and keys nested one level under a [section] (a common way to paste them).
+    """
     try:
-        for k, v in st.secrets.items():
-            if isinstance(v, (str, int, float)) and not os.getenv(k):
-                os.environ[k] = str(v)
+        items = list(st.secrets.items())
     except Exception:          # no secrets.toml locally -> .env is used instead
-        pass
+        return
+    for k, v in items:
+        pairs = v.items() if hasattr(v, "items") else [(k, v)]
+        for k2, v2 in pairs:
+            if isinstance(v2, (str, int, float, bool)) and not os.getenv(str(k2)):
+                os.environ[str(k2)] = str(v2)
 
 
 _secrets_to_env()

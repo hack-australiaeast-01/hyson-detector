@@ -17,6 +17,7 @@ from datetime import datetime
 from pathlib import Path
 
 from dotenv import load_dotenv
+import pandas as pd
 
 import tools
 
@@ -54,6 +55,12 @@ Décision
 Lecture des chiffres
 - Un ratio (montant / moyenne, montant / plafond, montant / revenu) > 1 signifie AU-DESSUS de la référence. Ne le présente jamais comme « non dépassé ».
 - Une contribution négative du modèle signifie que le modèle a jugé ce facteur rassurant pour CETTE opération ; décris le fait, pas un jugement contraire.
+- Facteurs principaux : commence par les faits métier lisibles s'ils existent (motif_refus, sequence_carte_24h, commerçants jamais vus,
+  événements de l'application, écart aux habitudes) avant les contributions du modèle.
+- Un facteur du modèle n'est PAS une anomalie en soi. N'emploie un adjectif d'anomalie (élevé, anormal, très court, inhabituel) que si
+  les faits le montrent : vitesse > 150 km/h, montant > habitude, première fois, nuit pour un client qui n'opère pas la nuit...
+  Sinon écris « le modèle pèse <facteur> (valeur) en combinaison avec les autres signaux ». Un montant SOUS l'habitude n'est jamais un écart.
+- Ne propose comme prochaine étape que des vérifications possibles avec tes outils ou par l'analyste (appeler le client, vérifier l'OTP...).
 - N'écris pas les noms techniques des champs ni des outils (score_modele, moteur_regles_actuel.fausses_alertes, connu_depuis_plus_de_24h,
   get_digital_events...) : utilise des mots métier (« appareil connu depuis plus de 24 h », « événements de l'application »).
 
@@ -114,7 +121,22 @@ def _is_digital(tx):
     return t.get("channel") in ("MOBILE", "WEB") or t.get("transaction_type") == "VIREMENT"
 
 
-def _prefetch(intent, context_tx, step):
+def _relative_day(question):
+    """'hier/yesterday' or 'aujourd'hui/today' -> date in the demo's calendar (last day of the live flow)."""
+    ql = question.lower()
+    try:
+        q = tools.da.queue()
+        today = pd.to_datetime(q[q.period == "test"].timestamp).max().normalize()
+    except Exception:
+        return None
+    if re.search(r"\bhier\b|yesterday", ql):
+        return f"{today - pd.Timedelta(days=1):%Y-%m-%d}"
+    if re.search(r"aujourd|today|du jour|today's", ql):
+        return f"{today:%Y-%m-%d}"
+    return None
+
+
+def _prefetch(intent, context_tx, step, question=""):
     """Fetch the facts the question needs. Returns [(tool, args, result)]."""
     out = []
 
@@ -127,7 +149,8 @@ def _prefetch(intent, context_tx, step):
         call("get_kpis")
         return out
     if intent == "queue":
-        call("get_alert_queue", n=10)
+        day = _relative_day(question)
+        call("get_alert_queue", n=10, **({"date": day} if day else {}))
         return out
     if not context_tx:
         return out
@@ -185,10 +208,23 @@ def _compact(obj, limit):
 
 
 # ---------------------------------------------------------------- Azure OpenAI
+_live_calls = []          # timestamps of live LLM calls (public demo cost guard)
+
+
+def _within_budget():
+    cap = int(os.getenv("COPILOT_HOURLY_CAP", "0") or 0)
+    if cap <= 0:
+        return True
+    now = time.time()
+    _live_calls[:] = [t for t in _live_calls if now - t < 3600]
+    return len(_live_calls) < cap
+
+
 def configured():
     if os.getenv("COPILOT_OFFLINE", "0") == "1":      # force offline mode (tests, no paid calls)
         return False
-    return all(os.getenv(k) for k in ["AZURE_OPENAI_ENDPOINT", "AZURE_OPENAI_API_KEY", "AZURE_OPENAI_DEPLOYMENT"])
+    keys = all(os.getenv(k) for k in ["AZURE_OPENAI_ENDPOINT", "AZURE_OPENAI_API_KEY", "AZURE_OPENAI_DEPLOYMENT"])
+    return keys and _within_budget()      # hourly cap reached -> offline answers until the window frees up
 
 
 _client_obj = None
@@ -196,6 +232,7 @@ _client_obj = None
 
 def _client():
     global _client_obj
+    _live_calls.append(time.time())
     if _client_obj is None:
         from openai import AzureOpenAI
         _client_obj = AzureOpenAI(azure_endpoint=os.environ["AZURE_OPENAI_ENDPOINT"], api_key=os.environ["AZURE_OPENAI_API_KEY"],
@@ -312,14 +349,28 @@ def ask(question, context_tx=None, history=None, lang="fr", on_token=None, on_st
     return out
 
 
+def _today_line():
+    """The demo runs on a synthetic 'today': the last day of the live flow (Aug–Sep 2026), not the real clock."""
+    if not hasattr(_today_line, "line"):
+        try:
+            q = tools.da.queue()
+            d = pd.to_datetime(q[q.period == "test"].timestamp).max().normalize()
+            _today_line.line = (f"Date de référence de la démo : aujourd'hui = {d:%Y-%m-%d} (dernier jour du flux du jour), "
+                                f"hier = {d - pd.Timedelta(days=1):%Y-%m-%d}. Interprète « aujourd'hui / hier / cette semaine » "
+                                "par rapport à cette date, jamais par rapport à l'horloge réelle.")
+        except Exception:
+            _today_line.line = ""
+    return _today_line.line
+
+
 def _ask_llm(question, context_tx, history, lang, intent, on_token, on_step):
     client = _client()
     step = on_step or (lambda name: None)
-    facts = _prefetch(intent, context_tx, step)
+    facts = _prefetch(intent, context_tx, step, question)
     used = [{"name": n, "args": _dumps(a), "prefetched": True} for n, a, _ in facts]
 
     messages = [{"role": "system", "content": SYSTEM_PROMPT}]
-    dynamic = [LANG_LINE[lang], f"Type de question détecté : {intent}."]
+    dynamic = [LANG_LINE[lang], f"Type de question détecté : {intent}.", _today_line()]
     if context_tx:
         dynamic.append(f"Transaction ouverte par l'analyste : {context_tx} (à utiliser si la question ne cite pas d'identifiant).")
     if facts:

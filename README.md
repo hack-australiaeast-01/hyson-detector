@@ -21,13 +21,20 @@ SQL source ──copy job──► Fabric Lakehouse lh_fraud (bronze)
 
 ## Results (validation, Jun–Jul 2026, out-of-time)
 
+> **Data actually used.** The dataset delivered in Fabric is larger than the one described in the brief: **1,908,228 transactions** (train 1,720,600 from 2025-01-01, test 187,628 for Aug–Sep 2026), 3,500 customers, 32,065 legacy alerts (brief: ~435,000 transactions, 2,500 customers, 6,324 alerts). Every figure below is measured on this data. On it, the current rules engine reaches **3.5 % precision / 11.5 % recall** in Jun–Jul (3.9 % / 13 % over the whole train period), well below the brief's ~15 % / ~42 %, which describes the brief's smaller sample.
+
 | | Alerts | Frauds caught | Recall | Precision |
 |---|---|---|---|---|
 | Current rules engine | 3,338 | 117 / 1,013 | 11.5 % | 3.5 % |
 | Model, same alert volume | 3,338 | 787 | 77.7 % | 23.6 % |
 | **Model, top 1 % (analyst capacity)** | **1,779** | **718** | **70.9 %** | **40.4 %** |
+| Model, top 0.5 % | 890 | 590 | 58.2 % | 66.4 % |
 
 PR-AUC 0.646 (rules 0.014). The model beats the rules engine on 5 of the 6 fraud types. For the sixth (CARTE_CLONEE_ETRANGER), the legacy rule is kept as a complement.
+
+**Alert budget.** The brief's "~1,000 alerts over two months" is 1 % of its 101,730 test transactions; we keep the same **1 %** rule on our 187,628 test transactions (1,876 alerts). If the team can only review ~1,000, the top 0.5 % (≈ 900 alerts) keeps 58 % recall at 66 % precision.
+
+**Score file (§14).** [`submission/submission.csv`](submission/submission.csv): one row per test transaction (187,628), `transaction_id,fraud_score,is_alert`, 1,876 alerts.
 
 ## Run the app
 
@@ -50,7 +57,7 @@ If Azure OpenAI is not configured or unavailable, the copilot switches to a **de
 Live link: **https://hyson-detector.streamlit.app**
 
 - Main file `app/app.py`, Python 3.12, dependencies from `app/requirements.txt`.
-- The cloud has no Entra login, so it reads the **Gold snapshot committed in `app/data/*.parquet`** (synthetic data exported from Fabric). Locally the app reads Fabric live.
+- The cloud has no Entra login, so it reads the **Gold snapshot committed in `app/data/*.parquet`** (synthetic data exported from Fabric): Gold tables, the full transaction history since 2025 and the digital events of the 1,814 customers in the alert queue (no test labels). Locally the app reads Fabric live. Online, "related cases" only see those 1,814 customers (labelled "extrait local" in the answer).
 - Azure OpenAI: paste the values of [`app/.streamlit/secrets.toml.example`](app/.streamlit/secrets.toml.example) into the app's **Settings → Secrets** (never in Git). Without a key, the demo cases are answered from the pre-computed gpt-5-mini cache and other questions use offline mode.
 - Decisions recorded on the hosted app stay in its container (not written to OneLake).
 

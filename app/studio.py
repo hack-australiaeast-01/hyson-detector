@@ -136,7 +136,8 @@ def page_guide(c):
         if imp:
             ui.kpi(c.L("Paiements légitimes épargnés", "Legitimate payments spared"),
                    f"{(imp['moteur']['fausses_tnd'] - imp['modele']['fausses_tnd']) / 1e6:.1f} M TND",
-                   c.L("bloqués à tort en moins sur 2 mois", "fewer wrongly stopped over 2 months"))
+                   c.L("de bons paiements en moins mis en alerte à tort (2 mois)",
+                       "fewer good payments wrongly flagged (2 months)"))
     with e:
         ui.kpi(c.L("Temps cible", "Target time"), "< 30 s", c.L("de l’alerte à la décision", "from alert to decision"))
 
@@ -207,9 +208,9 @@ def page_impact(c):
                  f"<b>{m['taux_tnd']:.0%}</b> of fraud value · current rules {_money(r['fraudes_tnd'])} ({r['taux_tnd']:.0%})"),
                f"×{m['fraudes_tnd'] / max(r['fraudes_tnd'], 1):.1f}")
     with b:
-        ui.kpi(L("Paiements légitimes interrompus", "Legitimate payments interrupted"), _money(m["fausses_tnd"]),
-               L(f"moteur actuel : <b>{_money(r['fausses_tnd'])}</b> de paiements de bons clients",
-                 f"current rules: <b>{_money(r['fausses_tnd'])}</b> of good customers' payments"),
+        ui.kpi(L("Paiements légitimes mis en alerte", "Legitimate payments flagged"), _money(m["fausses_tnd"]),
+               L(f"moteur actuel : <b>{_money(r['fausses_tnd'])}</b> de paiements de bons clients mis en alerte à tort",
+                 f"current rules: <b>{_money(r['fausses_tnd'])}</b> of good customers' payments wrongly flagged"),
                f"−{1 - m['fausses_tnd'] / r['fausses_tnd']:.1%}")
     with d:
         ui.kpi(L("Clients dérangés à tort", "Customers wrongly disturbed"), _nb(m["fausses"]),
