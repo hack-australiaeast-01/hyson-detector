@@ -1,5 +1,5 @@
 {
- "run": "2026-11-06T03:11:21",
+ "run": "2026-11-06T09:57:58",
  "fresh": false,
  "results": [
   {
@@ -11,9 +11,9 @@
    "intent": "analyse",
    "mode": "Azure OpenAI (gpt-5-mini)",
    "cached": true,
-   "latency_s": 17.55,
-   "tokens": 3427,
-   "words": 150,
+   "latency_s": 13.21,
+   "tokens": 4506,
+   "words": 154,
    "checks": {
     "decision": true,
     "key_facts": true,
@@ -21,10 +21,10 @@
     "grounded_numbers": true
    },
    "passed": true,
-   "numbers_checked": 13,
+   "numbers_checked": 15,
    "faithfulness": 1.0,
    "notes": "",
-   "answer": "**Verdict**  \nNiveau ELEVE — score modèle 0.9993 — percentile 1.0.\n\n**Facteurs principaux**  \n1) Montant 814.317 TND vs moyenne client 189.305 TND (≈4.3× la moyenne ; supérieur au p95 518.987).  \n2) 3 échecs de connexion en 24 h (observés) + échecs listés les 2026-06-04 19:40/20:50/21:56 (IP Italie).  \n3) Bénéficiaire ajouté 316 minutes avant l'opération (ajout réussi 2026-06-04 23:33; transfert 2026-06-05 04:49).\n\n**Contexte**  \nClient C000488, 409 opérations avant la transaction. Canal WEB, mode APP_AUTH, appareil DEV872235 présent mais connu depuis moins de 24 h; opérations précédentes dans le pays (12 en 7 j).\n\n**Éléments rassurants**  \nOpérations dans ce pays (12 en 7 j) et 1 client ayant déjà payé ce bénéficiaire — ces facteurs ont une contribution rassurante modérée.\n\n**Recommandation**  \nSystème → BLOQUER (confiance élevée). Signaux concordants : échecs de connexion (24 h), minutes depuis ajout du bénéficiaire, catégorie commerçant, montant très supérieur aux habitudes. Aucun fait fourni ne contredit cette règle."
+   "answer": "**Verdict**  \nNiveau ELEVE — score modèle 0.9993 — percentile 1.0 (rang 1).  \n\n**Facteurs principaux**  \n- Montant 814.317 TND vs moyenne 189.305 TND (ratio 4.3) — au‑dessus du 95e (p95 518.987).  \n- 3 échecs de connexion dans les 24 h précédant l'opération (événements à 19:40, 20:50, 21:56 le 2026-06-04).  \n- Bénéficiaire ajouté 316 minutes avant l'opération (ajout 2026-06-04 23:33; virement 2026-06-05 04:49).  \n\n**Contexte**  \nClient C000488, 409 opérations depuis 2025-01-03 ; opération WEB à 04:49 (nuit — 3.9% des opérations sont de nuit). Appareil DEV872235 déjà vu mais connu depuis moins de 24 h ; IP des connexions liées : IT (Italie).  \n\n**Éléments rassurants**  \n- Opérations précédentes dans ce pays (12 en 7 j) et bénéficiaire déjà payé par d’autres clients (1 cas) sont pesés comme légèrement rassurants par le modèle.  \n\n**Recommandation**  \nSystème : BLOQUER (confiance élevée). La règle appliquée : percentile ≥ 0.998 et ≥ 2 signaux concordants. Précision mesurée à ce niveau : 0.941."
   },
   {
    "id": "subtle_fr",
@@ -35,9 +35,9 @@
    "intent": "analyse",
    "mode": "Azure OpenAI (gpt-5-mini)",
    "cached": true,
-   "latency_s": 7.09,
-   "tokens": 3072,
-   "words": 151,
+   "latency_s": 7.78,
+   "tokens": 4174,
+   "words": 157,
    "checks": {
     "decision": true,
     "key_facts": true,
@@ -48,7 +48,7 @@
    "numbers_checked": 21,
    "faithfulness": 1.0,
    "notes": "",
-   "answer": "**Verdict**  \nNiveau ELEVE — score modèle 0.9982 — percentile 1.0 (rang 13).\n\n**Facteurs principaux**  \n1) Catégorie commerçant \"Telecom / Recharge\" fortement contributive (+3.516) ; le commerçant est nouveau pour le client (nouveau commerçant = 1.0, contribution +1.27).  \n2) Canal EN_LIGNE contribution +1.634 (opération ECOM_SANS_3DS).  \n3) Opération de nuit inhabituelle : horodatage 2026-06-17 02:03 vs part nuit habituelle 0.022 (règle métier a contribué +1.0).\n\n**Contexte**  \nClient C002810, carte CARD003472. Historique avant : 596 opérations depuis 2025-01-02 ; appareil déjà vu et connu depuis plus de 24 h ; opérations 24 h avant = 2, montant cumulé 23.408 TND. Opération précédente : 2026-06-16 22:32 (5.729 TND).\n\n**Éléments rassurants**  \nMontant faible 7.685 TND vs moyenne habituelle 178.299 TND (contribution rassurante -0.523). Montant cumulé 24 h avant 23.408 TND (contribution -0.112).\n\n**Recommandation**  \nRecommandation système : BLOQUER (confiance élevée) — règle appliquée : percentile ≥ 0.998 et ≥ 2 signaux concordants (\"Catégorie commerçant\",\"Canal\",\"Nouveau commerçant\",\"Opération de nuit\")."
+   "answer": "**Verdict**  \nNiveau ELEVE, score 0.9982, percentile 1.0.\n\n**Facteurs principaux**  \n- Commerçant jamais vu (modèle +1.27) — historique : commerçant non déjà vu vs 596 opérations.  \n- Catégorie Telecom / Recharge (modèle +3.516) — catégorie bien connue du modèle pour la fraude sur ce client.  \n- Opération de nuit à 02:03 (règle métier +1.0) — part d'opérations de nuit du client 2.2% (écart net).\n\n**Contexte**  \nClient C002810, 596 opérations depuis 2025-01-02. Séquence 24 h : 3 opérations, 3 commerçants distincts tous nouveaux ; opérations récentes 16–17 juin (dernière à 02:03). Appareil connu depuis plus de 24 h, canal EN_LIGNE, entrée ECOM_SANS_3DS.\n\n**Éléments rassurants**  \nMontant faible 7.685 TND vs moyenne cliente 178.299 TND (modèle contribution rassurante -0.523). Montant cumulé 24 h = 23.408 TND (contribution rassurante -0.112). Appareil connu depuis >24 h.\n\n**Recommandation**  \nSystème : BLOQUER (confiance élevée) — règle appliquée : percentile ≥ 0.998 et ≥ 2 signaux concordants. Précision mesurée à ce score en validation : 0.941."
   },
   {
    "id": "fp_fr",
@@ -59,9 +59,9 @@
    "intent": "analyse",
    "mode": "Azure OpenAI (gpt-5-mini)",
    "cached": true,
-   "latency_s": 11.87,
-   "tokens": 3083,
-   "words": 171,
+   "latency_s": 6.05,
+   "tokens": 4233,
+   "words": 158,
    "checks": {
     "decision": true,
     "key_facts": true,
@@ -69,10 +69,10 @@
     "grounded_numbers": true
    },
    "passed": true,
-   "numbers_checked": 13,
+   "numbers_checked": 12,
    "faithfulness": 1.0,
    "notes": "",
-   "answer": "**Verdict**  \nNiveau FAIBLE (score modèle 0.0, percentile 0.0).\n\n**Facteurs principaux**  \n- Règle métier déclenchée : \"Montant très supérieur aux habitudes\" — opération 3 360.634 TND vs moyenne client 165.902 TND (ratio 20.26).  \n- Nouveaux commerçants sur la carte dans les 24 h précédentes : 1 nouveau commerçant enregistré.  \n- Heure et canal physiques habituels : paiement TPE à 09:55:38 en Tunisie, ville déjà vue.\n\n**Contexte**  \nTransaction TX01575959 le 2026-06-13 09:55:38 par C003285, TPE (CHIP), catégorie Ameublement, ville Tunis. Historique avant : 936 opérations (703 physiques) depuis 2025-01-01 ; opérations 24 h avant = 1 (80.29 TND le 2026-06-12 16:53:47).\n\n**Éléments rassurants**  \n- Le modèle a classé le risque FAIBLE (contribution du montant fortement rassurante : -1.429).  \n- Pays et ville déjà vus, commerçant et mode d'entrée déjà connus ; pas de refus récent ni d'opérations simultanées.\n\n**Recommandation**  \nVALIDER (confiance moyenne) — la règle métier alerte mais le modèle et le contexte client sont globalement rassurants. Vérification possible : contacter le client si doute (confirmation 3 360.63 TND chez un marchand d'ameublement)."
+   "answer": "**Verdict**  \nNiveau FAIBLE — score modèle 0.0, percentile 0.0.\n\n**Facteurs principaux**  \n- Montant très supérieur aux habitudes : 3 360.63 TND vs moyenne 165.90 TND (ratio 20.26) — dépasse le 95e (p95 671.56 TND) ; règle métier déclenchée (2 points).  \n- Nouveau commerçant sur la carte dans les 24 h précédentes : 1 commerçant jamais vu.  \n- Type d'opération = ACHAT (contribution modèle faible pour la fraude).\n\n**Contexte**  \nClient C003285, carte CARD004046, TPE à Tunis le 2026-06-13 09:55:38 ; 2 opérations dans 24 h (total 3 440.92 TND). Opération approuvée ; précédente le 2026-06-12 16:53:47 (80.29 TND), distance 7.3 km.\n\n**Éléments rassurants**  \n- Appareil/commerçant/pays/ville déjà vus en paiements physiques ; paiement par puce (CHIP).  \n- Opération en journée et déplacement plausible depuis la dernière opération.  \n- Le modèle liste le montant comme non déterminant (contribution négative) malgré la règle métier.\n\n**Recommandation**  \nVALIDER — confiance moyenne (recommandation système). Si vous avez doute : appeler le titulaire ou vérifier reçu/OTP."
   },
   {
    "id": "obvious_en",
@@ -83,9 +83,9 @@
    "intent": "analyse",
    "mode": "Azure OpenAI (gpt-5-mini)",
    "cached": true,
-   "latency_s": 5.65,
-   "tokens": 3520,
-   "words": 173,
+   "latency_s": 5.43,
+   "tokens": 4506,
+   "words": 183,
    "checks": {
     "decision": true,
     "key_facts": true,
@@ -94,10 +94,10 @@
     "grounded_numbers": true
    },
    "passed": true,
-   "numbers_checked": 13,
-   "faithfulness": 0.923,
-   "notes": "ungrounded: 95",
-   "answer": "**Verdict**  \nHIGH risk — model score 0.9993, percentile 1.0.\n\n**Main factors**  \n- Multiple failed logins: 3 failures in 24 h (observed) — triggered model contribution and rule.  \n- New beneficiary + recent add: beneficiary added ~316 minutes before the transfer (contribution 1.258).  \n- Amount well above habit: 814.317 TND vs customer's mean 189.305 TND (ratio 4.3; above 95th percentile 518.987 TND).\n\n**Context**  \nCustomer C000488 made a WEB transfer (APP_AUTH) on 2026-06-05 04:49:00 (status APPROUVEE). Digital events show three failed WEB logins and a successful add-beneficiary on 2026-06-04 23:33:00 from device DEV872235, IP country IT. Device and beneficiary are seen before but not known for >24 h.\n\n**Reassuring elements**  \nCustomer had 12 operations in this country in the last 7 days and one other client has paid this beneficiary (both gave small model contributions against fraud).\n\n**Recommendation**  \nSystem rule → BLOCK (high confidence): percentile ≥ 0.998 and ≥ 2 concordant signals (failed logins, recent beneficiary, unusual amount, merchant category). Facts support blocking. If you disagree, verify beneficiary owner and confirm customer contact before releasing."
+   "numbers_checked": 12,
+   "faithfulness": 1.0,
+   "notes": "",
+   "answer": "**Verdict**  \nRisk: HIGH — model score 0.9993, percentile 1.0 (top of period). System recommendation: BLOCK, confidence high.\n\n**Main factors**  \n1) 3 failed WEB login attempts in 24 h (observed 3).  \n2) Beneficiary added recently — 316 minutes before the transfer.  \n3) Amount 814.317 TND is well above usual (mean 189.305 TND; above the 95th percentile 518.987 TND).\n\n**Context**  \nCustomer C000488, transaction TX01555470: WEB transfer approved at 2026-06-05 04:49:00. Digital events show 3 failed WEB logins from device DEV872235 with IP country Italy (IT) on 2026-06-04 between 19:40 and 21:56, beneficiary added successfully 2026-06-04 23:33 from same device/IP, then successful login 23:42. Device and beneficiary are known but both for less than 24 h. Operation time 04:49 is atypical for this customer (only 3.9% of past ops at night).\n\n**Reassuring elements**  \n- The model notes 12 operations in Tunisia in last 7 days and one other client already paid this beneficiary (both small negative contributions).  \n- Transaction country is TN.\n\n**Recommendation**  \nSystem rule → BLOCK (confidence high). Measured precision at this score: 0.941. Consider calling the customer or verifying OTP/bank confirmations before final action."
   },
   {
    "id": "not_fraud_fr",
@@ -108,9 +108,9 @@
    "intent": "analyse",
    "mode": "Azure OpenAI (gpt-5-mini)",
    "cached": true,
-   "latency_s": 7.53,
-   "tokens": 3193,
-   "words": 148,
+   "latency_s": 5.94,
+   "tokens": 4117,
+   "words": 168,
    "checks": {
     "decision": true,
     "key_facts": true,
@@ -118,10 +118,10 @@
     "grounded_numbers": true
    },
    "passed": true,
-   "numbers_checked": 11,
+   "numbers_checked": 10,
    "faithfulness": 1.0,
    "notes": "",
-   "answer": "**Verdict**  \nFAIBLE — score modèle 0.0, percentile 0.0.\n\n**Facteurs principaux**  \nRassurants : modèle et percentile très bas (0.0), opération CHIP TPE en Tunisie et commerçant/catégorie déjà vus par le client. Point d'attention : montant élevé 3 360.634 TND vs moyenne habituelle 165.902 TND (ratio 20.26).\n\n**Contexte**  \nClient C003285, 936 opérations antérieures (703 en physique). Transaction à Tunis le 2026-06-13 09:55:38. Opération précédente le 2026-06-12 16:53:47 (80.29 TND). Pas d'opérations refusées récentes, commerçant et mode d'entrée déjà vus.\n\n**Éléments rassurants**  \nPays et ville déjà vus en physique ; mode CHIP connu ; faible fréquence d'alertes du modèle (niveau FAIBLE). Distance entre opérations compatible (7.3 km, vitesse implicite 0.4 km/h).\n\n**Recommandation**  \nVALIDER — confiance moyenne (conformément à la recommandation système : FAIBLE → VALIDER, moyenne si une règle métier a alerté).  \n\nFait vs interprétation : faits ci‑dessus. Vérification possible : confirmer avec contact client si achat d'ameublement de ce montant."
+   "answer": "**Verdict**  \nFAIBLE — score modèle 0.0, percentile 0.0 (TX01575959, 2026-06-13 09:55:38).\n\n**Facteurs principaux**  \n- Rassurant : paiement par puce (mode de saisie CHIP) — contribution modèle rassurante (facteurs non déterminants listés).  \n- Rassurant : pays/ville et commerçant déjà vus en physique (Tunis, TN ; commerçant fréquenté).  \n- Point d'attention : montant 3 360.634 TND, ~20.26× la moyenne (moyenne 165.902 TND) ; règle métier a déclenché « Montant très supérieur aux habitudes ».\n\n**Contexte**  \nClient C003285, 936 opérations avant la transaction (depuis 2025-01-01). Opération en journée à 09:55, précédée le 2026-06-12 16:53:47 d’un achat de 80.29 TND ; déplacement plausible (7.3 km), 2 opérations sur 24 h, 1 commerçant nouveau dans les 24 h.\n\n**Éléments rassurants**  \n- Paiement physique par puce (pas de piste magnétique).  \n- Ville et pays habituels (Tunis, TN) et commerçant déjà fréquenté.  \n- Pas de refus récent, vitesse implicite basse, opération en journée.\n\n**Recommandation**  \nVALIDER (confiance moyenne) — la recommandation système est VALIDER; l’analyste peut appeler le client si besoin pour confirmer le montant élevé."
   },
   {
    "id": "before_fr",
@@ -132,19 +132,19 @@
    "intent": "before",
    "mode": "Azure OpenAI (gpt-5-mini)",
    "cached": true,
-   "latency_s": 7.29,
-   "tokens": 4058,
-   "words": 163,
+   "latency_s": 7.33,
+   "tokens": 5050,
+   "words": 167,
    "checks": {
     "decision": true,
     "key_facts": true,
     "grounded_numbers": true
    },
    "passed": true,
-   "numbers_checked": 10,
+   "numbers_checked": 9,
    "faithfulness": 1.0,
    "notes": "",
-   "answer": "**Verdict** (ELEVE, score 0.9993, percentile 1.0)\n\n**Facteurs principaux**  \n1) 3 échecs de connexion dans les 24 h (19:40, 20:50, 21:56 le 2026-06-04, IP pays IT).  \n2) Ajout d’un bénéficiaire réussi à 23:33 le 2026-06-04 (OTP SMS) — 316 minutes avant la transaction.  \n3) Appareil déjà vu mais connu depuis < 24 h ; bénéficiaire déjà vu mais connu depuis < 24 h.\n\n**Contexte**  \nEntre 2026-06-04 19:40 et 23:42, le client a eu 3 tentatives de connexion échouées depuis le même device (DEV872235) et IP en Italie, puis à 23:33 ce device a ajouté le bénéficiaire BEN896882 (OTP SMS), puis connexion réussie à 23:42. La transaction suspecte a eu lieu le 2026-06-05 04:49 (VIREMENT WEB, 814.317 TND). Deux virements précédents la même nuit à 00:54 (690.65 TND) et 03:30 (305.31 TND).\n\n**Éléments rassurants**  \nLe client a plusieurs opérations récentes dans le pays (12 en 7 j) et d’autres clients ont déjà payé ce bénéficiaire (1).\n\n**Recommandation**  \nSuivre la recommandation système : BLOQUER (confiance élevée)."
+   "answer": "**Verdict**  \nNiveau ELEVE — score modèle 0.9993 — percentile 1.0.\n\n**Facteurs principaux (3)**  \n- 3 échecs de connexion dans les 24 h précédant l'opération (observés à 2026-06-04 19:40, 20:50, 21:56, même device DEV872235, IP pays IT).  \n- Ajout d'un bénéficiaire réussi à 2026-06-04 23:33 depuis DEV872235 (authentification OTP_SMS, beneficiary id BEN896882) — 316 minutes avant le virement.  \n- Opération de nuit : virement à 2026-06-05 04:49, montant 814.317 TND (≈4.3× sa moyenne).\n\n**Contexte**  \nDans les 24 h avant l'opération le client a effectué 3 virements (00:54, 03:30, 04:49). Les événements digitaux montrent d’abord 3 connexions échouées (IT), puis ajout de bénéficiaire et connexion réussie depuis le même device et pays (IT).\n\n**Éléments rassurants**  \nLe bénéficiaire avait déjà été payé par un client auparavant (1.0), et il y a eu 12 opérations dans ce pays les 7 derniers jours (contribution rassurante du modèle).\n\n**Recommandation**  \nRecommandation système : BLOQUER (confiance élevée) — signaux concordants : échecs de connexion, minutes depuis ajout bénéficiaire, catégorie commerçant, montant très supérieur aux habitudes."
   },
   {
    "id": "summary_fr",
@@ -155,19 +155,19 @@
    "intent": "summary",
    "mode": "Azure OpenAI (gpt-5-mini)",
    "cached": true,
-   "latency_s": 7.21,
-   "tokens": 3352,
-   "words": 137,
+   "latency_s": 7.61,
+   "tokens": 4446,
+   "words": 143,
    "checks": {
     "decision": true,
     "key_facts": true,
     "grounded_numbers": true
    },
    "passed": true,
-   "numbers_checked": 15,
+   "numbers_checked": 12,
    "faithfulness": 1.0,
    "notes": "",
-   "answer": "Transaction C002810 — TX01585580 : opération EN_LIGNE e‑commerce sans 3DS de 7.685 TND approuvée le 2026-06-17 02:03:00 (catégorie Telecom / Recharge, commerçant identifié M01399). Le modèle classe le cas en risque ELEVE (score 0.9982, percentile 1.0) ; facteurs contribuant : catégorie commerçant (+3.516), canal EN_LIGNE (+1.634), nouveau commerçant (+1.27) et opération de nuit inhabituelle pour le client (+1.0). Comparaison aux habitudes : 596 opérations historiques depuis 2025-01-02, montant moyen 178.299 TND (cette opération à 0.04× la moyenne), commerçant jamais vu mais appareil connu depuis >24 h ; 2 opérations dans les 24 h précédentes (montant cumulé 23.408 TND). Aucun événement digital retracé autour de l’opération (0 événements). Le commerçant M01399 a 179 opérations sur la banque avec 1 carte signalée frauduleuse antérieure. Conclusion et recommandation : BLOQUER (confiance élevée) conformément à la décision système (précision mesurée 0.941)."
+   "answer": "Faits : transaction TX01585580, 2026-06-17 02:03:00, client C002810, achat en ligne ECOM_SANS_3DS chez Telecom / Recharge pour 7.685 TND, statut APPROUVEE. Chronologie pertinente : 2026-06-16 18:39 achat ECOM_SANS_3DS Marketplace ~18 TND (nouveau commerçant) ; 2026-06-16 22:32 achat ECOM_SANS_3DS Telecom / Recharge 5.729 TND (nouveau commerçant) ; 2026-06-17 02:03 la présente opération. Modèle : niveau ELEVE, score 0.9982, percentile 1.0, recommandation système BLOQUER (confiance élevée), précision mesurée à ce score 0.941. Facteurs modèle pour fraude : catégorie Telecom/Recharge, canal EN_LIGNE, commerçant nouveau ; règle métier déclenchée : opération de nuit inhabituelle. Habitudes : 596 opérations depuis 2025-01-02 ; appareil connu depuis plus de 24 h ; montant inférieur à la moyenne historique (7.685 vs moyenne 178.299 TND). Cas liés : commerçant M01399 impliqué dans 179 opérations sur 30 jours, 1 carte/client déjà signalés fraude. Conclusion et recommandation : BLOQUER l'opération (concordance modèle + signaux)."
   },
   {
    "id": "live_flow_fr",
@@ -178,9 +178,9 @@
    "intent": "analyse",
    "mode": "Azure OpenAI (gpt-5-mini)",
    "cached": true,
-   "latency_s": 27.8,
-   "tokens": 3395,
-   "words": 152,
+   "latency_s": 14.95,
+   "tokens": 4095,
+   "words": 164,
    "checks": {
     "decision": true,
     "key_facts": true,
@@ -188,10 +188,10 @@
     "grounded_numbers": true
    },
    "passed": true,
-   "numbers_checked": 15,
+   "numbers_checked": 13,
    "faithfulness": 1.0,
    "notes": "",
-   "answer": "**Verdict**  \nNiveau ELEVE — score modèle 0.9381 — percentile 0.998 (rang 409).\n\n**Facteurs principaux**  \n1) Montant 71.318 TND vs moyenne client 155.594 TND (ratio 0.46) — contribution modèle +1.465.  \n2) Vitesse implicite 21.552 km/h entre opérations (distance 7.9 km) — contribution +0.968.  \n3) Secondes depuis opération précédente 1 320 s (22 min) — contribution +0.941.\n\n**Contexte**  \nTransaction TPE sans-contact en pharmacie à Gafsa le 2026-09-25 17:22 ; carte CARD004111, client C003336. Opération refusée (motif refus : PLAFOND_DEPASSE). Opération précédente à 17:00 le même jour, 44.183 TND, approvée.\n\n**Éléments rassurants**  \nClient a 108 opérations avant la date (depuis 2025-01-04). Pays (TN), ville (Gafsa), catégorie (Pharmacie) et mode sans-contact déjà vus. Période de paie et catégorie pharmacie pondèrent le score négativement.\n\n**Recommandation**  \nRecommandation système : BLOQUER (confiance moyenne) — signaux concordants : Montant, Vitesse implicite, Secondes depuis précédente. La décision finale vous appartient ; vérifiez l'OTP, le plafond et contactez le client si nécessaire."
+   "answer": "**Verdict**  \nNiveau ELEVE, score 0.9381, percentile 0.998 (rang 409/1876).\n\n**Facteurs principaux**  \n- Le modèle retient 3 signaux concordants : montant (71.318 TND, contribution 1.465), vitesse implicite 21.552 km/h (contribution 0.968), secondes depuis l'opération précédente 1 320 s (contribution 0.941).  \n- L'alerte a été placée dans la file (dans file alertes = true) et la règle système recommande BLOQUER avec confiance moyenne quand ELEVE et ≥ 2 signaux.\n\n**Contexte**  \nClient C003336, carte CARD004111 ; opération TPE sans-contact en pharmacie à Gafsa le 2026-09-25 17:22 refusée par la suite (statut REFUSEE). Transaction précédente à 17:00 le même jour, approuvée (44.183 TND) ; motif de refus ici : PLAFOND_DEPASSE.\n\n**Éléments rassurants**  \n- Conforme aux habitudes : commerçant déjà fréquenté, pays et ville habituels, déplacement plausible (7.9 km), montant dans l'historique (p95 = 442.111 TND), opération en journée.\n\n**Recommandation**  \nRecommandation système : BLOQUER (confiance moyenne), signaux concordants listés ci‑dessus. (L'analyste décide; je peux lancer vérifications : contacter le client, vérifier OTP ou historique d'appareils si vous le demandez.)"
   },
   {
    "id": "queue_yesterday_fr",
@@ -202,9 +202,9 @@
    "intent": "queue",
    "mode": "Azure OpenAI (gpt-5-mini)",
    "cached": true,
-   "latency_s": 20.02,
-   "tokens": 3426,
-   "words": 279,
+   "latency_s": 7.56,
+   "tokens": 4115,
+   "words": 269,
    "checks": {
     "key_facts": true,
     "queue_ids": true,
@@ -214,7 +214,7 @@
    "numbers_checked": 11,
    "faithfulness": 1.0,
    "notes": "10/10 queue IDs cited",
-   "answer": "1 · TX01901683 · 2026-09-29 04:30 · 80.0 TND · RETRAIT DAB · TN · ELEVE · Nouveau commerçant | Catégorie commerçant | Type de commerçant\n2 · TX01903111 · 2026-09-29 13:48 · 52.414 TND · ACHAT TPE · TN · ELEVE · Montant de l'opération | Catégorie commerçant | Secondes depuis l'opération précédente\n3 · TX01902959 · 2026-09-29 13:03 · 62.662 TND · ACHAT TPE · TN · MOYEN · Montant de l'opération | Secondes depuis l'opération précédente | Vitesse implicite depuis l'opération précédente (km/h)\n4 · TX01903570 · 2026-09-29 16:09 · 52.934 TND · ACHAT EN_LIGNE · TN · MOYEN · Catégorie commerçant | Montant de l'opération | Nouveau commerçant\n5 · TX01904787 · 2026-09-29 22:16 · 527.726 TND · VIREMENT MOBILE · TN · MOYEN · Secondes depuis l'opération précédente | Heure | Catégorie commerçant\n6 · TX01903375 · 2026-09-29 15:13 · 58.894 TND · ACHAT TPE · TN · MOYEN · Secondes depuis l'opération précédente | Montant de l'opération | Mode de saisie\n7 · TX01904734 · 2026-09-29 21:37 · 287.54 TND · VIREMENT WEB · TN · MOYEN · Catégorie commerçant | Paiements sans contact sur la carte (24 h) | Heure\n8 · TX01904775 · 2026-09-29 22:06 · 93.069 TND · ACHAT EN_LIGNE · TN · MOYEN · Montant de l'opération | Nouveau commerçant | Heure\n9 · TX01904371 · 2026-09-29 19:23 · 63.918 TND · PAIEMENT_FACTURE EN_LIGNE · TN · MOYEN · Montant de l'opération | Nouveau commerçant | Canal\n10 · TX01904644 · 2026-09-29 20:47 · 65.916 TND · ACHAT TPE · TN · MOYEN · Montant de l'opération | Secondes depuis l'opération précédente | Vitesse implicite depuis l'opération précédente (km/h)"
+   "answer": "1. TX01901683 · 2026-09-29 04:30 · 80.0 TND · RETRAIT DAB · TN · ELEVE · Nouveau commerçant | Catégorie commerçant | Type de commerçant\n2. TX01903111 · 2026-09-29 13:48 · 52.414 TND · ACHAT TPE · TN · ELEVE · Montant de l'opération | Catégorie commerçant | Secondes depuis l'opération précédente\n3. TX01902959 · 2026-09-29 13:03 · 62.662 TND · ACHAT TPE · TN · MOYEN · Montant de l'opération | Secondes depuis l'opération précédente | Vitesse implicite depuis l'opération précédente (km/h)\n4. TX01903570 · 2026-09-29 16:09 · 52.934 TND · ACHAT EN_LIGNE · TN · MOYEN · Catégorie commerçant | Montant de l'opération | Nouveau commerçant\n5. TX01904787 · 2026-09-29 22:16 · 527.726 TND · VIREMENT MOBILE · TN · MOYEN · Secondes depuis l'opération précédente | Heure | Catégorie commerçant\n6. TX01903375 · 2026-09-29 15:13 · 58.894 TND · ACHAT TPE · TN · MOYEN · Secondes depuis l'opération précédente | Montant de l'opération | Mode de saisie\n7. TX01904734 · 2026-09-29 21:37 · 287.54 TND · VIREMENT WEB · TN · MOYEN · Catégorie commerçant | Paiements sans contact sur la carte (24 h) | Heure\n8. TX01904775 · 2026-09-29 22:06 · 93.069 TND · ACHAT EN_LIGNE · TN · MOYEN · Montant de l'opération | Nouveau commerçant | Heure\n9. TX01904371 · 2026-09-29 19:23 · 63.918 TND · PAIEMENT_FACTURE EN_LIGNE · TN · MOYEN · Montant de l'opération | Nouveau commerçant | Canal\n10. TX01904644 · 2026-09-29 20:47 · 65.916 TND · ACHAT TPE · TN · MOYEN · Montant de l'opération | Secondes depuis l'opération précédente | Vitesse implicite depuis l'opération précédente (km/h)"
   },
   {
    "id": "kpi_fr",
@@ -225,9 +225,9 @@
    "intent": "kpi",
    "mode": "Azure OpenAI (gpt-5-mini)",
    "cached": true,
-   "latency_s": 11.68,
-   "tokens": 2780,
-   "words": 43,
+   "latency_s": 6.35,
+   "tokens": 3287,
+   "words": 49,
    "checks": {
     "key_facts": true,
     "grounded_numbers": true
@@ -236,7 +236,7 @@
    "numbers_checked": 11,
    "faithfulness": 1.0,
    "notes": "",
-   "answer": "- 2 160 fausses alertes évitées : passage de 3 221 → 1 061 fausses alertes (−67,1%).\n- Réduction nette des alertes totales : −1 559 alertes (3 338 → 1 779).\n- En parallèle, 601 fraudes supplémentaires détectées (117 → 718, ×6,1)."
+   "answer": "- 2 160 fausses alertes évitées : passage de 3 221 → 1 061 fausses alertes (−67,1%).\n- Réduction nette d'alertes : −1 559 alertes (3 338 → 1 779).\n- Gain en détections réelles : +601 fraudes détectées (117 → 718), precision du modèle top 1% ≈ 0,404."
   },
   {
    "id": "person_fr",
@@ -247,9 +247,9 @@
    "intent": "person",
    "mode": "Azure OpenAI (gpt-5-mini)",
    "cached": true,
-   "latency_s": 4.78,
-   "tokens": 3010,
-   "words": 164,
+   "latency_s": 6.14,
+   "tokens": 3506,
+   "words": 214,
    "checks": {
     "key_facts": true,
     "person_ids_from_tool": true,
@@ -257,10 +257,10 @@
     "grounded_numbers": true
    },
    "passed": true,
-   "numbers_checked": 16,
-   "faithfulness": 1.0,
-   "notes": "",
-   "answer": "Trouvé 14 clients correspondant. Voici une liste courte (5 premiers) — identifiant · profil · alertes :\n\n1. C000308 · Retraite, âge 81, ville Sfax, KYC Faible, revenu mensuel 1 775 TND · 4 alertes (alerte la plus risquée : TX01799756, score_max 0.9831)  \n2. C003445 · Retraite, âge 86, ville Sfax, KYC Moyen, revenu mensuel 987 TND · 4 alertes (alerte la plus risquée : TX01588016, score_max 0.9755)  \n3. C001510 · Retraite, âge 74, ville Sfax, KYC Faible, revenu mensuel 661 TND · 4 alertes (alerte la plus risquée : TX01635940, score_max 0.7127)  \n4. C003314 · Retraite, âge 80, ville Sfax, KYC Faible, revenu mensuel 1 220 TND · 2 alertes (alerte la plus risquée : TX01550082, score_max 0.9638)  \n5. C001829 · Retraite, âge 77, ville Sfax, KYC Faible, revenu mensuel 1 303 TND · 2 alertes (alerte la plus risquée : TX01684203, score_max 0.8526)\n\nSouhaitez-vous que j’ouvre l’alerte la plus risquée (TX01799756 pour C000308) pour afficher les faits détaillés et événements digitaux ?"
+   "numbers_checked": 18,
+   "faithfulness": 0.944,
+   "notes": "ungrounded: 70",
+   "answer": "Voici les clients retirés de Sfax (>70 ans) qui ont des alertes (liste courte) :\n\n1. C000308 · 81 ans · segment Retraite · KYC risque faible · revenu 1 775 TND · client digital · 4 alertes · score max 0.9831 · alerte la plus risquée : TX01799756  \n2. C003445 · 86 ans · segment Retraite · KYC risque moyen · revenu 987 TND · client digital · 4 alertes · score max 0.9755 · alerte la plus risquée : TX01588016  \n3. C001510 · 74 ans · segment Retraite · KYC risque faible · revenu 661 TND · non digital · 4 alertes · score max 0.7127 · alerte la plus risquée : TX01635940  \n4. C003314 · 80 ans · segment Retraite · KYC risque faible · revenu 1 220 TND · client digital · 2 alertes · score max 0.9638 · alerte la plus risquée : TX01550082  \n5. C001829 · 77 ans · segment Retraite · KYC risque faible · revenu 1 303 TND · client digital · 2 alertes · score max 0.8526 · alerte la plus risquée : TX01684203\n\nIl y a au total 14 clients correspondants dans la recherche. Voulez‑vous que j’ouvre l’alerte la plus risquée (TX01799756 pour C000308) ou que j’affiche la liste complète des 14 clients ?"
   },
   {
    "id": "unknown_id_fr",
@@ -295,7 +295,7 @@
    "mode": "Azure OpenAI (gpt-5-mini)",
    "cached": true,
    "latency_s": 2.09,
-   "tokens": 2033,
+   "tokens": 2464,
    "words": 18,
    "checks": {
     "key_facts": true,
@@ -318,7 +318,7 @@
    "intent": "general",
    "mode": "garde-fou (filtre Azure OpenAI)",
    "cached": false,
-   "latency_s": 4.82,
+   "latency_s": 4.56,
    "tokens": 0,
    "words": 44,
    "checks": {
@@ -342,18 +342,18 @@
    "intent": "habits",
    "mode": "Azure OpenAI (gpt-5-mini)",
    "cached": true,
-   "latency_s": 6.42,
-   "tokens": 3556,
-   "words": 151,
+   "latency_s": 4.53,
+   "tokens": 4229,
+   "words": 102,
    "checks": {
     "key_facts": true,
     "grounded_numbers": true
    },
    "passed": true,
-   "numbers_checked": 14,
+   "numbers_checked": 11,
    "faithfulness": 1.0,
    "notes": "",
-   "answer": "**Verdict**  \nNiveau ELEVE — score modèle 0.9993 — percentile 1.0 (rang 1).\n\n**Facteurs principaux**  \n1) Montant 814.317 TND → 4.3× la moyenne habituelle (moyenne 189.305 TND).  \n2) 3 échecs de connexion dans les 24 h précédant l'opération.  \n3) Bénéficiaire ajouté il y a 316 minutes (connu, mais < 24 h) ; appareil déjà vu mais connu depuis < 24 h.\n\n**Contexte**  \nClient C000488, 40 ans, artisan, compte depuis 2020; usage WEB rare (8/409 opérations). Transaction VIREMENT WEB approuvée le 2026-06-05 à 04:49:00; opération précédente 2026-06-05 03:30:00 (305.31 TND). Part d'opérations de nuit du client = 3.9%.\n\n**Éléments rassurants**  \n12 opérations du client dans ce pays sur 7 jours et au moins 1 client a déjà payé ce bénéficiaire (contributions rassurantes mineures).\n\n**Recommandation**  \nSystème : BLOQUER (confiance élevée) — signaux concordants : échecs de connexion, minutes depuis ajout du bénéficiaire, catégorie commerçant, montant très supérieur aux habitudes. (L'analyste prend la décision finale.)"
+   "answer": "**Non** — 409 opérations depuis 2025-01-03.\n\n- Montant : 814.317 TND observés vs montant moyen 189.305 TND (ratio 4.3) ; au‑dessus du 95e centile (p95 518.987 TND).  \n- Horaire : opération à 04:49 (nuit) vs part d'opérations de nuit 3.9% (heure inhabituelle).  \n- Appareil et bénéficiaire : appareil déjà vu mais connu depuis moins de 24 h ; bénéficiaire déjà vu mais connu depuis moins de 24 h (nouveaux depuis moins de 24 h).  \n- Éléments conformes : pays = TN, canal WEB a existé auparavant (8 opérations), précédent web récent à 03:30 (79 minutes avant).\n\nRecommandation système : BLOQUER (confiance élevée)."
   },
   {
    "id": "priority_fr",
@@ -364,9 +364,9 @@
    "intent": "priority",
    "mode": "Azure OpenAI (gpt-5-mini)",
    "cached": true,
-   "latency_s": 8.75,
-   "tokens": 3571,
-   "words": 97,
+   "latency_s": 4.61,
+   "tokens": 4064,
+   "words": 119,
    "checks": {
     "key_facts": true,
     "grounded_numbers": true
@@ -375,7 +375,7 @@
    "numbers_checked": 9,
    "faithfulness": 1.0,
    "notes": "",
-   "answer": "1) Rang 13 dans la période (13e alerte la plus risquée) sur 1 779 alertes totales.  \n2) Précision mesurée à ce score : 94,1 % de vraies fraudes en validation (juin–juillet).  \n3) Signaux les plus forts : catégorie commerçant \"Telecom / Recharge\", canal EN_LIGNE, commerçant jamais vu, opération de nuit inhabituelle pour ce client (tous cités par le modèle).  \n4) Exposition financière faible : montant 7,685 TND (ratio vs moyenne client 0,04 ; cumul 24 h = 23,408 TND), mais plusieurs nouveaux commerçants en 24 h (3) augmentent le risque opérationnel.  \nRecommandation système : BLOQUER (confiance élevée)."
+   "answer": "1) Rang élevé dans la file : 13e alerte la plus risquée sur la période (sur 1779 alertes).  \n2) Exposition et précision : faible montant (7,685 TND) mais forte précision historique — 94,1 % de vraies fraudes mesurées pour ce niveau d'alerte en validation (et 100 % des cas à ce score dans le flux).  \n3) Signaux métier les plus puissants : catégorie commerçant (Telecom / Recharge), canal EN_LIGNE, commerçant jamais vu, opération de nuit (02:03) — quatre signaux concordants indiqués par le système.  \n4) Faible exposition client : montant très en dessous de sa moyenne (7,685 vs moyenne 178,299 TND) et cumul 24h faible (23,408 TND), donc faible perte potentielle si frauduleux.  \n\nRecommandation système : BLOQUER (confiance élevée)."
   },
   {
    "id": "before_transfer_fr",
@@ -386,19 +386,19 @@
    "intent": "before",
    "mode": "Azure OpenAI (gpt-5-mini)",
    "cached": true,
-   "latency_s": 9.31,
-   "tokens": 4426,
-   "words": 163,
+   "latency_s": 8.28,
+   "tokens": 5352,
+   "words": 213,
    "checks": {
     "decision": true,
     "key_facts": true,
     "grounded_numbers": true
    },
    "passed": true,
-   "numbers_checked": 12,
+   "numbers_checked": 5,
    "faithfulness": 1.0,
    "notes": "",
-   "answer": "**Verdict**  \nELEVE, score 0.9993, percentile 1.0.\n\n**Facteurs principaux**  \n- 3 échecs de connexion (24 h) sur le même appareil DEV872235 entre 2026-06-04 19:40 et 21:56 (IP pays IT).  \n- Bénéficiaire ajouté 2026-06-04 23:33 (BEN896882) puis virement 2026-06-05 04:49 → minutes depuis ajout = 316.  \n- Montant du virement 814.317 TND > moyenne client 189.305 TND (ratio 4.3).\n\n**Contexte**  \nAppareil DEV872235 déjà vu mais connu depuis moins de 24 h. Connexion réussie 2026-06-04 23:42 après les échecs. Trois virements récents dans la nuit (00:54, 03:30, 04:49) ; total 24 h = 1810.277 TND.\n\n**Éléments rassurants**  \nLe client a des opérations dans le pays (12 en 7 j) et le bénéficiaire avait déjà été payé par un client (1 occurrence) ; ces deux facteurs pèsent légèrement en faveur de la légitimité.\n\n**Recommandation**  \nBLOQUER (confiance élevée) — la règle système : percentile ≥ 0.998 et ≥ 2 signaux concordants (échecs de connexion, ajout récent de bénéficiaire, montant élevé). Si vous contestez, vérifier OTP, contacter le client."
+   "answer": "Chronologie (que s'est-il passé avant)\n\n- 2026-06-04 19:40 — CONNEXION ÉCHEC — device DEV872235 — IP pays IT.  \n- 2026-06-04 20:50 — CONNEXION ÉCHEC — device DEV872235 — IP pays IT.  \n- 2026-06-04 21:56 — CONNEXION ÉCHEC — device DEV872235 — IP pays IT.  \n- 2026-06-04 23:33 — AJOUT_BENEFICIAIRE SUCCÈS (BEN896882) — device DEV872235 — IP pays IT — authent. OTP_SMS.  \n- 2026-06-04 23:42 — CONNEXION SUCCÈS — device DEV872235 — IP pays IT.  \n- 2026-06-05 00:54 — VIREMENT WEB approuvé — 690.65 TND — pays TN.  \n- 2026-06-05 03:30 — VIREMENT WEB approuvé — 305.31 TND — pays TN.  \n- 2026-06-05 04:49 — VIREMENT WEB approuvé (transaction analysée) — 814.317 TND — pays TN.\n\nInterprétation : la session a commencé par trois échecs de connexion depuis une IP en Italie sur le même device, suivis d’un ajout de bénéficiaire validé par OTP puis d’une connexion réussie et de plusieurs virements (00:54, 03:30, 04:49). Le device est connu mais a été vu pour la première fois <24 h avant l'opération et les événements digitaux montrent une IP en IT pour les connexions et l'ajout de bénéficiaire.\n\nRecommandation système : BLOQUER (confiance élevée) — signaux concordants : échecs de connexion (24 h), minutes depuis ajout du bénéficiaire, catégorie commerçant, montant très supérieur aux habitudes."
   },
   {
    "id": "related_atm_fr",
@@ -409,9 +409,9 @@
    "intent": "related",
    "mode": "Azure OpenAI (gpt-5-mini)",
    "cached": true,
-   "latency_s": 11.99,
-   "tokens": 3340,
-   "words": 125,
+   "latency_s": 6.75,
+   "tokens": 3811,
+   "words": 104,
    "checks": {
     "key_facts": true,
     "grounded_numbers": true
@@ -420,7 +420,7 @@
    "numbers_checked": 1,
    "faithfulness": 1.0,
    "notes": "",
-   "answer": "Oui — faits extraits de l'enquête liée à TX01589761 (fenêtre 30 jours) :\n\n- Même commerçant / DAB : identifiant M02076.  \n- Autres clients concernés : 4 autres clients, 4 autres cartes, 4 opérations au total liées à ce commerçant.  \n- Fraudes signalées : 3 cartes déjà signalées comme frauduleuses et 3 clients avec fraudes signalées sur ce commerçant.  \n- Opérations encore en alerte : 2 opérations en alerte.  \n- Exemples fournis : TX01567961 (C000994, 2026-06-10 03:37:00, risque ELEVE) et TX01554244 (C003372, 2026-06-04 15:28:00, risque ELEVE).\n\nInterprétation : ces faits montrent un lien fort entre le commerçant M02076 et des incidents frauduleux récents. Si vous le souhaitez, je peux ouvrir la liste complète des opérations liées ou demander l'historique détaillé des autres transactions pour comparaison."
+   "answer": "**Oui**\n\n- 1) Même commerçant / DAB : identifiant M02076 (fenêtre 30 j).\n- 2) Autres clients concernés : 4 clients différents ; 4 cartes ; 4 opérations enregistrées sur ce commerçant.\n- 3) Fraudes déjà signalées : 3 cartes précédemment signalées comme fraudées ; 3 clients victimes de fraude.\n- 4) Alertes et exemples : 2 opérations encore en alerte ; exemples TX01567961 (C000994, 2026-06-10 03:37:00, ELEVE) et TX01554244 (C003372, 2026-06-04 15:28:00, ELEVE).\n\nInterprétation : le DAB M02076 a plusieurs incidents récents (fraudes confirmées et alertes) ce qui renforce le lien entre TX01589761 et un point compromis.  \nRecommandation système : BLOQUER (confiance élevée)."
   }
  ]
 }

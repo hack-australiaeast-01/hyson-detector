@@ -9,6 +9,7 @@
 - If Azure OpenAI is not configured or fails, a deterministic offline answer is built from the same tools.
 """
 import hashlib
+import unicodedata
 import json
 import os
 import re
@@ -30,7 +31,7 @@ MAX_TOOL_ROUNDS = 4
 MAX_TOKENS = int(os.getenv("COPILOT_MAX_TOKENS", "600"))
 FACTS_CHARS = 9000          # budget for prefetched facts
 TOOL_RESULT_CHARS = 4500    # budget for each tool result requested by the model
-CACHE_VERSION = "v4"        # bump when prompt/routing changes, so stale cached answers are not served
+CACHE_VERSION = "v6"        # bump when prompt/routing changes, so stale cached answers are not served
 
 # Static prefix (identical on every call -> eligible for Azure OpenAI prompt caching). Dynamic facts come after it.
 SYSTEM_PROMPT = """Tu es le copilote de l'analyste fraude d'une banque de détail tunisienne. Tu aides l'analyste à comprendre une alerte et à décider ; tu ne décides pas à sa place.
@@ -57,12 +58,15 @@ Décision
 
 Lecture des chiffres
 - Un ratio (montant / moyenne, montant / plafond, montant / revenu) > 1 signifie AU-DESSUS de la référence. Ne le présente jamais comme « non dépassé ».
+- kyc_risk_level est le niveau de RISQUE attribué au client (Faible = client jugé peu risqué) : écris « risque KYC faible / moyen / élevé »,
+  jamais « KYC faible » (un banquier lirait « KYC insuffisant »).
 - Une contribution négative du modèle signifie que le modèle a jugé ce facteur rassurant pour CETTE opération ; décris le fait, pas un jugement contraire.
 - Facteurs principaux : commence par les faits métier lisibles s'ils existent (motif_refus, sequence_carte_24h, commerçants jamais vus,
   événements de l'application, écart aux habitudes) avant les contributions du modèle.
 - Un facteur du modèle n'est PAS une anomalie en soi. N'emploie un adjectif d'anomalie (élevé, anormal, très court, inhabituel) que si
   les faits le montrent : vitesse > 150 km/h, montant > habitude, première fois, nuit pour un client qui n'opère pas la nuit...
   Sinon écris « le modèle pèse <facteur> (valeur) en combinaison avec les autres signaux ». Un montant SOUS l'habitude n'est jamais un écart.
+- Ne termine jamais par une offre de service (« si vous voulez, je peux… ») : l'analyste attend une réponse, pas une conversation.
 - Ne propose comme prochaine étape que des vérifications possibles avec tes outils ou par l'analyste (appeler le client, vérifier l'OTP...).
 - N'écris pas les noms techniques des champs ni des outils (score_modele, moteur_regles_actuel.fausses_alertes, connu_depuis_plus_de_24h,
   get_digital_events...) : utilise des mots métier (« appareil connu depuis plus de 24 h », « événements de l'application »).
@@ -76,6 +80,19 @@ Formats (titres dans la langue de réponse ; niveaux de risque FAIBLE / MOYEN / 
   1. **Verdict** (niveau, score, percentile) 2. **Facteurs principaux** (3 max, chiffrés, comparés aux habitudes du client)
   3. **Contexte** (profil, activité récente, événements digitaux) 4. **Éléments rassurants** 5. **Recommandation** (BLOQUER / ESCALADER / VALIDER + confiance).
   Si le risque est FAIBLE, commence la section 2 par ce qui rassure et présente l'écart principal comme point d'attention.
+  Éléments rassurants : commence par les éléments conformes aux habitudes (faits métier : puce, commerçant / appareil / bénéficiaire connus,
+  pays et ville habituels...). Les facteurs non déterminants du modèle (montant au-dessus des habitudes, dépassement de plafond, piste
+  magnétique) ne sont JAMAIS rassurants : cite-les au plus comme « non déterminants pour le modèle en combinaison avec les autres signaux ».
+- Comparaison aux habitudes (« ressemble-t-elle au comportement habituel ») : 1re ligne = la VALEUR de conforme_aux_habitudes en gras
+  (**Non**, **En partie** ou **Oui**, sans la recalculer), suivie du nombre d'opérations passées et depuis quand ; puis 3 à 4 puces chiffrées « observé vs habituel » :
+  d'abord les écarts nets, puis les éléments conformes ; puis une ligne avec la recommandation système. 140 mots maximum,
+  pas de sections Verdict/Contexte.
+- Chronologie (« que s'est-il passé avant ») : liste horodatée des faits (heure, événement, appareil, pays IP), une ligne d'interprétation
+  séparée des faits, puis une ligne avec la recommandation système.
+- Cas liés (« d'autres clients… même commerçant / DAB / appareil ») : 1re ligne = réponse directe (**Oui** / **Non**) ; puis 2 à 4 puces
+  chiffrées par point commun (commerçant ou DAB, appareil, bénéficiaire : autres clients, cartes, fraudes déjà signalées, alertes ;
+  les clients concernés sont des VICTIMES, jamais des « fraudeurs ») ;
+  une ligne d'interprétation ; puis une ligne avec la recommandation système. 120 mots maximum.
 - Résumé d'investigation : un paragraphe de dossier (faits, chronologie horodatée, points communs avec d'autres cas, conclusion avec une seule recommandation), 160 mots maximum.
 - Priorisation (« pourquoi prioriser cette alerte ») : 4 puces chiffrées maximum — rang dans la file et nombre d'alertes de la période,
   part de vraies fraudes mesurée à ce score en validation, signaux les plus forts (faits métier d'abord), montant / exposition —
@@ -86,7 +103,8 @@ Formats (titres dans la langue de réponse ; niveaux de risque FAIBLE / MOYEN / 
 LANG_LINE = {
     "fr": "LANGUE : réponds en français.",
     "en": ("LANGUAGE: answer in English. Section titles: **Verdict**, **Main factors**, **Context**, **Reassuring elements**, "
-           "**Recommendation**. Write risk levels LOW / MEDIUM / HIGH and decisions BLOCK / ESCALATE / VALIDATE."),
+           "**Recommendation**. Write risk levels LOW / MEDIUM / HIGH, decisions BLOCK / ESCALATE / VALIDATE, confidence high / medium / low, "
+           "and the habits answer Non / En partie / Oui as **No** / **Partly** / **Yes**. No French words."),
 }
 
 # Suggested questions (brief §9.7), shared by the app buttons and warmup.py so pre-computed answers are cache hits.
@@ -369,6 +387,7 @@ def ask(question, context_tx=None, history=None, lang="fr", on_token=None, on_st
     # cached Azure answers are pre-computed LLM output: serve them even without a key (hosted demo), unless forced offline
     if key in _cache and (configured() or os.getenv("COPILOT_OFFLINE", "0") != "1" or not _cache[key]["mode"].startswith("Azure")):
         out = {**_cache[key], "cached": True}
+        out["answer"] = polish(out["answer"], lang)
         for t in out["tools"]:
             on_step and on_step(t["name"])
         on_token and on_token(out["answer"])
@@ -405,6 +424,7 @@ def ask(question, context_tx=None, history=None, lang="fr", on_token=None, on_st
         for t in out["tools"]:
             on_step and on_step(t["name"])
         on_token and on_token(out["answer"])
+    out["answer"] = polish(out["answer"], lang)
     out["intent"] = intent
     out["latency_s"] = round(time.time() - start, 2)
     out["cached"] = False
@@ -415,6 +435,47 @@ def ask(question, context_tx=None, history=None, lang="fr", on_token=None, on_st
           "mode": out["mode"], "cached": False, "tools": out["tools"], "tokens": out["tokens"], "rounds": out.get("rounds"),
           "latency_s": out["latency_s"], "answer": out["answer"], "error": out.get("error")})
     return out
+
+
+# ---------------------------------------------------------------- answer polish (deterministic, 0 token)
+# gpt-5-mini sometimes copies a technical field name from the facts despite the prompt; an analyst must never read one.
+_FIELD_WORDS = {
+    "part_operations_passees_inferieures": ("part des opérations passées plus petites", "share of smaller past operations"),
+    "nb_commercants_jamais_vus": ("commerçants jamais vus", "never-seen merchants"),
+    "sequence_carte_24h": ("séquence de la carte sur 24 h", "24 h card sequence"),
+    "entry_mode": ("mode de saisie", "entry mode"), "part_nuit_passee": ("part des opérations de nuit", "share of night operations"),
+    "part_nuit": ("part des opérations de nuit", "share of night operations"),
+    "connu_depuis_plus_de_24h": ("connu depuis plus de 24 h", "known for more than 24 h"),
+    "ratio_vs_moyenne": ("rapport à la moyenne", "ratio to average"), "montant_moyen": ("montant moyen", "average amount"),
+    "montant_p95": ("p95 du montant", "amount p95"), "score_modele": ("score du modèle", "model score"),
+    "recommandation_systeme": ("recommandation système", "system recommendation"),
+    "percentile_risque_periode": ("percentile de risque", "risk percentile"),
+    "conforme_aux_habitudes": ("conforme aux habitudes", "matches habits"),
+    "fraudes_mesurees_a_ce_score": ("fraudes mesurées à ce score", "measured fraud at this score"),
+    "precision_mesuree_validation": ("précision mesurée en validation", "precision measured in validation"),
+    "signaux_concordants": ("signaux concordants", "concordant signals"),
+    "minutes_depuis_operation_precedente": ("minutes depuis l'opération précédente", "minutes since the previous operation"),
+    "vitesse_implicite_kmh": ("vitesse implicite", "implied speed"),
+    "clients_victimes_de_fraude_deja_signales": ("clients victimes de fraude déjà signalés", "customers already reported as fraud victims"),
+}
+_SNAKE = re.compile(r"\b[a-zà-ÿ][a-zà-ÿ0-9]*(?:_[a-zà-ÿ0-9]+)+\b")      # lowercase only: data codes (SANS_CONTACT) stay
+_CONF_EN = {"élevée": "high", "elevee": "high", "moyenne": "medium", "faible": "low"}
+
+
+def polish(text, lang="fr"):
+    """Replace leaked field names by business words; English answers get English confidence levels."""
+    if not text:
+        return text
+    i = 1 if lang == "en" else 0
+    def word(m):
+        k = unicodedata.normalize("NFKD", m.group(0)).encode("ascii", "ignore").decode()   # the LLM sometimes adds accents
+        return _FIELD_WORDS[k][i] if k in _FIELD_WORDS else m.group(0).replace("_", " ")
+    text = _SNAKE.sub(word, text)
+    if lang == "en":
+        text = re.sub(r"(confidence\W{0,4})(élevée|elevee|moyenne|faible)\b", lambda m: m.group(1) + _CONF_EN[m.group(2).lower()],
+                      text, flags=re.I)
+        text = re.sub(r"\((élevée|moyenne|faible)\)", lambda m: f"({_CONF_EN[m.group(1)]})", text)
+    return text
 
 
 _REFUSAL_FR = ("Je ne peux pas répondre à cette demande : elle a été bloquée par le filtre de sécurité d'Azure OpenAI "
@@ -536,7 +597,7 @@ def _ask_person_offline(question, intent, lang):
         else:
             pr, hb = p.get("profil", {}), p.get("habitudes", {})
             text = (f"**{cid}** · {pr.get('age')} {'ans' if lang != 'en' else 'y/o'} · {pr.get('segment')} · {pr.get('occupation')} · "
-                    f"{pr.get('home_city')} · KYC {pr.get('kyc_risk_level')}\n\n"
+                    f"{pr.get('home_city')} · {'risque KYC' if lang != 'en' else 'KYC risk'} {pr.get('kyc_risk_level')}\n\n"
                     + (f"- {'Opérations' if lang != 'en' else 'Operations'} : {hb.get('nb_operations')} ({hb.get('periode_observee')})\n"
                        f"- {'Montant moyen' if lang != 'en' else 'Average amount'} : {_fmt(hb.get('montant_moyen'))} TND\n" if hb else "")
                     + f"- {'Alertes dans la file' if lang != 'en' else 'Alerts in the queue'} : {p.get('nb_alertes_dans_file', 0)}")

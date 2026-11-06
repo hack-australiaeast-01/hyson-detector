@@ -106,10 +106,10 @@ The transaction page also has a stopwatch (alert opened → decision saved, stor
 
 ```powershell
 pip install -r requirements.txt pytest
-python -m pytest -q        # 89 tests, ~40 s, offline (snapshot), no Fabric / Azure OpenAI call
+python -m pytest -q        # 93 tests, ~60 s, offline (snapshot), no Fabric / Azure OpenAI call
 ```
 
-`tests/` checks: no test labels anywhere, 1 % alert budget, documented KPIs (117 / 3,221 vs 718 / 1,061), decision-rule bands, calibration of the measured fraud rate, habits computed on the past only, related cases count only frauds reported before, person search on approved filters, the hash-chained audit trail, the Nazar agent (command parsing, decisions only after confirmation, logging), submission format, no secret in tracked files, copilot guardrails (unknown ID, decision, intents, demo calendar) and every page rendering in FR and EN. GitHub Actions runs them on every push. The copilot's answers themselves are evaluated by `app/eval_copilot.py` (18 golden questions, [report](docs/COPILOT_EVAL.md)).
+`tests/` checks: no test labels anywhere, 1 % alert budget, documented KPIs (117 / 3,221 vs 718 / 1,061), decision-rule bands, calibration of the measured fraud rate, habits computed on the past only, related cases count only frauds reported before, person search on approved filters, the hash-chained audit trail, explanations a banker can trust (habits verdict computed, risky-looking model factors never shown as reassuring), the Nazar agent (command parsing, decisions only after confirmation, logging), submission format, no secret in tracked files, copilot guardrails (unknown ID, decision, intents, demo calendar) and every page rendering in FR and EN. GitHub Actions runs them on every push. The copilot's answers themselves are evaluated by `app/eval_copilot.py` (18 golden questions, [report](docs/COPILOT_EVAL.md)).
 
 ## Rules followed
 

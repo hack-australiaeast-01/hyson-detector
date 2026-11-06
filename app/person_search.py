@@ -155,7 +155,7 @@ def answer_offline(res, lang="fr"):
               else f"{r['nb_alertes']} alert(s), riskiest {r['alerte_la_plus_risquee']}") if r["nb_alertes"] else \
              ("aucune alerte" if lang != "en" else "no alert")
         lines.append(f"- **{r['customer_id']}** · {r['age']} {'ans' if lang != 'en' else 'y/o'} · {r['segment']} · {r['occupation']} · "
-                     f"{r['ville']} · KYC {r['kyc']} · {al}")
+                     f"{r['ville']} · {'risque KYC' if lang != 'en' else 'KYC risk'} {r['kyc']} · {al}")
     more = "" if n <= len(rows) else (f"\n\n… et {n - len(rows)} autre(s). Précisez un critère pour réduire la liste." if lang != "en"
                                       else f"\n\n… and {n - len(rows)} more. Add a criterion to narrow the list.")
     return head + "\n" + "\n".join(lines) + more

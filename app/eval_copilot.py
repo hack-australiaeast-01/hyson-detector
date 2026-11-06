@@ -53,7 +53,7 @@ GOLDEN = [
     ("habits_fr", "fr", "TX01555470", "Cette transaction ressemble-t-elle au comportement habituel du client ?", "habits",
      [r"189[.,]3", r"409"]),
     ("priority_fr", "fr", "TX01585580", "Résume pourquoi cette alerte doit être priorisée.", "priority",
-     [r"\b13\b", r"1[ \u00a0\u202f]?779", r"9[34][.,]\d|100 ?%"]),
+     [r"\b13(e|ème|th)?\b", r"1[ \u00a0\u202f]?779", r"9[34][.,]\d|100 ?%"]),
     ("before_transfer_fr", "fr", "TX01555470", "Que s'est-il passé dans l'application juste avant ce virement ?", "before",
      [r"échec|echec", r"bénéficiaire|beneficiaire"]),
     ("related_atm_fr", "fr", "TX01589761", "D'autres clients sont-ils passés par le même commerçant ou le même DAB ?", "related",
@@ -141,6 +141,9 @@ def evaluate(case, fresh):
         checks["format_5_sections"] = found == 5
         if found < 5:
             notes.append(f"{found}/5 sections")
+    if re.search(r"(?<!risque )(?<!risk )\bKYC (faible|low)\b", ans, re.I):    # "KYC faible" reads as "weak KYC" to a banker
+        checks["kyc_wording"] = False
+        notes.append("'KYC faible' instead of 'risque KYC faible'")
     if lang == "en":
         checks["english_only"] = not re.search(r"Facteurs principaux|Éléments rassurants|Recommandation\s*:", ans)
     if kind in ("refuse", "unknown"):

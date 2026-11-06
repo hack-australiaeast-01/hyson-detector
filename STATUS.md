@@ -1,5 +1,5 @@
 # Project status — Hyson Detector · AI Banking Copilot for Fraud Detection
-Updated: **2026-11-06 10:10** · ✅ done · 🟡 in progress · ❌ to do · Target level: **Gold ("Or")** (brief §6)
+Updated: **2026-11-06 10:30** · ✅ done · 🟡 in progress · ❌ to do · Target level: **Gold ("Or")** (brief §6)
 
 **Live demo:** https://hyson-detector.streamlit.app · **Repo (jury):** https://github.com/hack-australiaeast-01/hyson-detector ·
 **Architecture:** [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) (18 diagrams) · **Audit & bank IT:** [docs/AUDIT_AND_BANK_INTEGRATION.md](docs/AUDIT_AND_BANK_INTEGRATION.md) · **Jury Q&A:** [JURY_HANDBOOK.md](JURY_HANDBOOK.md)
@@ -14,7 +14,7 @@ Sections 1–6 = **current state** (kept up to date). Section 7 = **work log** (
 | Data pipeline on Fabric | ✅ | Lakehouse `lh_fraud`, notebooks 01 · 02 · 03e · 04, pipeline `pl_hyson_retrain`, MLflow model `hyson-fraud-lightgbm` |
 | Validation vs current rules | ✅ | Top 1 %: 718 frauds vs 117, 1,061 false alerts vs 3,221 · backtest 69.4 % ± 2.1 recall over 4 periods |
 | Technical walkthrough | ✅ | `docs/ARCHITECTURE.md`, `docs/MODEL_CARD.md`, `docs/AUDIT_AND_BANK_INTEGRATION.md`, `README.md`, `JURY_HANDBOOK.md` |
-| Automated tests | ✅ | 89 pytest tests (`tests/`, offline, ~40 s: 30 page renders FR/EN, data/model, guardrails, **audit trail**, **Nazar agent**) run by GitHub Actions on every push |
+| Automated tests | ✅ | 93 pytest tests (`tests/`, offline, ~60 s: 30 page renders FR/EN, data/model, guardrails, **audit trail**, **Nazar agent**, **explanations**) run by GitHub Actions on every push |
 | Usage of GitHub Copilot | ✅ | `docs/AI_TOOLS_USAGE.md`: 12 real uses with commit + screenshot (`docs/copilot_evidence/`), 30/30 commits co-authored by Copilot, ≈ 7 person-days in ≈ 11 h (estimate), 30-second pitch script |
 | GitHub repo | ✅ | Code, Fabric notebooks (exported with outputs), `requirements.txt` (root + `app/`), README, tests + CI, no secret in files or history |
 | Score file (optional, brief §14) | ✅ | `submission/submission.csv` (187,628 rows, 1,876 alerts) |
@@ -86,7 +86,7 @@ Sections 1–6 = **current state** (kept up to date). Section 7 = **work log** (
 | 27 | 10 tools (`tools.py`) | ✅ | get_alert_queue · get_transaction (+ measured fraud at this score, alerts in the period) · get_customer_profile · compare_to_habits (+ decline reason, 24 h card sequence) · get_customer_history · get_digital_events · find_related_cases · get_kpis (comparison in plain words) · find_customers · record_decision |
 | 28 | Copilot engine (`copilot.py`) | ✅ | Intent routing (incl. priority, person / customer ID / typed TX ID), prefetch → 1 LLM round, streaming, deterministic `recommandation_systeme`, demo calendar ("hier" = 2026-09-29), guardrails: off-topic refusal, unknown ID answered with 0 token, Azure content-filter refusal, no field names; cache, log, offline mode, hourly cap |
 | 29 | Azure OpenAI (Azure AI Foundry) | ✅ | Project `proj-fraud-australiaeast`, resource `aoai-fraud-australiaeast-vnxcy`, deployment **gpt-5-mini**, API 2024-12-01-preview, `reasoning_effort=low`, `max_completion_tokens` 2,400, timeout 60 s, 2 retries; ≈ 3,300 tokens (≈ 1,400–2,000 prompt-cached) and ≈ 7 s per new question |
-| 30 | Evaluation & cache | ✅ | `eval_copilot.py`: 18/18, 99.5 % grounded (`docs/COPILOT_EVAL.md`); `tests/` 89 tests + GitHub Actions; `warmup.py fr en`: 40 answers + 6 trials pre-computed |
+| 30 | Evaluation & cache | ✅ | `eval_copilot.py`: 18/18 (live re-run 10:15), 99.4 % grounded (`docs/COPILOT_EVAL.md`); `tests/` 93 tests + GitHub Actions; `warmup.py fr en`: 40 answers + 6 trials pre-computed |
 | 31 | Traceability | ✅ | `copilot_log.jsonl`, `agent_log.jsonl` (Nazar), `decisions.csv` (hash-chained, → OneLake), `onboarding_log.csv` · `docs/AUDIT_AND_BANK_INTEGRATION.md` |
 | 32 | GitHub + Streamlit Cloud | ✅ | Repo owned by the team account; push to `main` redeploys; snapshot fits the 690 MB limit (peak ≈ 520 MB) — after a crash use **Reboot** |
 | 33 | Architecture & docs | ✅ | 18 diagrams (images + Mermaid source in `docs/diagrams/`), README, JURY_HANDBOOK, `fabric/README.md` |
@@ -125,6 +125,8 @@ Sections 1–6 = **current state** (kept up to date). Section 7 = **work log** (
 - Pitch laptop: `az login` → `cd app` → `streamlit run app.py` (sidebar shows Fabric live) → run the demo path once.
 - Do not click "Rafraîchir depuis Fabric" during the pitch (≈ 15 s reload). Do not run notebooks 01/02 or the pipeline.
 - Keep one Aug–Sep alert ready besides the 3 June demo cases (e.g. TX01890379, declined for limit exceeded).
+- Projector at 1366×768: set the browser zoom to **80 %** so the transaction page (score → factors → recommendation → *Enregistrer la décision*) fits without scrolling (brief §10). At 1920×1080 it fits at 100 % (checked 10:00).
+- After any change to the copilot prompt or tools: bump `CACHE_VERSION`, run `python warmup.py fr en` then `python eval_copilot.py` (must be 18/18) and commit `app/data/copilot_cache.json` — the public app serves these answers.
 - For "même commerçant ou DAB ?" use **TX01589761** (ATM skimming: same ATM M02076, 4 other customers, 3 cards already reported) — most alerts have no shared point.
 
 ## 6. Known limits (say them before the jury does)
@@ -489,3 +491,23 @@ Still open (team): Azure key in Streamlit Secrets, slides, rehearsal + backup vi
 - **Push isolation:** the chat calls `copilot.polish`, which belongs to the jury-test session's unfinished copilot changes → guarded (`hasattr`) so this push works on its own; only the Journal-caption hunk of `app.py` was staged.
 - **Tests:** `tests/test_nazar.py` 33 → 40 (small talk, chat offline never decides, chat facts = aggregates without customer IDs) → full suite 89/89 on the exact tree pushed.
 - **Jury handbook:** "Why not deep learning or a GNN?", "Do you use RAG?" (yes, on facts), "Why not a bigger model?"; roadmap now names Fabric Real-Time Intelligence (scoring at authorisation), a Fabric Data Agent for managers and document RAG (Azure AI Search) once the bank provides procedures.
+
+### 7.18 Test against the jury grid (brief §15) + explanation fixes (2026-11-06 09:20 → 10:30)
+| Criterion (weight) | Test run | Result |
+|---|---|---|
+| Business relevance (20 %) | Headline numbers cross-checked in every doc and page | Consistent everywhere (718 / 1,061 / 3,221 / 2,160 / PR-AUC 0.646; 0.622 = backtest average, a different metric) |
+| Detection quality (20 %) | KPIs **recomputed with sklearn from raw `gold_scores` + `fraud_labels_train` in Fabric**; leak scan of notebooks 01/02; `submission.csv` vs Fabric | PR-AUC 0.6459 (rules 0.0143), top 1 % 718 frauds / 1,061 false, rules 117 / 3,221 — all reproduced; windows past-only, network features use `rdate < d`; 0 test rows with a label; submission = 187,628 rows, scores identical to Fabric (max diff 1e-16) |
+| Explanation & copilot (25 %) | `eval_copilot.py --fresh` (18 live golden questions) + scan of all 72 cached answers | Found and fixed 5 defects a banker would catch (below) → **18/18**, 99.4 % grounded, 0 defects in cached answers |
+| Experience & demo (15 %) | Browser run of the §17 path on live Fabric + Azure OpenAI; 15 pages × FR/EN | Alert → answer (cache 0.9 s, free live question 8.5 s) → decision saved: 15 s; transaction page fits one screen at 1920×1080 (zoom 80 % at 1366×768); 0 exceptions on 30 page renders |
+| Tech coherence (15 %) | Fabric REST item list; doc links; fresh `git clone` run without `.env` | All Fabric items present (copy job, lakehouse, 4 notebooks, pipeline, MLflow model + experiments, semantic model, report); 0 broken links in 16 docs; fresh clone runs on the snapshot (3.6 s first load) |
+| Delivery (5 %) + rules §16 | Secret scan of **all 71 commits** incl. notebook outputs | 0 keys, tokens or passwords; slides / rehearsal / video still to do (§5) |
+
+**Defects found and fixed (explanations, incl. the legitimate case TX01575959):**
+1. The copilot listed **"KYC faible"** as reassuring (the field is the KYC *risk* level) → prompt rule + labels "risque KYC" in the app.
+2. **181 / 3,656 alerts** showed a risky-looking model factor as *reassuring* (amount above the customer's usual, above the card limit, magnetic stripe) — including the false-positive demo case ("3,360 TND, sous plafond") → `tools.COUNTER_INTUITIVE`: shown as "non déterminants pour le modèle", never as reassuring; the page now shows business reassurances computed from the past (chip, known merchant, usual city / country, plausible travel).
+3. "Does it look like the customer's habits?" was hedged and miscounted → verdict computed in code (`compare_to_habits` → `lecture_habitudes`: Non / En partie / Oui + deviations + consistent facts), the LLM only phrases it; the new merchant in the 24 h card sequence is named.
+4. Technical field names leaked ("part_operations_passees_inferieures", even accented) and English answers said "confidence: moyenne" → deterministic `copilot.polish` on every answer (0 token).
+5. Answers ended with chatbot offers ("si vous voulez, je peux…") and an ATM case called the victims "fraudeurs" → explicit formats for timeline and related-cases questions, field renamed `clients_victimes_de_fraude_deja_signales`.
+- Transaction page: duplicate factor removed (rule + model saying the same thing), whole numbers without ".0", decision button on the first screen.
+- Cache rebuilt cleanly (`CACHE_VERSION` v6, `warmup.py fr en`: 64 answers + 6 trials + 18 deep searches, 223k tokens); `tests/test_explanations.py` (4 tests) → 93/93.
+- Still open: a *fresh* live answer can occasionally end with an offer despite the rule (seen once on a free question); cached demo answers are clean.

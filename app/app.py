@@ -3,7 +3,9 @@
 Run:  streamlit run app.py
 """
 import os
+import re
 import time
+import unicodedata
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -315,6 +317,19 @@ def page_queue():
 
 
 # ---------------------------------------------------------------- 2. transaction card + copilot
+def _dedupe(rows):
+    """A rule and a model factor often state the same fact ("Échecs de connexion (24 h)" / "... dans les 24 h"): show it once."""
+    seen, out = set(), []
+    for f in rows:
+        w = [x for x in re.sub(r"[^a-z ]", " ", unicodedata.normalize("NFKD", f["facteur"].lower()).encode("ascii", "ignore").decode()).split()
+             if x not in {"de", "du", "des", "dans", "les", "la", "le", "l", "d", "aux", "au"}]
+        k = " ".join(w[:2])
+        if k not in seen:
+            seen.add(k)
+            out.append(f)
+    return out
+
+
 def page_transaction():
     ids = queue.transaction_id.tolist()
     risk_of = dict(zip(queue.transaction_id, queue.risk_icon))
@@ -362,17 +377,19 @@ def page_transaction():
         a, b = st.columns(2)
         with a:
             ui.section(L("Facteurs de risque", "Risk factors"))
-            ui.factors(t["facteurs_modele_pour_fraude"] + t["regles_metier_declenchees"][:2], True, L("habituel", "usual"),
+            ui.factors(_dedupe(t["facteurs_modele_pour_fraude"] + t["regles_metier_declenchees"][:2]), True, L("habituel", "usual"),
                        L("Aucun élément", "None"))
         with b:
             ui.section(L("Éléments rassurants", "Reassuring elements"))
-            ui.factors(t["facteurs_modele_rassurants"] + t["regles_rassurantes"], False, L("habituel", "usual"),
-                       L("Aucun élément", "None"))
-        if r.period == "valid" and pd.notna(r.is_fraud):
-            with st.expander(L("Vérité terrain (validation uniquement — jamais visible sur le flux du jour)",
-                               "Ground truth (validation only — never shown on the live flow)")):
-                st.write(L("Fraude", "Fraud") if r.is_fraud == 1 else L("Légitime", "Legitimate"),
-                         r.fraud_scenario if pd.notna(r.fraud_scenario) else "")
+            calm = t["facteurs_modele_rassurants"] + t["regles_rassurantes"]
+            habits = tools.habits_reading(tid, st.session_state.get("lang", "fr"))
+            calm += [{"facteur": x[:1].upper() + x[1:]} for x in habits.get("elements_conformes", [])][:max(0, 4 - len(calm))]
+            ui.factors(calm, False, L("habituel", "usual"), L("Aucun élément", "None"))
+            nd = t.get("facteurs_modele_non_determinants") or []
+            if nd:
+                st.caption(L("Jugés non déterminants par le modèle (pas rassurants) : ", "Not decisive for the model (not reassuring): ")
+                           + " · ".join(f"{x['facteur'].split(' (')[0]} {money(x['valeur_observee']) if 'Montant de' in x['facteur'] else x['valeur_observee']}"
+                                        for x in nd))
 
         rs = t.get("recommandation_systeme") or {}
         if rs:
@@ -394,11 +411,13 @@ def page_transaction():
                                 format_func=lambda x: L(x, {"BLOQUER": "BLOCK", "ESCALADER": "ESCALATE", "VALIDER": "VALIDATE"}[x]))
             conf = d2.select_slider(L("Confiance", "Confidence"), ["faible", "moyenne", "élevée"], value=rs.get("confiance", "moyenne"),
                                     format_func=lambda x: L(x, {"faible": "low", "moyenne": "medium", "élevée": "high"}[x]))
-            comment = st.text_input(L("Commentaire", "Comment"))
+            c1, c2 = st.columns([2.2, 1], vertical_alignment="bottom")
+            comment = c1.text_input(L("Commentaire", "Comment"))
+            save = c2.form_submit_button(L("Enregistrer la décision", "Save decision"), type="primary", width="stretch")
             elapsed = time.time() - opened.get(tid, time.time())
             st.caption(L(f"⏱️ Dossier ouvert depuis {elapsed:.0f} s — objectif : décision en moins de 30 s",
                          f"⏱️ Case open for {elapsed:.0f} s — target: decision in under 30 s"))
-            if st.form_submit_button(L("Enregistrer la décision", "Save decision"), type="primary"):
+            if save:
                 dur = time.time() - opened.get(tid, time.time())
                 res = tools.record_decision(tid, decision, conf, comment, analyst=st.session_state.get("analyst"),
                                             source="interface", duration_s=dur)
@@ -407,6 +426,11 @@ def page_transaction():
                     mark("decide")
                 else:
                     st.error(res)
+        if r.period == "valid" and pd.notna(r.is_fraud):
+            with st.expander(L("Vérité terrain (validation uniquement — jamais visible sur le flux du jour)",
+                               "Ground truth (validation only — never shown on the live flow)")):
+                st.write(L("Fraude", "Fraud") if r.is_fraud == 1 else L("Légitime", "Legitimate"),
+                         r.fraud_scenario if pd.notna(r.fraud_scenario) else "")
         past = tools.decisions()
         past = past[past.transaction_id == tid]
         if len(past):
@@ -501,7 +525,7 @@ def customer_search():
             a, b = st.columns([6, 1])
             al = (L(f"{row['nb_alertes']} alerte(s)", f"{row['nb_alertes']} alert(s)") if row["nb_alertes"] else L("aucune alerte", "no alert"))
             a.markdown(f"**{row['customer_id']}** · {row['age']} {L('ans', 'y/o')} · {row['segment']} · {row['occupation']} · "
-                       f"{row['ville']} · KYC {row['kyc']} · {al}")
+                       f"{row['ville']} · {L('risque KYC', 'KYC risk')} {row['kyc']} · {al}")
             b.button(L("Ouvrir", "Open"), key=f"pick_{row['customer_id']}", on_click=_pick_customer, args=(row,), width="stretch")
 
 
@@ -523,7 +547,7 @@ def page_customer():
     c[1].metric("Segment", p.get("segment", "—"))
     c[2].metric(L("Ville", "City"), p.get("home_city", "—"))
     c[3].metric(L("Revenu mensuel", "Monthly income"), money(p["monthly_income_tnd"]) if p.get("monthly_income_tnd") else "—")
-    c[4].metric("KYC", p.get("kyc_risk_level", "—"))
+    c[4].metric(L("Risque KYC", "KYC risk"), p.get("kyc_risk_level", "—"))
     c[5].metric(L("Alertes en file", "Alerts in queue"), prof["nb_alertes_dans_file"])
     if hab:
         h = st.columns(5)

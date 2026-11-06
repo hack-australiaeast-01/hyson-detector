@@ -97,9 +97,12 @@ def get_transaction(transaction_id):
     e = da.explanations()
     e = e[e.transaction_id == transaction_id]
 
-    def facts(src, k):
+    def facts(src, k, keep=None):
         sub = e[e.source == src]
-        sub = sub.reindex(sub.points.abs().sort_values(ascending=False).index).head(k)
+        sub = sub.reindex(sub.points.abs().sort_values(ascending=False).index)
+        if keep is not None:
+            sub = sub[[bool(keep(f)) for f in sub.itertuples()]]
+        sub = sub.head(k)
         return [{k2: v for k2, v in {"facteur": f.factor,
                                      "valeur_observee": _v(f.observed) if _v(f.observed) is not None else _v(f.observed_text),
                                      "valeur_habituelle": _v(f.usual), "contribution": _v(f.points)}.items()
@@ -120,11 +123,24 @@ def get_transaction(transaction_id):
         "dans_file_alertes": True,
         "score": score,
         "facteurs_modele_pour_fraude": for_fraud,
-        "facteurs_modele_rassurants": facts("model_against", 2),
+        "facteurs_modele_rassurants": facts("model_against", 2, keep=lambda f: not _counter_intuitive(f)),
+        "facteurs_modele_non_determinants": facts("model_against", 2, keep=_counter_intuitive),
         "regles_metier_declenchees": triggered,
         "regles_rassurantes": [x for x in rules if x.get("contribution", 0) < 0],
         "recommandation_systeme": recommend(r.risk_level, float(r.score_pct), for_fraud, triggered),
     }
+
+
+# Model factors the model weighed DOWN although their value is on the risky side for a banker (amount above the customer's usual,
+# above the card limit, magnetic stripe...). Shown as "not decisive for the model", never as reassuring.
+COUNTER_INTUITIVE = {"f_amount": lambda o, u: u is not None and o > u, "f_amount_over_limit": lambda o, u: o > 1,
+                     "f_amount_ratio": lambda o, u: o > 1, "f_amount_over_max": lambda o, u: o > 1,
+                     "f_amount_over_income": lambda o, u: o > 1, "f_magstripe": lambda o, u: o >= 1}
+
+
+def _counter_intuitive(f):
+    o = _v(f.observed)
+    return f.feature in COUNTER_INTUITIVE and isinstance(o, (int, float)) and COUNTER_INTUITIVE[f.feature](float(o), _v(f.usual))
 
 
 STRONG_CONTRIBUTION = 0.5   # SHAP log-odds; a model factor above this counts as a concordant risk signal
@@ -304,7 +320,9 @@ def compare_to_habits(transaction_id):
             "motifs_refus": sorted({str(x) for x in seq.decline_reason.dropna()})[:4],
             "montant_total": round(float(pd.to_numeric(seq.amount_tnd).sum()), 3),
             "operations": [f"{pd.Timestamp(x.timestamp):%m-%d %H:%M} {x.entry_mode} {_v(x.merchant_category) or x.transaction_type} "
-                           f"{float(x.amount_tnd):.0f} TND {x.status}" for x in seq.tail(6).itertuples()],
+                           f"{float(x.amount_tnd):.0f} TND {x.status}"
+                           + (" · commerçant nouveau" if _v(x.merchant_id) and x.merchant_id not in seen else "")
+                           for x in seq.tail(6).itertuples()],
         }
     if is_phys and _v(prev.get("latitude")) is not None and _v(r.get("latitude")) is not None:
         lat1, lon1, lat2, lon2 = map(np.radians, [prev.latitude, prev.longitude, r.latitude, r.longitude])
@@ -314,7 +332,68 @@ def compare_to_habits(transaction_id):
         out["ecarts"]["distance_operation_precedente_km"] = round(float(km), 1)
         out["ecarts"]["vitesse_implicite_kmh"] = round(float(km / hours), 1)
     out["ecarts"] = {k: v for k, v in out["ecarts"].items() if v is not None}
+    out["lecture_habitudes"] = _habits_reading(r, out["ecarts"])
     return out
+
+
+def habits_reading(transaction_id, lang="fr"):
+    """Same reading as compare_to_habits, in the UI language (the copilot gets the French one and translates)."""
+    r = _tx_row(transaction_id)
+    h = compare_to_habits(transaction_id)
+    return _habits_reading(r, h["ecarts"], lang) if r is not None and "ecarts" in h else {}
+
+
+def _habits_reading(r, e, lang="fr"):
+    """Deterministic answer to "does it match the customer's habits?": the LLM phrases it, it never counts deviations itself."""
+    T = (lambda fr, en: en) if lang == "en" else (lambda fr, en: fr)
+    nets, ok = [], []
+    if e["montant"] > e["montant_p95"]:
+        nets.append(T(f"montant {e['montant']:.3f} TND au-dessus de 95 % de ses opérations passées (p95 {e['montant_p95']:.3f} TND)",
+                      f"amount {e['montant']:.3f} TND above 95% of past operations (p95 {e['montant_p95']:.3f} TND)"))
+    else:
+        ok.append(T(f"montant dans ses habitudes (p95 {e['montant_p95']:.3f} TND)", f"amount within habits (p95 {e['montant_p95']:.3f} TND)"))
+    if e["heure"] < 6 and e["part_nuit_passee"] < 0.10:
+        nets.append(T(f"opération de nuit ({e['heure']} h) alors que {e['part_nuit_passee']:.1%} de ses opérations passées sont de nuit",
+                      f"night operation ({e['heure']}:00) while {e['part_nuit_passee']:.1%} of past operations are at night"))
+    elif e["heure"] >= 6:
+        ok.append(T(f"opération en journée ({e['heure']} h)", f"daytime operation ({e['heure']}:00)"))
+    for key, fr, en in (("appareil", "appareil", "device"), ("beneficiaire", "bénéficiaire", "beneficiary")):
+        if f"{key}_deja_vu" in e:
+            if not e.get(f"{key}_connu_depuis_plus_de_24h"):
+                nets.append(T(f"{fr} {'connu depuis moins de 24 h' if e[f'{key}_deja_vu'] else 'jamais vu'}",
+                              f"{en} {'known for less than 24 h' if e[f'{key}_deja_vu'] else 'never seen'}"))
+            else:
+                ok.append(T(f"{fr} connu depuis plus de 24 h", f"{en} known for more than 24 h"))
+    if e.get("pays_deja_vu_en_physique") is False:
+        nets.append(T(f"premier paiement physique dans ce pays ({r.country})", f"first physical payment in this country ({r.country})"))
+    elif e.get("pays_deja_vu_en_physique"):
+        ok.append(T(f"pays déjà fréquenté en paiement physique ({r.country})", f"country already used for physical payments ({r.country})"))
+    if e.get("commercant_deja_vu") is False:
+        nets.append(T("commerçant de cette opération jamais vu pour ce client", "merchant of this operation never seen for this customer"))
+    elif e.get("commercant_deja_vu"):
+        ok.append(T("commerçant de cette opération déjà fréquenté", "merchant of this operation already used"))
+    if e.get("ville_deja_vue"):
+        ok.append(T(f"ville habituelle ({r.city})", f"usual city ({r.city})"))
+    if e.get("vitesse_implicite_kmh", 0) > 150:
+        nets.append(T(f"déplacement impossible : {e['distance_operation_precedente_km']} km depuis l'opération précédente "
+                      f"({e['vitesse_implicite_kmh']} km/h)",
+                      f"impossible travel: {e['distance_operation_precedente_km']} km since the previous operation ({e['vitesse_implicite_kmh']} km/h)"))
+    elif "distance_operation_precedente_km" in e:
+        ok.append(T(f"déplacement plausible ({e['distance_operation_precedente_km']} km depuis l'opération précédente)",
+                    f"plausible travel ({e['distance_operation_precedente_km']} km since the previous operation)"))
+    if r.entry_mode == "CHIP":
+        ok.append(T("paiement par puce (pas de piste magnétique)", "chip payment (no magnetic stripe)"))
+    elif r.entry_mode == "MAGSTRIPE":
+        nets.append(T("piste magnétique (typique d'une carte copiée)", "magnetic stripe (typical of a cloned card)"))
+    if e.get("refus_carte_1h_avant", 0) > 0:
+        nets.append(T(f"{e['refus_carte_1h_avant']} refus sur la carte dans l'heure précédente",
+                      f"{e['refus_carte_1h_avant']} declines on the card in the previous hour"))
+    strength = ["puce", "chip", "commerçant", "merchant", "appareil", "device", "bénéficiaire", "beneficiary", "pays", "country",
+                "ville", "city", "déplacement", "travel"]
+    ok.sort(key=lambda x: next((i for i, w in enumerate(strength) if w in x.lower()), len(strength)))
+    return {"conforme_aux_habitudes": ("No" if len(nets) >= 2 else "Partly" if nets else "Yes") if lang == "en"
+            else ("Non" if len(nets) >= 2 else "En partie" if nets else "Oui"),
+            "ecarts_nets": nets, "elements_conformes": ok}
 
 
 def get_customer_history(customer_id, days=7, before_transaction_id=None):
@@ -394,7 +473,7 @@ def find_related_cases(transaction_id, days=30):
             "type": name, "identifiant": val, "autres_clients": int(o.customer_id.nunique()),
             "autres_cartes": int(o.card_id.nunique()), "operations": int(len(o)),
             "cartes_fraudees_deja_signalees": int(rep.card_id.nunique()),
-            "clients_fraudes_deja_signales": int(rep.customer_id.nunique()),
+            "clients_victimes_de_fraude_deja_signales": int(rep.customer_id.nunique()),
             "operations_en_alerte": int(len(hits)),
             "exemples_alertes": [{"transaction_id": t, "client": alerted.loc[t, "customer_id"],
                                   "date": _v(alerted.loc[t, "timestamp"]), "risque": alerted.loc[t, "risk_level"]}

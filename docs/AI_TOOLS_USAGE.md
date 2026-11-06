@@ -4,7 +4,7 @@ The brief allows and encourages AI tools and asks teams to **say how they used t
 
 ## 1. GitHub Copilot (official delivery accelerator)
 
-**GitHub Copilot agent mode in VS Code** was our development partner from the first notebook to the deployment: **30 commits in ≈ 11 hours** (2026-11-05 16:54 → 2026-11-06 03:43), every one carrying the `Co-authored-by: Copilot` trailer, ≈ 6,100 lines of app code + 49 automated tests. Each row below is a real request, with the commit that proves it (GitHub → commit hash) and, when useful, a screenshot in [`copilot_evidence/`](copilot_evidence/).
+**GitHub Copilot agent mode in VS Code** was our development partner from the first notebook to the deployment: **36 commits** (2026-11-05 16:54 → 2026-11-06 10:30), every one carrying the `Co-authored-by: Copilot` trailer, ≈ 6,200 lines of app code + 93 automated tests. Each row below is a real request, with the commit that proves it (GitHub → commit hash) and, when useful, a screenshot in [`copilot_evidence/`](copilot_evidence/).
 
 | # | When | Where | What we asked Copilot | What it produced | What the team did / decided | Time saved (estimate) | Evidence |
 |---|---|---|---|---|---|---|---|
@@ -21,12 +21,12 @@ The brief allows and encourages AI tools and asks teams to **say how they used t
 | 11 | 11-06 03:31 | `tools.py`, Journal page | "See other gaps like audit or the bank system" | Audit trail (who, AI recommendation at that time, model / prompt version, **SHA-256 hash chain**), override rate, decision message to card management / core banking (simulated), audit document | Asked for it; reviewed the bank-IT design | ≈ 3 h | `d8d87df` · [10_audit_trail.png](copilot_evidence/10_audit_trail.png) |
 | 12 | throughout | Git | Commits, pushes, checks before each push | 30 commits with explicit messages, secret scan + tests before every push, one bad commit detected by CI and fixed in 2 min (`ca12836`) | Chose the repo owner and what goes public | ≈ 1 h | `git log` |
 
-**Total (rough team estimate): ≈ 7 person-days of work delivered in ≈ 11 hours.** Every change was run and tested before commit (AppTest on every page FR/EN, 49 automated tests, live Fabric / Azure OpenAI checks, browser screenshots).
+**Total (rough team estimate): ≈ 7 person-days of work delivered in ≈ 11 hours.** Every change was run and tested before commit (AppTest on every page FR/EN, 93 automated tests, live Fabric / Azure OpenAI checks, browser screenshots).
 
 **What Copilot did *not* decide:** the model and the alert threshold, the demo cases, the product ideas and design, what goes public, the pitch.
 
 **Pitch (≈ 30 s, brief §17 "4:00–4:30"):**
-> "GitHub Copilot agent mode was our pair-programmer: 30 commits in 11 hours, every one co-authored by Copilot. Three examples: it found the split bug that turned 2025 transactions into fake test frauds; it cut our copilot's cost from 5,200 to 3,300 tokens per question; and when the public app crashed on memory, it brought it from 856 to 520 MB. Roughly seven days of work — and every change was tested before commit, 49 automated tests. Copilot built and checked; we decided."
+> "GitHub Copilot agent mode was our pair-programmer: 36 commits, every one co-authored by Copilot. Three examples: it found the split bug that turned 2025 transactions into fake test frauds; it cut our copilot's cost from 5,200 to 3,300 tokens per question; and when the public app crashed on memory, it brought it from 856 to 520 MB. Roughly seven days of work — and every change was tested before commit, 93 automated tests. Copilot built and checked; we decided."
 
 ## 2. GitHub Copilot agent mode (VS Code) — what the agent built, tested and reviewed
 
@@ -39,7 +39,7 @@ What the Copilot agent was used for in this project (facts):
 | Notebooks | First versions of `01_silver_features` and `02_score_explain` (past-only features, temporal split, rules baseline, model, explanations) | Team ran, fixed and extended them in Fabric |
 | Power BI | Power BI built as code: `03*_powerbi_dashboard.ipynb` (pbi_* tables → Direct Lake model with DAX measures → report JSON, dark theme, icon navigation, FR/EN pages) | Team chose the design and reviewed every page |
 | App | Streamlit app, 10 copilot tools, Azure OpenAI copilot (intent routing, prefetch, streaming, cache), Hyson Detector pages (Le Procès, Reconstitution, Contre-enquête, Réseau de compromission, Impact), FR/EN, Power BI embed | Team tested the demo path |
-| Tests & deploy | pytest suite (`tests/`, 49 tests) + GitHub Actions CI, AppTest on every page FR/EN, browser screenshots, live Azure OpenAI tests, secret scan, GitHub repo + push, Streamlit Cloud preparation, architecture diagrams (`docs/ARCHITECTURE.md`) | Team reviewed results and deployed |
+| Tests & deploy | pytest suite (`tests/`, 93 tests) + GitHub Actions CI, AppTest on every page FR/EN, browser screenshots, live Azure OpenAI tests, secret scan, GitHub repo + push, Streamlit Cloud preparation, architecture diagrams (`docs/ARCHITECTURE.md`) | Team reviewed results and deployed |
 | Market research | Searched public sources (EBA/ECB, UK Finance, BCT) and built the "Marché & benchmarks" page: cited benchmarks, same KPIs on our data, Tunisian scenario, rules-engine audit, time to detect | Team checked the sources and the wording of every comparison |
 | Audit & bank IT | Audit trail with hash chain, override rate, decision message to the bank's systems (simulated), `docs/AUDIT_AND_BANK_INTEGRATION.md` | Team asked for the bank's audit / IT view |
 | Reviews | Token-cost review of the copilot (§7.2 of `STATUS.md`), consistency checks between app, dashboard and docs | Team decided which fixes to apply |

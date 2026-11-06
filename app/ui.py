@@ -248,7 +248,7 @@ def factors(rows, positive, usual_word="habituel", empty="Aucun élément"):
     dot = RED if positive else GREEN
     out = []
     for f in rows:
-        obs, usual = f.get("valeur_observee"), f.get("valeur_habituelle")
+        obs, usual = (int(x) if isinstance(x, float) and x.is_integer() else x for x in (f.get("valeur_observee"), f.get("valeur_habituelle")))
         val = "" if obs is None else f" : <b>{esc(obs)}</b>"
         cmp_ = "" if usual is None else f" <small>· {esc(usual_word)} {esc(usual)}</small>"
         out.append(f'<div class="factor"><span class="dot" style="background:{dot}"></span><div>{esc(f["facteur"])}{val}{cmp_}</div></div>')
