@@ -276,7 +276,7 @@ def page_onboarding(c, mode):
             return ", ".join(map(str, s.astype(str).unique()[:3]))
         num = pd.to_numeric(s, errors="coerce")
         if pd.api.types.is_numeric_dtype(df[x]) or num.notna().mean() > 0.95:   # amounts: show the range, not values
-            return f"min {num.min():,.2f} · médiane {num.median():,.2f} · max {num.max():,.2f}".replace(",", " ")
+            return f"min {num.min():,.2f} · {L('médiane', 'median')} {num.median():,.2f} · max {num.max():,.2f}".replace(",", " ")
         return L("(masqué : identifiant / valeur libre)", "(masked: identifier / free value)")
 
     prof = pd.DataFrame({"column": df.columns, "type": [str(t) for t in df.dtypes],
