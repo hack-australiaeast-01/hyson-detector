@@ -28,7 +28,7 @@ FOUNDRY_PROJECT = os.getenv("FOUNDRY_PROJECT_ENDPOINT",
                             "https://aoai-fraud-australiaeast-vnxcy.services.ai.azure.com/api/projects/proj-fraud-australiaeast")
 JUDGE_AGENT = os.getenv("FOUNDRY_JUDGE_AGENT", "judge-patern")
 MODEL = os.getenv("INTEL_DEPLOYMENT", "gpt-6.1-terra")
-VERSION = "inv-1"
+VERSION = "inv-2"
 
 ADVOCATE = {
     "prosecution": ("Tu es l'ACCUSATION dans une enquête de fraude bancaire. Cherche pourquoi ce comportement pourrait être une fraude : "
@@ -120,11 +120,15 @@ def board_text(ev):
 
 # ---------------------------------------------------------------- LLM calls
 def _lang_line(lang):
-    return "Answer in English." if lang == "en" else "Réponds en français."
+    return ("Answer entirely in English: translate the French labels and values of the evidence into English. No French words."
+            if lang == "en" else "Réponds en français.")
 
 
-def _chat(system, user, max_tokens=1500):
-    kw = dict(model=MODEL, messages=[{"role": "system", "content": system}, {"role": "user", "content": user}])
+def _chat(system, user, max_tokens=1500, lang=None):
+    """One completion; if `lang` is given and the answer came back in the other language, one corrective rewrite."""
+    import courtroom
+    msgs = [{"role": "system", "content": system}, {"role": "user", "content": user + (f"\n\n{_lang_line(lang)}" if lang else "")}]
+    kw = dict(model=MODEL, messages=msgs)
     kw.update(max_completion_tokens=max_tokens)
     try:
         r = copilot._client().chat.completions.create(**kw)
@@ -132,8 +136,14 @@ def _chat(system, user, max_tokens=1500):
         kw["model"] = os.environ["AZURE_OPENAI_DEPLOYMENT"]
         kw["reasoning_effort"] = "low"
         r = copilot._client().chat.completions.create(**kw)
-    u = r.usage
-    return (r.choices[0].message.content or "").strip(), int(u.total_tokens or 0), kw["model"]
+    text, tokens = (r.choices[0].message.content or "").strip(), int(r.usage.total_tokens or 0)
+    if lang and courtroom.wrong_language(text, lang):
+        kw["messages"] = msgs + [{"role": "assistant", "content": text},
+                                 {"role": "user", "content": "Rewrite exactly the same content entirely in English, same format, same E-numbers."
+                                  if lang == "en" else "Réécris exactement le même contenu entièrement en français, même format."}]
+        r = copilot._client().chat.completions.create(**kw)
+        text, tokens = (r.choices[0].message.content or "").strip(), tokens + int(r.usage.total_tokens or 0)
+    return text, tokens, kw["model"]
 
 
 def _foundry_judge(prompt):
@@ -204,7 +214,7 @@ def investigate(tid, as_of=None, lang="fr", context_note="", analyst=None, on_st
     t0 = time.time()
     btxt = board_text(ev) + (f"\nE{len(ev) + 1} [contexte ajouté par l'employé] {context_note}" if context_note else "")
     with cf.ThreadPoolExecutor(max_workers=2) as pool:
-        futs = {r: pool.submit(_chat, ADVOCATE[r] + ADVOCATE_RULES.format(lang=_lang_line(lang)), f"TABLEAU DE PREUVES :\n{btxt}", 1800)
+        futs = {r: pool.submit(_chat, ADVOCATE[r] + ADVOCATE_RULES.format(lang=_lang_line(lang)), f"TABLEAU DE PREUVES :\n{btxt}", 1800, lang)
                 for r in ("prosecution", "defense")}
         for r in ("prosecution", "defense"):
             out[r], tk, mdl = futs[r].result()

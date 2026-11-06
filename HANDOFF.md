@@ -13,7 +13,7 @@ The earlier [COPILOT_HANDOFF.md](COPILOT_HANDOFF.md) is the original day-1 task 
 | Item | State | Where |
 |---|---|---|
 | Code | ✅ pushed, `main` = `ffae177`, CI green | https://github.com/hack-australiaeast-01/hyson-detector |
-| Tests | ✅ 166 pytest, offline, ~3 min | `tests/`, GitHub Actions `.github/workflows/tests.yml` |
+| Tests | ✅ 169 pytest, offline, ~3 min | `tests/`, GitHub Actions `.github/workflows/tests.yml` |
 | Public app | 🟡 runs, **AI off** until the key is pasted in Streamlit Secrets (§4.1) | https://hyson-detector.streamlit.app |
 | Local app | ✅ live Microsoft Fabric + Azure OpenAI (needs `az login`) | `cd app; streamlit run app.py` |
 | Fabric | ✅ workspace `ws-hack-fraud-australiaeast`, lakehouse `lh_fraud` (schemas bronze → meta), Power BI, MLflow | §3 |
@@ -137,7 +137,7 @@ cd app; streamlit run app.py
 
 # tests (offline: snapshot data, no Fabric, no tokens)
 pip install -r app/requirements-api.txt pytest
-python -m pytest -q                      # 166 passed
+python -m pytest -q                      # 169 passed
 
 # copilot answers (after any prompt / tool change): bump CACHE_VERSION, then
 cd app; python warmup.py fr en; python eval_copilot.py     # must stay 18/18, commit app/data/copilot_cache.json

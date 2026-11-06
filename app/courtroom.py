@@ -8,6 +8,7 @@ One LLM call per role, no tool calls, cached and logged like the copilot.
 import concurrent.futures as cf
 import hashlib
 import os
+import re
 import time
 from datetime import datetime
 
@@ -58,21 +59,48 @@ def _facts(transaction_id):
     return text, used, reco
 
 
+LANG_LINE = {"fr": "Rédige toute ta réponse en français.",
+             "en": "Write your whole answer in English: translate every French label or value of the facts into English "
+                   "(e.g. « Carte nationale utilisée à l'étranger » → national card used abroad). No French words."}
+_FR_WORDS = set("le la les des du une est pour avec sur dans au aux et ou opération opérations client montant carte habitudes "
+                "commerçant étranger connu jamais refus heure mais car donc cette ce".split())
+_EN_WORDS = set("the and with for is was this that customer amount card habits operation merchant abroad known never declined "
+                "hour but because so are has".split())
+
+
+def wrong_language(text, lang):
+    """True when the text is mostly in the other language (word counts on common function words)."""
+    words = re.findall(r"[a-zà-ÿ]+", (text or "").lower())
+    fr, en = sum(w in _FR_WORDS for w in words), sum(w in _EN_WORDS for w in words)
+    return (fr > en and fr >= 3) if lang == "en" else (en > fr and en >= 3)
+
+
 def _call(role, lang, facts_text, extra=""):
     client = copilot._client()
+    head = "FACTS" if lang == "en" else "FAITS"
     messages = [{"role": "system", "content": ROLES[role][lang]},
-                {"role": "user", "content": f"FAITS :\n{facts_text}{extra}"}]
-    kwargs = dict(model=os.environ["AZURE_OPENAI_DEPLOYMENT"], messages=messages)
+                {"role": "user", "content": f"{head}:\n{facts_text}{extra}\n\n{LANG_LINE[lang]}"}]
+    kwargs = dict(model=os.environ["AZURE_OPENAI_DEPLOYMENT"])
     if copilot._is_reasoning():
         kwargs.update(max_completion_tokens=1600, reasoning_effort=os.getenv("COPILOT_REASONING", "low"))
     else:
         kwargs.update(temperature=0.2, max_tokens=350)
-    resp = client.chat.completions.create(**kwargs)
-    u = resp.usage
-    details = getattr(u, "prompt_tokens_details", None)
-    tok = {"prompt": u.prompt_tokens, "completion": u.completion_tokens, "total": u.total_tokens,
-           "cached_prompt": getattr(details, "cached_tokens", 0) or 0}
-    return (resp.choices[0].message.content or "").strip(), tok
+    tok = {"prompt": 0, "completion": 0, "total": 0, "cached_prompt": 0}
+    text = ""
+    for attempt in range(2):                      # one corrective retry if the model answered in the other language
+        resp = client.chat.completions.create(messages=messages, **kwargs)
+        u = resp.usage
+        details = getattr(u, "prompt_tokens_details", None)
+        for k, v in (("prompt", u.prompt_tokens), ("completion", u.completion_tokens), ("total", u.total_tokens),
+                     ("cached_prompt", getattr(details, "cached_tokens", 0) or 0)):
+            tok[k] += v or 0
+        text = (resp.choices[0].message.content or "").strip()
+        if not wrong_language(text, lang) or attempt:
+            break
+        messages += [{"role": "assistant", "content": text},
+                     {"role": "user", "content": "Rewrite exactly the same content entirely in English, same format." if lang == "en"
+                      else "Réécris exactement le même contenu entièrement en français, même format."}]
+    return copilot.polish(text, lang), tok
 
 
 def _offline(lang, reco, transaction_id):
@@ -85,7 +113,7 @@ def _offline(lang, reco, transaction_id):
     def line(f):
         v = f.get("valeur_observee")
         u = f.get("valeur_habituelle")
-        return f"• {f['facteur']}" + (f" : {v}" if v is not None else "") + (f" (habituel {u})" if u is not None else "")
+        return f"• {f['facteur']}" + (f" : {v}" if v is not None else "") + ((f" (usual {u})" if en else f" (habituel {u})") if u is not None else "")
     pros = "\n".join(line(f) for f in risk[:3]) or ("• No strong risk factor." if en else "• Aucun facteur de risque fort.")
     dfn = "\n".join(line(f) for f in calm[:3]) or ("• No reassuring factor." if en else "• Aucun élément rassurant.")
     dec = (reco or {}).get("decision", "ESCALADER")
@@ -98,7 +126,7 @@ def trial(transaction_id, lang="fr", on_stage=None):
     """Run (or replay from cache) the trial. Returns {"procureur", "defense", "juge", "recommendation", "tokens", ...}."""
     lang = "en" if lang == "en" else "fr"
     stage = on_stage or (lambda role, text: None)
-    key = hashlib.sha256(f"proces-p2|{copilot.CACHE_VERSION}|{lang}|{transaction_id}".encode()).hexdigest()
+    key = hashlib.sha256(f"proces-p3|{copilot.CACHE_VERSION}|{lang}|{transaction_id}".encode()).hexdigest()
     cache = copilot._cache
     if key in cache and (copilot.configured() or os.getenv("COPILOT_OFFLINE", "0") != "1"):
         out = {**cache[key], "cached": True}

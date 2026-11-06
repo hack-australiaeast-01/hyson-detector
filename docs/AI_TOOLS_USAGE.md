@@ -26,7 +26,7 @@ The brief allows and encourages AI tools and asks teams to **say how they used t
 **What Copilot did *not* decide:** the model and the alert threshold, the demo cases, the product ideas and design, what goes public, the pitch.
 
 **Pitch (≈ 30 s, brief §17 "4:00–4:30"):**
-> "GitHub Copilot agent mode was our pair-programmer: 48 commits, every one co-authored by Copilot. Three examples: it found the split bug that turned 2025 transactions into fake test frauds; it cut our copilot's cost from 5,200 to 3,300 tokens per question; and when the public app crashed on memory, it brought it from 856 to 520 MB. Roughly seven days of work — and every change was tested before commit, 166 automated tests. Copilot built and checked; we decided."
+> "GitHub Copilot agent mode was our pair-programmer: 48 commits, every one co-authored by Copilot. Three examples: it found the split bug that turned 2025 transactions into fake test frauds; it cut our copilot's cost from 5,200 to 3,300 tokens per question; and when the public app crashed on memory, it brought it from 856 to 520 MB. Roughly seven days of work — and every change was tested before commit, 169 automated tests. Copilot built and checked; we decided."
 
 ## 2. GitHub Copilot agent mode (VS Code) — what the agent built, tested and reviewed
 
