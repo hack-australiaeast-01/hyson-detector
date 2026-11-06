@@ -1,5 +1,5 @@
 # Project status — Hyson Detector · AI Banking Copilot for Fraud Detection
-Updated: **2026-11-06 04:25** · ✅ done · 🟡 in progress · ❌ to do · Target level: **Gold ("Or")** (brief §6)
+Updated: **2026-11-06 04:50** · ✅ done · 🟡 in progress · ❌ to do · Target level: **Gold ("Or")** (brief §6)
 
 **Live demo:** https://hyson-detector.streamlit.app · **Repo (jury):** https://github.com/hack-australiaeast-01/hyson-detector ·
 **Architecture:** [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) (18 diagrams) · **Audit & bank IT:** [docs/AUDIT_AND_BANK_INTEGRATION.md](docs/AUDIT_AND_BANK_INTEGRATION.md) · **Jury Q&A:** [JURY_HANDBOOK.md](JURY_HANDBOOK.md)
@@ -9,12 +9,12 @@ Sections 1–6 = **current state** (kept up to date). Section 7 = **work log** (
 ## 0. At a glance — deliverables (brief §13)
 | Deliverable | Status | Where / evidence |
 |---|---|---|
-| Working application | ✅ | 15 pages FR/EN · local = **live Fabric** · public = https://hyson-detector.streamlit.app (Gold snapshot) |
+| Working application | ✅ | 15 pages FR/EN + **Nazar work agent** · local = **live Fabric** · public = https://hyson-detector.streamlit.app (Gold snapshot) |
 | Copilot (mandatory) | ✅ · 🟡 online key | `app/copilot.py` + 10 tools · **18/18 golden questions (incl. the brief's §9.7 wording), 99.5 % of cited numbers grounded** · public app still "Hors-ligne (règles)" until the key is in Streamlit Secrets (§5.1) |
 | Data pipeline on Fabric | ✅ | Lakehouse `lh_fraud`, notebooks 01 · 02 · 03e · 04, pipeline `pl_hyson_retrain`, MLflow model `hyson-fraud-lightgbm` |
 | Validation vs current rules | ✅ | Top 1 %: 718 frauds vs 117, 1,061 false alerts vs 3,221 · backtest 69.4 % ± 2.1 recall over 4 periods |
 | Technical walkthrough | ✅ | `docs/ARCHITECTURE.md`, `docs/MODEL_CARD.md`, `docs/AUDIT_AND_BANK_INTEGRATION.md`, `README.md`, `JURY_HANDBOOK.md` |
-| Automated tests | ✅ | 49 pytest tests (`tests/`, offline, ~50 s: 30 page renders FR/EN, data/model, guardrails, **audit trail**) run by GitHub Actions on every push |
+| Automated tests | ✅ | 82 pytest tests (`tests/`, offline, ~40 s: 30 page renders FR/EN, data/model, guardrails, **audit trail**, **Nazar agent**) run by GitHub Actions on every push |
 | Usage of GitHub Copilot | ✅ | `docs/AI_TOOLS_USAGE.md`: 12 real uses with commit + screenshot (`docs/copilot_evidence/`), 30/30 commits co-authored by Copilot, ≈ 7 person-days in ≈ 11 h (estimate), 30-second pitch script |
 | GitHub repo | ✅ | Code, Fabric notebooks (exported with outputs), `requirements.txt` (root + `app/`), README, tests + CI, no secret in files or history |
 | Score file (optional, brief §14) | ✅ | `submission/submission.csv` (187,628 rows, 1,876 alerts) |
@@ -81,12 +81,13 @@ Sections 1–6 = **current state** (kept up to date). Section 7 = **work log** (
 | 23 | Performance du modèle | ✅ | Model vs rules, recall by type, drivers, leaderboard + **Robustesse et gouvernance** (backtest, CIs, MLflow, copilot evaluation) + **fairness** (false-alert rate by segment / age band: gap model 1.4× / 1.2× vs rules 2.8× / 1.5×) + acknowledged-limits card |
 | 24 | Tableau de bord Power BI | ✅ | Secure embed (viewer signs in), page picker |
 | 25 | Journal & traçabilité | ✅ | **Audit trail**: analyst identity (sidebar; production = Entra ID SSO), system recommendation + score at decision time, model / prompt version, SHA-256 hash chain + integrity check, override rate, `fraud_decision.v1` message to the bank's systems (simulated, four-eyes flag); copilot log (question, tools, tokens) |
+| 26b | **Nazar · agent de travail** (`nazar.py`) | ✅ | Sidebar card (our evil-eye icon, live count to block / to dig / overrides) → dialog with quick buttons + one instruction field. Rule-based parser, **0 token**: briefing, next most urgent alert, top N of a day / risk / action, open any page on a TX, customer ID, person search, journal check, KPIs, FR/EN. Decisions are **prepared** (recommendation, measured fraud rate, override warning) and saved only after the analyst confirms (source `agent_nazar`, hash chain). Free questions handed to the copilot. Log `agent_log.jsonl`, shown on the Journal page |
 | 26 | Nouvelle source de données | ✅ | Profile → map/translate (rules, optional 1 AI call on names + stats) → accuracy + PSI → **human approval** → versioned data contract |
 | 27 | 10 tools (`tools.py`) | ✅ | get_alert_queue · get_transaction (+ measured fraud at this score, alerts in the period) · get_customer_profile · compare_to_habits (+ decline reason, 24 h card sequence) · get_customer_history · get_digital_events · find_related_cases · get_kpis (comparison in plain words) · find_customers · record_decision |
 | 28 | Copilot engine (`copilot.py`) | ✅ | Intent routing (incl. priority, person / customer ID / typed TX ID), prefetch → 1 LLM round, streaming, deterministic `recommandation_systeme`, demo calendar ("hier" = 2026-09-29), guardrails: off-topic refusal, unknown ID answered with 0 token, Azure content-filter refusal, no field names; cache, log, offline mode, hourly cap |
 | 29 | Azure OpenAI (Azure AI Foundry) | ✅ | Project `proj-fraud-australiaeast`, resource `aoai-fraud-australiaeast-vnxcy`, deployment **gpt-5-mini**, API 2024-12-01-preview, `reasoning_effort=low`, `max_completion_tokens` 2,400, timeout 60 s, 2 retries; ≈ 3,300 tokens (≈ 1,400–2,000 prompt-cached) and ≈ 7 s per new question |
-| 30 | Evaluation & cache | ✅ | `eval_copilot.py`: 18/18, 99.5 % grounded (`docs/COPILOT_EVAL.md`); `tests/` 49 tests + GitHub Actions; `warmup.py fr en`: 40 answers + 6 trials pre-computed |
-| 31 | Traceability | ✅ | `copilot_log.jsonl`, `decisions.csv` (hash-chained, → OneLake), `onboarding_log.csv` · `docs/AUDIT_AND_BANK_INTEGRATION.md` |
+| 30 | Evaluation & cache | ✅ | `eval_copilot.py`: 18/18, 99.5 % grounded (`docs/COPILOT_EVAL.md`); `tests/` 82 tests + GitHub Actions; `warmup.py fr en`: 40 answers + 6 trials pre-computed |
+| 31 | Traceability | ✅ | `copilot_log.jsonl`, `agent_log.jsonl` (Nazar), `decisions.csv` (hash-chained, → OneLake), `onboarding_log.csv` · `docs/AUDIT_AND_BANK_INTEGRATION.md` |
 | 32 | GitHub + Streamlit Cloud | ✅ | Repo owned by the team account; push to `main` redeploys; snapshot fits the 690 MB limit (peak ≈ 520 MB) — after a crash use **Reboot** |
 | 33 | Architecture & docs | ✅ | 18 diagrams (images + Mermaid source in `docs/diagrams/`), README, JURY_HANDBOOK, `fabric/README.md` |
 | 34 | GitHub Copilot usage evidence | ✅ | `docs/AI_TOOLS_USAGE.md` §1: 12 real uses (when, where, ask, result, team decision, time-saved estimate, commit + screenshot); pitch script; handbook §8 aligned |
@@ -473,3 +474,11 @@ Still open (team): Azure key in Streamlit Secrets, slides, rehearsal + backup vi
 - **Symptom:** the user's style update (Réseau de compromission, Reconstitution roadmap) looked "not pushed": the public app showed the new sidebar name but the old Constellation (stars, dark background) and the old timeline.
 - **Cause:** it *was* pushed (`965f769`, 03:43); Streamlit Cloud re-ran `app.py` on push but kept the old `studio.py` module loaded. No lost work: working tree clean, no stash / branch / other copy, VS Code history and git objects only hold older versions.
 - **Fix:** checked the pushed code on a fresh server (new designs, 0 errors), then the user rebooted the public app → both pages verified online. Demo checklist: reboot after every push.
+
+### 7.16 Nazar — evil-eye work agent (2026-11-06 04:25 → 04:50)
+- **Ask:** a helper that does work, not a chatbot, with the evil eye as the agent. Built `app/nazar.py`: one instruction → one action, parsed by rules (0 token, instant, works offline), FR/EN.
+- **Actions:** `mes tâches` (briefing: alerts left, 377 high-confidence blocks, 53 deep-search priorities, journal integrity, copilot mode), `suivante`, `top 10 d'hier`, `alertes à bloquer`, `ouvre / procès / reconstitution / contre-enquête TX…`, `C000488`, person search, `vérifie le journal`, `kpi`, page names; anything else → handed to the copilot on the open alert, or a refusal ("I'm a work agent").
+- **Safety:** `bloque TX…` / `valide celle-ci` only *prepare* the decision (system recommendation, measured fraud rate at that score, override warning); it is saved only after **Confirm**, through the same `record_decision` (source `agent_nazar`, hash chain intact). List words never trigger a decision; a decision needs a TX ID or "celle-ci".
+- **Icon:** our own evil-eye drawing (`app/static/brand/nazar*.png`, drawn in code). The downloaded pngtree image stays out of Git (licence; `.gitignore`).
+- **Checks:** `tests/test_nazar.py` (33 tests: parsing, every action, decisions only after confirmation, log) → full suite 82/82 offline; browser test on a copy: briefing, list, prepared block with override warning, cancel, confirm (journal still "intacte"), open → navigates, Journal shows the agent section, 0 exceptions.
+- **After this push:** Reboot the public app so the new module loads.

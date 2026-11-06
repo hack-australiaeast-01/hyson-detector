@@ -35,3 +35,9 @@ Hackathon_AI_Banking_Copilot_Brief_*
 app/data/staging/
 app/data/onboarding_log.csv
 
+
+# third-party image kept locally only (licence); the app uses its own drawing app/static/brand/nazar.png
+pngtree-*.png
+# agent action log (runtime)
+app/data/agent_log.jsonl
+

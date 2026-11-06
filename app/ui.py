@@ -73,6 +73,11 @@ h1, h2, h3 {{ letter-spacing: -.015em; color: {TEXT}; }}
 .brand span {{ font-size: .74rem; color: #B9C8E0; }}
 .side-label {{ font-size: .68rem; font-weight: 700; color: {SOFT}; text-transform: uppercase; letter-spacing: .1em;
     margin: 1rem 0 .3rem .25rem; }}
+.nazar-card {{ display: flex; gap: .7rem; align-items: center; padding: .55rem .7rem; border-radius: 14px; margin: .5rem 0 .35rem;
+    background: linear-gradient(135deg, #EEF0FF 0%, #F6F7FF 100%); border: 1px solid #D9DCFF; }}
+.nazar-card b {{ display: block; color: #26199C; font-size: .98rem; }}
+.nazar-card span {{ display: block; font-size: .74rem; color: {MUTED}; line-height: 1.35; }}
+.nazar-card .nz-n {{ color: #26199C; font-weight: 600; }}
 .side-info {{ font-size: .78rem; color: {MUTED}; line-height: 1.55; background: {LINE2}; border-radius: 12px; padding: .65rem .75rem; }}
 .side-info b {{ color: {TEXT}; font-weight: 600; }}
 

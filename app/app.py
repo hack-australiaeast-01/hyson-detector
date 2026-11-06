@@ -36,6 +36,7 @@ import deepsearch
 import fairness
 import features as fx
 import market
+import nazar
 import onboarding
 import person_search
 import studio
@@ -172,6 +173,7 @@ with st.sidebar:
     st.text_input(L("Analyste connecté", "Signed-in analyst"), key="analyst", value=st.session_state.get("analyst", "analyste.demo"),
                   help=L("Nom enregistré avec chaque décision (piste d'audit). En production : identité Entra ID (SSO).",
                          "Name stored with every decision (audit trail). In production: Entra ID identity (SSO)."))
+    nazar.sidebar_card(SimpleNamespace(L=L, lang=st.session_state.get("lang", "fr")))
     for (fr, en), ids in NAV_GROUPS:
         ui.side_label(L(fr, en))
         for pid in ids:
@@ -435,7 +437,8 @@ def page_transaction():
                 st.markdown(m["content"])
                 if m.get("meta"):
                     st.caption(m["meta"])
-        question = st.chat_input(L("Posez votre question sur cette alerte…", "Ask a question about this alert…")) or clicked
+        question = (st.chat_input(L("Posez votre question sur cette alerte…", "Ask a question about this alert…")) or clicked
+                    or st.session_state.pop("copilot_question", None))      # hand-off from the Nazar agent
         if question:
             with box.chat_message("user"):
                 st.markdown(question)
@@ -762,6 +765,13 @@ def page_journal():
         st.download_button(L("Exporter (CSV)", "Export (CSV)"), d.to_csv(index=False).encode("utf-8"), "decisions.csv", "text/csv")
         st.caption(L("Boucle d'amélioration : ces décisions deviennent des labels pour le prochain réentraînement dans Fabric.",
                      "Improvement loop: these decisions become labels for the next retraining in Fabric."))
+    ag = nazar.history()
+    if len(ag):
+        ui.section(L("Agent Nazar · actions tracées", "Nazar agent · logged actions"))
+        st.caption(L(f"{len(ag)} instruction(s) exécutée(s) · 0 token · décisions via l'agent : source « agent_nazar » dans le journal ci-dessus.",
+                     f"{len(ag)} instruction(s) run · 0 tokens · decisions through the agent: source \"agent_nazar\" in the log above."))
+        st.dataframe(ag.iloc[::-1][[c for c in ["ts", "analyst", "command", "action", "context_tx", "tools", "latency_s"] if c in ag.columns]].head(20),
+                     hide_index=True, width="stretch")
     ui.section(L("Traçabilité du copilote", "Copilot traceability"))
     u = copilot.usage_summary()
     st.caption(L(f"{u['appels']} questions · {nb(u['tokens'])} tokens · {u['caches']} réponses servies par le cache",
@@ -844,7 +854,10 @@ ctx = SimpleNamespace(L=L, lang=st.session_state.get("lang", "fr"), queue=queue,
                       mark=mark, demos=DEMO_TX)
 if not st.session_state.get("welcomed"):
     st.session_state.welcomed = True
+    st.session_state.pop("nazar_open", None)
     welcome()
+elif st.session_state.pop("nazar_open", False):                 # one dialog at a time
+    nazar.panel(ctx)
 studio.tour_hint(ctx, page)
 {"guide": lambda: studio.page_guide(ctx), "queue": page_queue, "tx": page_transaction, "cust": page_customer,
  "deep": lambda: studio.page_deep(ctx), "proces": lambda: studio.page_proces(ctx), "replay": lambda: studio.page_replay(ctx), "contre": lambda: studio.page_contre(ctx),
