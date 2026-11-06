@@ -631,15 +631,20 @@ def page_robustness():
     if rob is not None and len(rob):
         r = rob.top1_recall
         c = st.columns(4)
-        c[0].metric(L("Rappel top 1 % · 4 périodes", "Top-1% recall · 4 periods"), f"{r.mean():.1%}",
-                    f"± {r.std(ddof=1) * 100:.1f} pts", delta_color="off",
-                    help=L("Moyenne ± écart-type sur 4 tests de 2 mois, modèle ré-entraîné à chaque fois sur le passé uniquement.",
-                           "Mean ± std over 4 two-month tests, model re-trained each time on the past only."))
-        c[1].metric(L("Pire période", "Worst period"), f"{r.min():.1%}", L("rappel top 1 %", "top-1% recall"), delta_color="off")
-        c[2].metric(L("Fraude en valeur (TND) détectée", "Fraud value (TND) caught"), f"{rob.value_recall.mean():.1%}",
-                    L("moyenne des 4 périodes", "mean of 4 periods"), delta_color="off")
-        c[3].metric(L("Règles actuelles · même périodes", "Current rules · same periods"), f"{rob.legacy_recall.mean():.1%}",
-                    L(f"précision {rob.legacy_precision.mean():.1%}", f"precision {rob.legacy_precision.mean():.1%}"), delta_color="off")
+        with c[0]:
+            ui.kpi(L("Rappel top 1 % · 4 périodes", "Top-1% recall · 4 periods"), f"{r.mean():.1%}",
+                   L(f"± <b>{r.std(ddof=1) * 100:.1f} pts</b> d'une période à l'autre (ré-entraîné sur le passé à chaque fois)",
+                     f"± <b>{r.std(ddof=1) * 100:.1f} pts</b> from one period to the next (re-trained on the past each time)"))
+        with c[1]:
+            ui.kpi(L("Pire période", "Worst period"), f"{r.min():.1%}",
+                   L("rappel top 1 % le plus bas des 4 tests", "lowest top-1% recall of the 4 tests"))
+        with c[2]:
+            ui.kpi(L("Fraude en valeur (TND) détectée", "Fraud value (TND) caught"), f"{rob.value_recall.mean():.1%}",
+                   L("moyenne des 4 périodes", "mean of the 4 periods"))
+        with c[3]:
+            ui.kpi(L("Règles actuelles · mêmes périodes", "Current rules · same periods"), f"{rob.legacy_recall.mean():.1%}",
+                   L(f"rappel · précision <b>{rob.legacy_precision.mean():.1%}</b>",
+                     f"recall · precision <b>{rob.legacy_precision.mean():.1%}</b>"))
         fold = L("Période de test", "Test period")
         labels = [f"{pd.Timestamp(a):%m/%Y} → {pd.Timestamp(b):%m/%Y}" + (" · validation" if i == len(rob) - 1 else "")
                   for i, (a, b) in enumerate(zip(rob.test_from, rob.test_to))]
