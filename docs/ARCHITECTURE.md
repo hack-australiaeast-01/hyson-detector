@@ -16,6 +16,7 @@ Principle everywhere: **the model scores, the AI explains, the analyst decides.*
 | 6 | [Where ML and DL are used](#6-where-ml-and-dl-are-used) | Rules vs machine learning vs deep learning, and the DL roadmap |
 | 7 | [AI pipelines, one by one](#7-ai-pipelines-one-by-one) | Copilot, Le Procès, Enquête approfondie, Reconstitution, person search, data onboarding, copilot evaluation, Power BI as code |
 | 8 | [Application pages and demo path](#8-application-pages-and-demo-path) | The 15 pages and how they link |
+| 10 | [Continuous fraud intelligence](#10-continuous-fraud-intelligence-unified-architecture) | Events, case file, memory (RAG), agents + Foundry judge, human review, steering drilldown |
 | 9 | [Deployment, security and CI/CD](#9-deployment-security-and-cicd) | Local live mode vs hosted demo, identities, secrets, GitHub → Streamlit Cloud |
 
 ---
@@ -211,3 +212,57 @@ Principle everywhere: **the model scores, the AI explains, the analyst decides.*
 | Traceability | Every LLM call logged (question, intent, tools, tokens, latency); every decision and data approval logged |
 | Cost | Cache, 1-round prefetch, prompt caching, hourly cap on the public demo |
 | Production next steps | Private endpoint + managed identity for Azure OpenAI, RBAC / row-level security, PII masking, real-time scoring with Eventstream + Eventhouse |
+
+## 10. Continuous fraud intelligence (unified architecture)
+
+How the advanced investigation layer extends the existing system without rebuilding it: the ML model still scores; around it, events
+keep a case alive, a behavioural memory recalls precedents, three agents argue and judge on numbered evidence, the employee decides,
+and the steering layer turns aggregates into hypotheses to investigate.
+
+```mermaid
+flowchart LR
+    subgraph IN["1 · Ingestion"]
+        TX["Transactions<br/>approved + declined"] --- EV["App events<br/>logins, beneficiary, device"] --- NB["New bank feeds<br/>(onboarding, CSV)"]
+    end
+    subgraph ML["2 · ML detection (unchanged)"]
+        SC["LightGBM score · top 1 %<br/>documented recommendation"]
+    end
+    subgraph ST["3 · Persistent storage"]
+        STAR["Star schema<br/>fact_transactions · fact_digital_events"] --- CASES["Case file (append-only)<br/>cases.jsonl"]
+    end
+    subgraph MON["4 · Continuous monitoring"]
+        TRIG["intel.triggers(as_of)<br/>same card / customer after the alert<br/>declines · failed logins · two places · new alerts"]
+    end
+    subgraph RAG["5 · Behavioural memory (RAG)"]
+        MEM["16,302 past cases<br/>text-embedding-3-small (256) + behaviour vector<br/>status as known at the time"]
+    end
+    subgraph AG["6–7 · Agents"]
+        P["Prosecution"] --> J["Judge<br/>Azure AI Foundry agent judge-patern"]
+        D["Defence"] --> J
+    end
+    subgraph HU["8 · Human review"]
+        E["Employee: accept · reject · more · context<br/>escalate · confirm fraud / legit"]
+    end
+    subgraph KPI["10–11 · Steering intelligence"]
+        DR["Drilldown L1→L5"] --> AI["AI insight<br/>cyber · admin · tech · customer · coordinated<br/>fact vs hypothesis"]
+    end
+    IN --> ML --> ST --> MON --> AG
+    RAG --> AG
+    AG --> HU --> CASES
+    HU -->|"9 · validated outcome only"| RAG
+    STAR --> KPI
+```
+
+| Brief step | Where | Guardrail |
+|---|---|---|
+| Ingestion, event storage | star schema (notebook 05), `intel.stream()`, `context.batch()` for new feeds | quality rules row by row, quarantine |
+| Continuous monitoring, reactivation | `intel.triggers(tid, as_of)` — documented rules, weights | `as_of` time travel: never the future |
+| RAG retrieval | `memory.similar()` — hybrid cosine (meaning 0.5 + behaviour 0.5) over 16,302 cases | only earlier cases; fraud = confirmed only if reported before; AI conclusions never stored as knowledge |
+| Multi-agent investigation | `investigation.py` — Prosecution / Defence (gpt-6.1-terra) on board E1…En | must cite E-numbers; code checks every citation |
+| Judge | Azure AI Foundry agent `judge-patern` (managed harness, Entra ID), fallback the same model by key | grades evidence reliability; may deviate from the system only with post-alert evidence, shown side by side |
+| Human review, knowledge update | case page actions → `cases.jsonl` + decision journal | rationale required; "confirmed" only by the employee after contact or the bank's report |
+| Steering KPIs, drilldown | `steering.py` — fixed read-only SQL, click a bar to go down | aggregates; transactions without customer identity |
+| AI strategic analysis | facts K1…Kn in SQL → AI classifies, cites, separates fact / hypothesis | no data on employees / switch logs → stated as missing, confidence low |
+
+**Measured honestly:** the memory alone barely predicts fraud on validation alerts (ROC-AUC 0.57 vs 0.85 for the model; blending
+them does not help: 0.84) — so it is used as precedent and context for agents and employees, never added to the score.

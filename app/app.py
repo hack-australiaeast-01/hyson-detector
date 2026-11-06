@@ -34,8 +34,10 @@ _secrets_to_env()
 
 import copilot  # noqa: E402  (after the secrets bridge on purpose)
 import assistant
+import casepage
 import context
 import ctxpage
+import steering
 import data_access as da
 import deepsearch
 import fairness
@@ -64,10 +66,10 @@ def L(fr, en):
 
 
 # internal page ids (stable across languages) -> labels, grouped like a banking platform menu
-PAGES = ["assist", "guide", "queue", "tx", "cust", "context", "deep", "proces", "replay", "contre", "galaxy", "impact", "market", "perf", "pbi", "journal", "onboard"]
+PAGES = ["assist", "guide", "queue", "tx", "case", "cust", "context", "steer", "deep", "proces", "replay", "contre", "galaxy", "impact", "market", "perf", "pbi", "journal", "onboard"]
 PAGE_LABEL = {"assist": ("Assistant IA", "AI assistant"), "guide": ("Visite guidée (démo)", "Guided tour (demo)"),
               "queue": ("File d'alertes", "Alert queue"), "tx": ("Fiche transaction & copilote", "Transaction & copilot"),
-              "cust": ("Vue client 360", "Customer 360"), "context": ("Contexte personnel", "Personal context"),
+              "cust": ("Vue client 360", "Customer 360"), "context": ("Contexte personnel", "Personal context"), "case": ("Dossier d'enquête", "Investigation case"), "steer": ("Intelligence fraude", "Fraud intelligence"),
               "deep": ("Enquête approfondie", "Deep search"),
               "proces": ("Le Procès", "The Trial"), "replay": ("Reconstitution", "Crime-scene replay"),
               "contre": ("Contre-enquête", "Counter-inquiry"), "galaxy": ("Réseau de compromission", "Compromise network"),
@@ -76,14 +78,14 @@ PAGE_LABEL = {"assist": ("Assistant IA", "AI assistant"), "guide": ("Visite guid
               "journal": ("Journal & traçabilité", "Audit log"), "pbi": ("Tableau de bord Power BI", "Power BI dashboard"),
               "onboard": ("Nouvelle source de données", "New data source")}
 PAGE_ICON = {"assist": ":material/auto_awesome:", "guide": ":material/flag:", "queue": ":material/notifications_active:", "tx": ":material/manage_search:",
-             "cust": ":material/person:", "context": ":material/flight_takeoff:", "deep": ":material/troubleshoot:", "proces": ":material/gavel:", "replay": ":material/movie:",
+             "cust": ":material/person:", "context": ":material/flight_takeoff:", "case": ":material/folder_open:", "steer": ":material/query_stats:", "deep": ":material/troubleshoot:", "proces": ":material/gavel:", "replay": ":material/movie:",
              "contre": ":material/alt_route:", "galaxy": ":material/hub:", "impact": ":material/insights:", "market": ":material/public:",
              "perf": ":material/monitoring:", "pbi": ":material/dashboard:", "journal": ":material/fact_check:",
              "onboard": ":material/upload_file:"}
 NAV_GROUPS = [(("Assistant", "Assistant"), ["assist"]),
-              (("Analyste", "Analyst"), ["queue", "tx", "cust", "context"]),
+              (("Analyste", "Analyst"), ["queue", "tx", "case", "cust", "context"]),
               (("Enquête IA", "AI investigation"), ["deep", "proces", "replay", "contre", "galaxy"]),
-              (("Pilotage", "Steering"), ["impact", "market", "perf", "pbi", "journal"]),
+              (("Pilotage", "Steering"), ["steer", "impact", "market", "perf", "pbi", "journal"]),
               (("Données", "Data"), ["onboard"]),
               (("Démo (optionnel)", "Demo (optional)"), ["guide"])]
 DEMO_LABEL = {"obvious_fraud": ("Fraude évidente", "Obvious fraud"), "subtle_fraud": ("Fraude subtile", "Subtle fraud"),
@@ -118,7 +120,7 @@ def refresh():
 def open_tx(tid, page="tx"):
     st.session_state.tx = tid
     st.session_state.tx_select = tid
-    for k in ("proces_tx", "replay_tx", "contre_tx", "deep_tx"):
+    for k in ("proces_tx", "replay_tx", "contre_tx", "deep_tx", "case_tid"):
         st.session_state[k] = tid
     st.session_state.goto = page
 
@@ -455,6 +457,9 @@ def page_transaction():
             st.caption(L("Décisions précédentes : ", "Previous decisions: ") +
                        " · ".join(f"{x.decision} ({x.confidence}, {x.decided_at})" for x in past.itertuples()))
         q0, q1, q2, q3 = st.columns(4)
+        st.button(L("📂 Ouvrir le dossier d'enquête (suivi continu · accusation · défense · juge)",
+                    "📂 Open the investigation case (continuous follow-up · prosecution · defence · judge)"),
+                  on_click=open_tx, args=(tid, "case"), width="stretch", type="primary")
         q0.button(L("🔎 Enquête approfondie", "🔎 Deep search"), on_click=open_tx, args=(tid, "deep"), width="stretch",
                   help=deepsearch.reason(tid, st.session_state.lang) or L("Preuves calculées sans token + 1 appel IA (~600 tokens).",
                                                                           "Evidence computed with no tokens + 1 AI call (~600 tokens)."))
@@ -902,7 +907,7 @@ elif st.session_state.pop("nazar_open", False):                 # one dialog at 
     nazar.panel(ctx)
 studio.tour_hint(ctx, page)
 nazar.fab(ctx)
-{"assist": lambda: assistant.page_assistant(ctx), "guide": lambda: studio.page_guide(ctx), "queue": page_queue, "tx": page_transaction, "cust": page_customer, "context": lambda: ctxpage.page_context(ctx),
+{"assist": lambda: assistant.page_assistant(ctx), "guide": lambda: studio.page_guide(ctx), "queue": page_queue, "tx": page_transaction, "cust": page_customer, "context": lambda: ctxpage.page_context(ctx), "case": lambda: casepage.page_case(ctx), "steer": lambda: steering.page_steering(ctx),
  "deep": lambda: studio.page_deep(ctx), "proces": lambda: studio.page_proces(ctx), "replay": lambda: studio.page_replay(ctx), "contre": lambda: studio.page_contre(ctx),
  "galaxy": lambda: studio.page_galaxy(ctx), "impact": lambda: studio.page_impact(ctx),
  "market": lambda: market.page_market(ctx, src.mode), "perf": page_performance,

@@ -51,3 +51,5 @@ app/data/travel_notices.csv
 app/data/feat_ctx_signals.parquet
 app/data/feat_ctx_eval.parquet
 app/data/feat_ctx_model_valid.parquet
+app/data/cases.jsonl
+app/data/investigations.json

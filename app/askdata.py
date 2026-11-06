@@ -200,12 +200,15 @@ def star_ready():
     return all((STAR / f"{t}.parquet").exists() for t in TABLES)
 
 
-def _duck():
+def _duck(extra=None):
+    """Read-only DuckDB on the snapshot; `extra` = {view name: SQL over read_parquet} registered BEFORE file access is locked."""
     import duckdb
     con = duckdb.connect()
     con.execute("SET threads=2; SET memory_limit='200MB'")
     for t in TABLES:
         con.execute(f"CREATE VIEW {t} AS SELECT * FROM read_parquet('{(STAR / f'{t}.parquet').as_posix()}')")
+    for name, sql in (extra or {}).items():
+        con.execute(f"CREATE TEMP TABLE {name} AS {sql}")              # materialised now: file access is locked just after
     for s in ("SET allowed_directories=['{}']".format(STAR.as_posix()), "SET enable_external_access=false", "SET lock_configuration=true"):
         try:
             con.execute(s)
