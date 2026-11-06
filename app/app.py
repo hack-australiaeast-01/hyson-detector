@@ -768,8 +768,9 @@ def page_journal():
     ag = nazar.history()
     if len(ag):
         ui.section(L("Agent Nazar · actions tracées", "Nazar agent · logged actions"))
-        st.caption(L(f"{len(ag)} instruction(s) exécutée(s) · 0 token · décisions via l'agent : source « agent_nazar » dans le journal ci-dessus.",
-                     f"{len(ag)} instruction(s) run · 0 tokens · decisions through the agent: source \"agent_nazar\" in the log above."))
+        _tok = int(ag["tokens"].fillna(0).sum()) if "tokens" in ag else 0
+        st.caption(L(f"{len(ag)} instruction(s) · {_tok} token(s) (commandes : 0, conversation : Azure OpenAI) · décisions via l'agent : source « agent_nazar » dans le journal ci-dessus.",
+                     f"{len(ag)} instruction(s) · {_tok} token(s) (commands: 0, chat: Azure OpenAI) · decisions through the agent: source \"agent_nazar\" in the log above."))
         st.dataframe(ag.iloc[::-1][[c for c in ["ts", "analyst", "command", "action", "context_tx", "tools", "latency_s"] if c in ag.columns]].head(20),
                      hide_index=True, width="stretch")
     ui.section(L("Traçabilité du copilote", "Copilot traceability"))
