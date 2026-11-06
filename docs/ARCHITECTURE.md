@@ -18,6 +18,7 @@ Principle everywhere: **the model scores, the AI explains, the analyst decides.*
 | 8 | [Application pages and demo path](#8-application-pages-and-demo-path) | The 15 pages and how they link |
 | 10 | [Continuous fraud intelligence](#10-continuous-fraud-intelligence-unified-architecture) | Events, case file, memory (RAG), agents + Foundry judge, human review, steering drilldown |
 | 9 | [Deployment, security and CI/CD](#9-deployment-security-and-cicd) | Local live mode vs hosted demo, identities, secrets, GitHub → Streamlit Cloud |
+| 12 | [AI reporting engine](#12-ai-reporting-engine-professional-evidence-based-reports) | Plain-language request → verified analysis → audience-adapted report (FR/EN/AR) → review, approval, PDF/DOCX/HTML/XLSX |
 | 11 | [Universal banking integration](#11-universal-banking-integration-any-bank-any-schema) | Any bank, any schema: discovery, AI mapping, readiness, approval, activation, bank-specific model, per-bank memory, signed webhook, REST API |
 
 ---
@@ -344,3 +345,43 @@ queue, memory, real time) and the capability-gated module list — wiring each H
 storage is local files (production: one OneLake workspace / lakehouse per bank, secrets in Key Vault, keys in Entra ID). The
 unsupervised behaviour score is weak alone (ROC-AUC 0.67–0.70 when checked on Atlas / Nordic labels): it orders the review, it
 does not decide.
+
+## 12. AI reporting engine (professional, evidence-based reports)
+
+A bank employee asks for a report in plain language (French, English or Arabic); the platform understands the need, analyses
+the data **before** writing, verifies every figure, adapts the document to its reader and waits for a named approval.
+Same engine for the Hyson bank and for every onboarded bank (tenant), on one canonical SQL surface.
+
+```mermaid
+flowchart LR
+    REQ["Request in plain language<br/>FR · EN · AR"] --> INT["Request interpreter<br/>type · audience · period (+ previous)<br/>scope · focus · depth · format · confidentiality"]
+    INT -->|"essential info missing → one question"| REQ
+    INT --> RET["Data retrieval<br/>canonical views tx / auth<br/>Hyson star schema or tenant data"]
+    RET --> ANA["Analytical queries (SQL)<br/>facts F# · tables T#<br/>confirmed ≠ suspected"]
+    ANA --> VER["Verification<br/>period · duplicates · sums · recount<br/>label coverage · evidence links"]
+    VER --> INS["Interpretation (rules)<br/>insights I#: what · evidence · why<br/>hypotheses · impact · action · priority"]
+    INS --> GEN["Composition by audience<br/>+ charts C# (title, unit, period, source)"]
+    GEN --> AIW["Optional AI writer<br/>kept only if every number is in the evidence"]
+    AIW --> REV["Review: preview · edit · regenerate section<br/>change audience / period · comments · compare versions"]
+    REV --> APP["Named approval → PDF · DOCX · HTML · XLSX<br/>archived with SHA-256 · hash-chained audit"]
+```
+
+| Brief component | Where | Guardrail |
+|---|---|---|
+| Request interpreter, audience & requirements analyzer | `report_interpret.py` — rules (0 token) for type, audience, explicit or relative periods (Q2 2026, août 2026, الربع الثاني, du … au …, last quarter), comparison, scope (channels, card types, cities, countries), focus, depth, format, confidentiality, language; optional single LLM refinement on the request text only | defaults are listed as assumptions; a question only when essential (investigation without a transaction, no data in the period); fraud reports default to the last period with confirmed labels |
+| Data retrieval | `report_sources.py` — views `tx` / `auth` over the Hyson star schema (`mart`, exported from Fabric) or a tenant's canonical data | read-only DuckDB, file access locked, one cursor per query, 100 MB memory limit |
+| Analytical query + statistical validation | `report_analysis.py` — fixed SQL per figure (overview, previous period, breakdowns with share / rate / over-representation, trend, authentication, 3-D Secure / stripe, decline reasons, decisions) | confirmed fraud = bank label; suspected = model alert without label; model / rules coverage measured only where they exist; independent recount, breakdown sums, duplicates, label coverage |
+| RAG / investigation evidence | `investigation_case()` reuses the evidence board, system recommendation, 16,302-case memory, monitoring triggers, the employee decision and (optional) the three agents; tenants use their own memory | AI arguments shown as AI, never as a decision; customer identity not reproduced |
+| Interpretation | `report_insights.py` — documented thresholds (≥ 5 frauds, ≥ 30 operations, ×1.5 share); change vs previous period; emerging segments; night, 3-D Secure, stripe; model vs rules; exposure; account-takeover and login-spike **indicators** | each insight = what / evidence ids / why / hypotheses / impact / action / priority; security items never claim an attack |
+| Report generation agent | `report_compose.py` — sections by type and audience (executive, analyst, cyber, operations), depth, institution terminology and departments | the same facts for every audience (tested) |
+| Visualisations | matplotlib: trend, share of frauds vs share of transactions, period comparison, failed logins | title, unit, period, source and a one-line reading on every chart |
+| Evidence traceability | evidence register (F#, T#, I#) with value, kind, method, SQL, period, source, timestamp; every statement tagged *verified fact / ML prediction / AI interpretation / employee-confirmed / hypothesis / recommendation / data limitation* | AI paragraphs rejected if any number is not in the evidence (`grounded()`) |
+| Formatting & export | `report_render.py` — HTML, PDF (reportlab, DejaVu fonts, Arabic shaping + right-to-left wrapping), DOCX (python-docx, `w:bidi`), XLSX (evidence + tables + findings + checks) | drafts watermarked; approved files carry approver, version and hash |
+| Review & approval, document management | `report_store.py` — versions, edit section (employee statement), regenerate a section or the report (audience, period, depth), comments, version diff, named approval (blocked if an error-level check fails), archived files with SHA-256, saved templates, institution branding, hash-chained audit (a tenant's report steps join the tenant's own chain) | stored per bank: Hyson in `app/data/reports`, each bank in its tenant folder |
+| UI and API | page **Rapports IA** (`reportpage.py`); `POST/GET /v1/tenants/{id}/reports`, `…/approve` (admin), `…/export?format=` | analyst creates, admin approves; another bank's key gets 403 |
+
+**Measured:** the brief's example request ("detailed quarterly report … DAB … previous quarter … card categories … emerging
+patterns … cyber or operational weaknesses … recommendations for management") is understood as a periodic report for management,
+Q2 2026 vs Q1 2026, channel ATM, detailed, with cyber and processing sections; it is generated in ~4 s with 39 figures, 8 insights, 9 tables,
+5 charts and 6/6 checks. Figures reconcile with the documented KPIs (Jun–Jul 2026: 1,779 model alerts, 718 confirmed frauds caught).
+On Aug–Sep 2026 (no labels yet) the report contains **no** confirmed-fraud figure, only suspected alerts, and says why.

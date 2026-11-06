@@ -130,6 +130,53 @@ h1, h2, h3 {{ letter-spacing: -.015em; color: {TEXT}; }}
 .stButton > button[kind="primary"], .stFormSubmitButton > button {{ background: {BLUE}; border-color: {BLUE}; color: #fff; }}
 [data-testid="stAlert"] {{ border-radius: 14px; }}
 
+/* form controls: where to type / click must be obvious (white field, visible border, blue focus ring, bold label) */
+[data-testid="stWidgetLabel"] p, [data-testid="stWidgetLabel"] label {{ font-weight: 600 !important; color: {TEXT} !important; font-size: .88rem !important; }}
+.main [data-baseweb="input"], .main [data-baseweb="textarea"], .main [data-baseweb="select"] > div,
+[data-testid="stTextInputRootElement"], [data-testid="stTextAreaRootElement"], [data-testid="stDateInputField"],
+[data-testid="stNumberInputContainer"], [data-testid="stTimeInputField"],
+[data-testid="stSelectbox"] [role="group"], [data-testid="stMultiSelect"] [role="group"],
+[data-testid="stMain"] [data-baseweb="input"], [data-testid="stMain"] [data-baseweb="textarea"], [data-testid="stMain"] [data-baseweb="select"] > div,
+[data-testid="stDialog"] [data-baseweb="input"], [data-testid="stDialog"] [data-baseweb="textarea"], [data-testid="stDialog"] [data-baseweb="select"] > div {{
+    background: #fff !important; border: 1.5px solid #AEBBD0 !important; border-radius: 11px !important;
+    box-shadow: 0 1px 2px rgba(16,24,40,.05) !important; transition: border-color .15s ease, box-shadow .15s ease; }}
+[data-testid="stTextInputRootElement"]:hover, [data-testid="stTextAreaRootElement"]:hover, [data-testid="stDateInputField"]:hover,
+[data-testid="stNumberInputContainer"]:hover, [data-testid="stSelectbox"] [role="group"]:hover, [data-testid="stMultiSelect"] [role="group"]:hover {{
+    border-color: {BLUE2} !important; }}
+[data-testid="stTextInputRootElement"]:focus-within, [data-testid="stTextAreaRootElement"]:focus-within, [data-testid="stDateInputField"]:focus-within,
+[data-testid="stNumberInputContainer"]:focus-within, [data-testid="stSelectbox"] [role="group"]:focus-within, [data-testid="stMultiSelect"] [role="group"]:focus-within {{
+    border-color: {BLUE} !important; box-shadow: 0 0 0 3px rgba(30,91,216,.18) !important; }}
+[data-testid="stDateInputField"] input, [data-testid="stTextInputRootElement"] input, [data-testid="stTextAreaRootElement"] textarea,
+[data-testid="stNumberInputContainer"] input {{ border: none !important; background: transparent !important; outline: none !important; }}
+[data-baseweb="input"] > div, [data-baseweb="textarea"] > div, [data-baseweb="base-input"] {{ background: #fff !important; }}
+[data-baseweb="input"] input, [data-baseweb="textarea"] textarea {{ color: {TEXT} !important; caret-color: {BLUE}; }}
+[data-baseweb="input"]:hover, [data-baseweb="textarea"]:hover, [data-baseweb="select"] > div:hover {{ border-color: {BLUE2} !important; }}
+[data-baseweb="input"]:focus-within, [data-baseweb="textarea"]:focus-within, [data-baseweb="select"] > div:focus-within {{
+    border-color: {BLUE} !important; box-shadow: 0 0 0 3px rgba(30,91,216,.18) !important; }}
+input::placeholder, textarea::placeholder {{ color: #7A879B !important; opacity: 1 !important; }}
+[data-testid="stNumberInput"] button {{ background: {LINE2} !important; border-left: 1px solid #D5DDEA !important; color: {NAVY} !important; }}
+[data-testid="stFileUploaderDropzone"] {{ background: #fff !important; border: 2px dashed #9FB3D6 !important; border-radius: 14px !important; }}
+[data-testid="stFileUploaderDropzone"]:hover {{ border-color: {BLUE} !important; background: #F5F8FF !important; }}
+[data-testid="stChatInput"] {{ background: #fff !important; border: 1.5px solid #AEBBD0 !important; border-radius: 16px !important;
+    box-shadow: 0 4px 16px rgba(30,91,216,.10) !important; }}
+[data-testid="stChatInput"]:focus-within {{ border-color: {BLUE} !important; box-shadow: 0 0 0 3px rgba(30,91,216,.18), 0 6px 22px rgba(30,91,216,.14) !important; }}
+[data-testid="stChatInput"] textarea {{ background: transparent !important; }}
+[data-testid="stMain"] .stButton > button[kind="secondary"], [data-testid="stMain"] .stDownloadButton > button,
+[data-testid="stDialog"] .stButton > button[kind="secondary"] {{
+    background: #fff; border: 1.5px solid #AEBBD0; color: {NAVY}; box-shadow: 0 1px 2px rgba(16,24,40,.06); }}
+[data-testid="stMain"] .stButton > button[kind="secondary"]:hover, [data-testid="stMain"] .stDownloadButton > button:hover,
+[data-testid="stDialog"] .stButton > button[kind="secondary"]:hover {{ border-color: {BLUE}; color: {BLUE}; background: #F5F8FF; }}
+[data-testid="stMain"] .stButton > button[kind="primary"] {{ box-shadow: 0 4px 14px rgba(30,91,216,.28); }}
+[data-testid="stMain"] .stButton > button[kind="primary"]:hover, [data-testid="stDialog"] .stButton > button[kind="primary"]:hover {{
+    background: #174BB8; border-color: #174BB8; color: #fff; }}
+[data-testid="stMain"] .stButton > button:disabled {{ opacity: .55; box-shadow: none !important; }}
+[data-testid="stCheckbox"] label span:first-child, [data-testid="stToggle"] label > div:first-child {{ outline: 1.5px solid #AEBBD0; outline-offset: 1px; border-radius: 6px; }}
+[data-testid="stSegmentedControl"] button, [data-testid="stButtonGroup"] button {{ border: 1.5px solid #C3CEDF !important; }}
+[data-testid="stTab"] p {{ font-weight: 600; }}
+.start-here {{ display: inline-flex; align-items: center; gap: .45rem; font-size: .78rem; font-weight: 700; color: {BLUE};
+    background: #E8EFFD; border: 1px solid #C9D9FA; border-radius: 999px; padding: .22rem .7rem; margin: .2rem 0 .45rem; }}
+.start-here:before {{ content: "➜"; }}
+
 /* transaction card */
 .txcard {{ background: {CARD}; border: 1px solid {LINE}; border-radius: 18px; padding: 1.05rem 1.25rem; margin-bottom: .9rem;
     box-shadow: 0 1px 2px rgba(16,24,40,.04); }}
@@ -279,6 +326,11 @@ def step(n, title, text, done=False):
 
 def hint(html_text):
     st.markdown(f'<div class="hint">{html_text}</div>', unsafe_allow_html=True)
+
+
+def start_here(text):
+    """Small blue pill pointing at the first thing to do on a page."""
+    st.markdown(f'<div class="start-here">{esc(text)}</div>', unsafe_allow_html=True)
 
 
 def plea(who, title, icon, color, body):

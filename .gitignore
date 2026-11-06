@@ -58,3 +58,6 @@ fabric/backups/
 # universal integration: per-bank workspaces (runtime, contain the banks' data)
 app/data/tenants/
 
+# AI reports (runtime: generated versions, approved files, settings)
+app/data/reports/
+

@@ -13,3 +13,11 @@ pyodbc>=5.0
 # ask the data: local SQL engine on the star-schema snapshot + SQL guard
 duckdb>=1.2
 sqlglot>=25
+# AI reports: professional documents (PDF / DOCX / XLSX), charts, Arabic right-to-left
+reportlab>=4.0
+python-docx>=1.1
+openpyxl>=3.1
+matplotlib>=3.8
+arabic-reshaper>=3.0
+python-bidi>=0.4
+

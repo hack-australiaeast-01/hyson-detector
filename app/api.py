@@ -290,3 +290,66 @@ async def events(tenant_id: str, request: Request, x_hyson_timestamp: str = Head
     res = _err(t.ingest_events, records, "webhook")
     res["scores"] = json.loads(pd.DataFrame(res["scores"]).to_json(orient="records")) if res["scores"] else []
     return res
+
+
+# ---------------------------------------------------------------- AI reports (per bank, isolated)
+class ReportRequest(BaseModel):
+    request: str = Field(min_length=5, max_length=2000)
+    lang: Literal["fr", "en", "ar"] = "fr"
+    overrides: Optional[dict] = None
+    ai_writer: bool = False
+
+
+def _report_store(c):
+    import report_store as RSt
+    if c.tenant.config["status"] != "active":
+        raise HTTPException(409, "tenant is not active")
+    return RSt.store(c.tenant.id)
+
+
+@app.post("/v1/tenants/{tenant_id}/reports", status_code=201)
+def create_report(body: ReportRequest, c: Caller = Depends(caller)):
+    import report_interpret as RP
+    need(c, "analyst")
+    st = _report_store(c)
+    spec = RP.interpret(body.request, st.src, body.lang)
+    allowed = {"type", "audience", "depth", "format", "confidentiality", "period", "compare", "lang", "case_id", "sections"}
+    spec.update({k: v for k, v in (body.overrides or {}).items() if k in allowed})
+    if spec.get("questions"):
+        raise HTTPException(422, {"questions": spec["questions"], "understood": {k: spec[k] for k in ("type", "audience", "period", "lang")}})
+    try:
+        rid = st.create(spec, c.actor, use_ai=body.ai_writer)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
+    b = st.version(rid)
+    return {"report_id": rid, "version": b["version"], "title": b["doc"]["meta"]["title"],
+            "understood": {k: spec[k] for k in ("type", "audience", "period", "compare", "depth", "lang", "scope", "focus", "sections")},
+            "checks": b["checks"], "findings": [{"id": i["id"], "priority": i["priority"], "title": i["title"][spec["lang"]]} for i in b["insights"]],
+            "status": "draft"}
+
+
+@app.get("/v1/tenants/{tenant_id}/reports")
+def list_reports(c: Caller = Depends(caller)):
+    need(c, "analyst")
+    return {"reports": _report_store(c).list()}
+
+
+@app.post("/v1/tenants/{tenant_id}/reports/{report_id}/approve")
+def approve_report(report_id: str, body: Approval, c: Caller = Depends(caller)):
+    need(c, "admin")
+    try:
+        ap = _report_store(c).approve(report_id, body.approver, "admin")
+    except (ValueError, FileNotFoundError) as exc:
+        raise HTTPException(400, str(exc))
+    return ap
+
+
+@app.get("/v1/tenants/{tenant_id}/reports/{report_id}/export")
+def export_report(report_id: str, format: Literal["pdf", "docx", "html", "xlsx"] = "pdf", c: Caller = Depends(caller)):
+    from fastapi.responses import Response
+    need(c, "analyst")
+    try:
+        data, mime, name = _report_store(c).export(report_id, format)
+    except (ValueError, FileNotFoundError):
+        raise HTTPException(404, "unknown report")
+    return Response(data, media_type=mime, headers={"Content-Disposition": f'attachment; filename="{name}"'})

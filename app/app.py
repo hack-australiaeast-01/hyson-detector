@@ -42,6 +42,7 @@ import data_access as da
 import deepsearch
 import fairness
 import integpage
+import reportpage
 import features as fx
 import market
 import nazar
@@ -67,10 +68,10 @@ def L(fr, en):
 
 
 # internal page ids (stable across languages) -> labels, grouped like a banking platform menu
-PAGES = ["assist", "guide", "queue", "tx", "case", "cust", "context", "steer", "deep", "proces", "replay", "contre", "galaxy", "impact", "market", "perf", "pbi", "journal", "integ", "onboard"]
+PAGES = ["assist", "guide", "queue", "tx", "case", "cust", "context", "steer", "reports", "deep", "proces", "replay", "contre", "galaxy", "impact", "market", "perf", "pbi", "journal", "integ", "onboard"]
 PAGE_LABEL = {"assist": ("Assistant IA", "AI assistant"), "guide": ("Visite guidée (démo)", "Guided tour (demo)"),
               "queue": ("File d'alertes", "Alert queue"), "tx": ("Fiche transaction & copilote", "Transaction & copilot"),
-              "cust": ("Vue client 360", "Customer 360"), "context": ("Contexte personnel", "Personal context"), "case": ("Dossier d'enquête", "Investigation case"), "steer": ("Intelligence fraude", "Fraud intelligence"),
+              "cust": ("Vue client 360", "Customer 360"), "context": ("Contexte personnel", "Personal context"), "case": ("Dossier d'enquête", "Investigation case"), "steer": ("Intelligence fraude", "Fraud intelligence"), "reports": ("Rapports IA", "AI reports"),
               "deep": ("Enquête approfondie", "Deep search"),
               "proces": ("Le Procès", "The Trial"), "replay": ("Reconstitution", "Crime-scene replay"),
               "contre": ("Contre-enquête", "Counter-inquiry"), "galaxy": ("Réseau de compromission", "Compromise network"),
@@ -79,14 +80,14 @@ PAGE_LABEL = {"assist": ("Assistant IA", "AI assistant"), "guide": ("Visite guid
               "journal": ("Journal & traçabilité", "Audit log"), "pbi": ("Tableau de bord Power BI", "Power BI dashboard"),
               "integ": ("Intégration bancaire", "Bank integration"), "onboard": ("Nouvelle source de données", "New data source")}
 PAGE_ICON = {"assist": ":material/auto_awesome:", "guide": ":material/flag:", "queue": ":material/notifications_active:", "tx": ":material/manage_search:",
-             "cust": ":material/person:", "context": ":material/flight_takeoff:", "case": ":material/folder_open:", "steer": ":material/query_stats:", "deep": ":material/troubleshoot:", "proces": ":material/gavel:", "replay": ":material/movie:",
+             "cust": ":material/person:", "context": ":material/flight_takeoff:", "case": ":material/folder_open:", "steer": ":material/query_stats:", "reports": ":material/description:", "deep": ":material/troubleshoot:", "proces": ":material/gavel:", "replay": ":material/movie:",
              "contre": ":material/alt_route:", "galaxy": ":material/hub:", "impact": ":material/insights:", "market": ":material/public:",
              "perf": ":material/monitoring:", "pbi": ":material/dashboard:", "journal": ":material/fact_check:",
              "integ": ":material/account_balance:", "onboard": ":material/upload_file:"}
 NAV_GROUPS = [(("Assistant", "Assistant"), ["assist"]),
               (("Analyste", "Analyst"), ["queue", "tx", "case", "cust", "context"]),
               (("Enquête IA", "AI investigation"), ["deep", "proces", "replay", "contre", "galaxy"]),
-              (("Pilotage", "Steering"), ["steer", "impact", "market", "perf", "pbi", "journal"]),
+              (("Pilotage", "Steering"), ["steer", "reports", "impact", "market", "perf", "pbi", "journal"]),
               (("Données", "Data"), ["integ", "onboard"]),
               (("Démo (optionnel)", "Demo (optional)"), ["guide"])]
 DEMO_LABEL = {"obvious_fraud": ("Fraude évidente", "Obvious fraud"), "subtle_fraud": ("Fraude subtile", "Subtle fraud"),
@@ -908,7 +909,7 @@ elif st.session_state.pop("nazar_open", False):                 # one dialog at 
     nazar.panel(ctx)
 studio.tour_hint(ctx, page)
 nazar.fab(ctx)
-{"assist": lambda: assistant.page_assistant(ctx), "guide": lambda: studio.page_guide(ctx), "queue": page_queue, "tx": page_transaction, "cust": page_customer, "context": lambda: ctxpage.page_context(ctx), "case": lambda: casepage.page_case(ctx), "steer": lambda: steering.page_steering(ctx),
+{"assist": lambda: assistant.page_assistant(ctx), "guide": lambda: studio.page_guide(ctx), "queue": page_queue, "tx": page_transaction, "cust": page_customer, "context": lambda: ctxpage.page_context(ctx), "case": lambda: casepage.page_case(ctx), "steer": lambda: steering.page_steering(ctx), "reports": lambda: reportpage.page_reports(ctx),
  "deep": lambda: studio.page_deep(ctx), "proces": lambda: studio.page_proces(ctx), "replay": lambda: studio.page_replay(ctx), "contre": lambda: studio.page_contre(ctx),
  "galaxy": lambda: studio.page_galaxy(ctx), "impact": lambda: studio.page_impact(ctx),
  "market": lambda: market.page_market(ctx, src.mode), "perf": page_performance,
