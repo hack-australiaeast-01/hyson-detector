@@ -33,6 +33,7 @@ def _secrets_to_env():
 _secrets_to_env()
 
 import copilot  # noqa: E402  (after the secrets bridge on purpose)
+import assistant
 import data_access as da
 import deepsearch
 import fairness
@@ -58,8 +59,8 @@ def L(fr, en):
 
 
 # internal page ids (stable across languages) -> labels, grouped like a banking platform menu
-PAGES = ["guide", "queue", "tx", "cust", "deep", "proces", "replay", "contre", "galaxy", "impact", "market", "perf", "pbi", "journal", "onboard"]
-PAGE_LABEL = {"guide": ("Démarrer ici", "Start here"),
+PAGES = ["assist", "guide", "queue", "tx", "cust", "deep", "proces", "replay", "contre", "galaxy", "impact", "market", "perf", "pbi", "journal", "onboard"]
+PAGE_LABEL = {"assist": ("Assistant IA", "AI assistant"), "guide": ("Visite guidée (démo)", "Guided tour (demo)"),
               "queue": ("File d'alertes", "Alert queue"), "tx": ("Fiche transaction & copilote", "Transaction & copilot"),
               "cust": ("Vue client 360", "Customer 360"),
               "deep": ("Enquête approfondie", "Deep search"),
@@ -69,16 +70,17 @@ PAGE_LABEL = {"guide": ("Démarrer ici", "Start here"),
               "market": ("Marché & benchmarks", "Market & benchmarks"), "perf": ("Performance du modèle", "Model performance"),
               "journal": ("Journal & traçabilité", "Audit log"), "pbi": ("Tableau de bord Power BI", "Power BI dashboard"),
               "onboard": ("Nouvelle source de données", "New data source")}
-PAGE_ICON = {"guide": ":material/flag:", "queue": ":material/notifications_active:", "tx": ":material/manage_search:",
+PAGE_ICON = {"assist": ":material/auto_awesome:", "guide": ":material/flag:", "queue": ":material/notifications_active:", "tx": ":material/manage_search:",
              "cust": ":material/person:", "deep": ":material/troubleshoot:", "proces": ":material/gavel:", "replay": ":material/movie:",
              "contre": ":material/alt_route:", "galaxy": ":material/hub:", "impact": ":material/insights:", "market": ":material/public:",
              "perf": ":material/monitoring:", "pbi": ":material/dashboard:", "journal": ":material/fact_check:",
              "onboard": ":material/upload_file:"}
-NAV_GROUPS = [(("Bienvenue", "Welcome"), ["guide"]),
+NAV_GROUPS = [(("Assistant", "Assistant"), ["assist"]),
               (("Analyste", "Analyst"), ["queue", "tx", "cust"]),
               (("Enquête IA", "AI investigation"), ["deep", "proces", "replay", "contre", "galaxy"]),
               (("Pilotage", "Steering"), ["impact", "market", "perf", "pbi", "journal"]),
-              (("Données", "Data"), ["onboard"])]
+              (("Données", "Data"), ["onboard"]),
+              (("Démo (optionnel)", "Demo (optional)"), ["guide"])]
 DEMO_LABEL = {"obvious_fraud": ("Fraude évidente", "Obvious fraud"), "subtle_fraud": ("Fraude subtile", "Subtle fraud"),
               "avoided_false_positive": ("Faux positif évité", "Avoided false positive")}
 SUGGESTIONS = copilot.SUGGESTIONS          # same strings as warmup.py -> pre-computed answers are cache hits
@@ -148,7 +150,7 @@ DEMO_TX = dict(zip(demos.demo_case, demos.transaction_id))
 st.session_state.setdefault("tx", demos.transaction_id.iloc[0] if len(demos) else queue.transaction_id.iloc[0])
 st.session_state.setdefault("chat", {})
 if st.session_state.get("page") not in PAGES:
-    st.session_state.page = "guide"
+    st.session_state.page = "assist"
 if "goto" in st.session_state:
     st.session_state.page = st.session_state.pop("goto")
 page = st.session_state.page
@@ -181,11 +183,11 @@ with st.sidebar:
         for pid in ids:
             st.button(tr(PAGE_LABEL[pid]), key=f"nav_{pid}", on_click=go, args=(pid,), icon=PAGE_ICON[pid], width="stretch",
                       type="primary" if pid == page else "secondary")
-    ui.side_label(L("Cas de démo", "Demo cases"))
-    for _, d in demos.iterrows():
-        st.button(f"{d.risk_icon}  {tr(DEMO_LABEL.get(d.demo_case, (d.demo_case, d.demo_case)))} · {d.transaction_id}",
-                  key=f"demo_{d.transaction_id}", on_click=open_tx, args=(d.transaction_id,), width="stretch")
-    ui.side_label(L("Système", "System"))
+    with st.expander(L("Cas de démo", "Demo cases"), icon=":material/play_circle:"):
+        for _, d in demos.iterrows():
+            st.button(f"{d.risk_icon}  {tr(DEMO_LABEL.get(d.demo_case, (d.demo_case, d.demo_case)))} · {d.transaction_id}",
+                      key=f"demo_{d.transaction_id}", on_click=open_tx, args=(d.transaction_id,), width="stretch")
+    sysbox = st.expander(L("Système", "System"), icon=":material/settings:")
     u = copilot.usage_summary()
     info = (f"{L('Données', 'Data')} : <b>{ui.esc(src.describe())}</b><br>{L('Copilote', 'Copilot')} : <b>{ui.esc(mode_label())}</b><br>"
             f"{L('Appels LLM', 'LLM calls')} : <b>{u['appels']}</b> · tokens : <b>{nb(u['tokens'])}</b> · cache : <b>{u['caches']}</b>")
@@ -193,8 +195,9 @@ with st.sidebar:
         info += f"<br>{L('Journal synchronisé dans OneLake à', 'Log synced to OneLake at')} {ui.esc(src.feedback_synced)}"
     if src.error:
         info += f"<br>⚠ {ui.esc(src.error)}"
-    ui.side_info(info)
-    st.button(L("Rafraîchir depuis Fabric", "Refresh from Fabric"), on_click=refresh, width="stretch", icon=":material/sync:")
+    with sysbox:
+        ui.side_info(info)
+        st.button(L("Rafraîchir depuis Fabric", "Refresh from Fabric"), on_click=refresh, width="stretch", icon=":material/sync:")
 
 
 # ---------------------------------------------------------------- 1. alert queue
@@ -877,14 +880,13 @@ def welcome():
 
 ctx = SimpleNamespace(L=L, lang=st.session_state.get("lang", "fr"), queue=queue, open_tx=open_tx, go=go, chips=status_chips,
                       mark=mark, demos=DEMO_TX)
-if not st.session_state.get("welcomed"):
-    st.session_state.welcomed = True
+if st.session_state.pop("open_welcome", False):              # the tour is optional: offered from the guide page only
     st.session_state.pop("nazar_open", None)
     welcome()
 elif st.session_state.pop("nazar_open", False):                 # one dialog at a time
     nazar.panel(ctx)
 studio.tour_hint(ctx, page)
-{"guide": lambda: studio.page_guide(ctx), "queue": page_queue, "tx": page_transaction, "cust": page_customer,
+{"assist": lambda: assistant.page_assistant(ctx), "guide": lambda: studio.page_guide(ctx), "queue": page_queue, "tx": page_transaction, "cust": page_customer,
  "deep": lambda: studio.page_deep(ctx), "proces": lambda: studio.page_proces(ctx), "replay": lambda: studio.page_replay(ctx), "contre": lambda: studio.page_contre(ctx),
  "galaxy": lambda: studio.page_galaxy(ctx), "impact": lambda: studio.page_impact(ctx),
  "market": lambda: market.page_market(ctx, src.mode), "perf": page_performance,

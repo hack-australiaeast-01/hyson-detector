@@ -10,3 +10,6 @@ azure-identity>=1.17
 azure-storage-file-datalake>=12.16
 # live Fabric SQL (local run; needs ODBC Driver 17/18 for SQL Server). On Streamlit Cloud the app uses the snapshot.
 pyodbc>=5.0
+# ask the data: local SQL engine on the star-schema snapshot + SQL guard
+duckdb>=1.2
+sqlglot>=25

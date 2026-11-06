@@ -73,12 +73,12 @@ wrap.prepend(renderer.domElement);
 const scene = new THREE.Scene();
 scene.environment = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture;
 const camera = new THREE.PerspectiveCamera(30, 1, 0.1, 100);
-camera.position.set(0, 0.2, 10.2);
-camera.lookAt(0, -0.85, 0);
-scene.add(new THREE.HemisphereLight(0xcfe3ff, 0x0a1440, 0.6));
-const key = new THREE.DirectionalLight(0xffffff, 1.6); key.position.set(3, 4, 6); scene.add(key);
-const rim = new THREE.DirectionalLight(0x3d8bff, 3.0); rim.position.set(-4, 2, -5); scene.add(rim);
-const rim2 = new THREE.DirectionalLight(0x48c8ff, 1.8); rim2.position.set(5, -1, -3); scene.add(rim2);
+camera.position.set(0, 0.2, 10.4);
+camera.lookAt(0, -0.78, 0);
+scene.add(new THREE.HemisphereLight(0xffffff, 0xb8c8e8, 0.9));
+const key = new THREE.DirectionalLight(0xffffff, 1.5); key.position.set(3, 5, 6); scene.add(key);
+const rim = new THREE.DirectionalLight(0x6aa8ff, 1.6); rim.position.set(-5, 2, -4); scene.add(rim);
+const rim2 = new THREE.DirectionalLight(0x9fe0ff, 0.9); rim2.position.set(5, 0, -3); scene.add(rim2);
 
 function resize() {
   const w = wrap.clientWidth || 600, h = wrap.clientHeight || 400;
@@ -86,110 +86,90 @@ function resize() {
 }
 window.addEventListener("resize", resize);
 
-// ------------------------------------------------------------------ materials
-const white = new THREE.MeshPhysicalMaterial({ color: 0xeef2fa, roughness: 0.28, clearcoat: 1, clearcoatRoughness: 0.12 });
-const navy = new THREE.MeshPhysicalMaterial({ color: 0x0c1534, roughness: 0.32, metalness: 0.45, clearcoat: 0.6 });
-const visorMat = new THREE.MeshPhysicalMaterial({ color: 0x03050c, roughness: 0.05, metalness: 0.2, clearcoat: 1 });
-const glow = new THREE.MeshStandardMaterial({ color: 0x4fc3ff, emissive: 0x39b4ff, emissiveIntensity: 2.6 });
-const glowSoft = new THREE.MeshStandardMaterial({ color: 0x2e7bff, emissive: 0x2f6dff, emissiveIntensity: 1.6, transparent: true, opacity: .9 });
+// ------------------------------------------------------------------ materials (minimal: one pearl white, one glass, one light)
+const pearl = new THREE.MeshPhysicalMaterial({ color: 0xf6f8fc, roughness: 0.36, clearcoat: 1, clearcoatRoughness: 0.18, sheen: 0.4,
+                                               sheenColor: new THREE.Color(0xdbe8ff), sheenRoughness: 0.6 });
+const glass = new THREE.MeshPhysicalMaterial({ color: 0x050a18, roughness: 0.04, metalness: 0.1, clearcoat: 1, clearcoatRoughness: 0.02,
+                                               reflectivity: 0.6 });
+const seamMat = new THREE.MeshBasicMaterial({ color: 0xc9d6ea });
+const glow = new THREE.MeshStandardMaterial({ color: 0x7fd6ff, emissive: 0x4cc2ff, emissiveIntensity: 2.4, toneMapped: false });
 const M = (geo, mat, parent, pos = [0, 0, 0], scale = [1, 1, 1], rot = [0, 0, 0]) => {
   const m = new THREE.Mesh(geo, mat); m.position.set(...pos); m.scale.set(...scale); m.rotation.set(...rot); parent.add(m); return m;
 };
-function halo(parent, pos, size, color = "rgba(70,180,255,") {   // additive glow sprite (cheap bloom, keeps the background empty)
-  const c = document.createElement("canvas"); c.width = c.height = 128; const g = c.getContext("2d");
-  const r = g.createRadialGradient(64, 64, 0, 64, 64, 64); r.addColorStop(0, color + ".55)"); r.addColorStop(1, color + "0)");
-  g.fillStyle = r; g.fillRect(0, 0, 128, 128);
-  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), blending: THREE.AdditiveBlending, depthWrite: false }));
+function radial(stops, size = 256) {
+  const c = document.createElement("canvas"); c.width = c.height = size; const g = c.getContext("2d");
+  const r = g.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+  stops.forEach(([o, col]) => r.addColorStop(o, col)); g.fillStyle = r; g.fillRect(0, 0, size, size);
+  return new THREE.CanvasTexture(c);
+}
+function halo(parent, pos, size, alpha = .5) {
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: radial([[0, `rgba(70,160,255,${alpha * 0.45})`], [1, "rgba(70,160,255,0)"]]),
+                                                         blending: THREE.NormalBlending, depthWrite: false, transparent: true }));
   s.position.set(...pos); s.scale.set(size, size, 1); parent.add(s); return s;
 }
+// rounded pill for the eyes (a capsule flattened in depth)
+const pill = (w, h) => new THREE.CapsuleGeometry(w / 2, Math.max(0.001, h - w), 8, 24);
 
 // ------------------------------------------------------------------ the robot
 const robot = new THREE.Group(); scene.add(robot);
 const body = new THREE.Group(); robot.add(body);
-// torso
-M(new THREE.SphereGeometry(1, 48, 32), white, body, [0, -1.75, 0], [1.28, 1.12, 0.86]);
-M(new THREE.CylinderGeometry(0.62, 0.75, 0.5, 32), navy, body, [0, -2.85, 0]);
-for (const sx of [-1, 1]) {   // side light strips
-  M(new THREE.TorusGeometry(1.0, 0.025, 8, 40, 0.9), glow, body, [sx * 0.05, -1.85, 0], [1.28, 1.12, 0.86], [0, sx > 0 ? 0.25 : Math.PI - 0.25, -0.55]);
-}
-// chest shield with the Hyson logo
-const shield = new THREE.Shape();
-shield.moveTo(-0.55, 0.42); shield.quadraticCurveTo(0, 0.56, 0.55, 0.42); shield.lineTo(0.5, -0.12);
-shield.quadraticCurveTo(0.35, -0.5, 0, -0.66); shield.quadraticCurveTo(-0.35, -0.5, -0.5, -0.12); shield.closePath();
-const plate = M(new THREE.ExtrudeGeometry(shield, { depth: 0.06, bevelEnabled: true, bevelSize: 0.03, bevelThickness: 0.03, bevelSegments: 3 }),
-                navy, body, [0, -1.48, 0.8], [1, 1, 1], [-0.12, 0, 0]);
-const edge = new THREE.Mesh(new THREE.ShapeGeometry(shield), new THREE.MeshBasicMaterial({ color: 0x3aa8ff, transparent: true, opacity: .35 }));
-edge.scale.set(1.06, 1.06, 1); edge.position.set(0, -1.48, 0.79); edge.rotation.x = -0.12; body.add(edge);
-const logoMat = new THREE.MeshBasicMaterial({ transparent: true, toneMapped: false, color: 0x9fd8ff });
-const logo = M(new THREE.PlaneGeometry(0.78, 0.78), logoMat, body, [0, -1.55, 0.92], [1, 1, 1], [-0.12, 0, 0]);
+// body: a floating egg with one thin seam of light
+const torso = M(new THREE.SphereGeometry(1, 96, 64), pearl, body, [0, -1.72, 0], [0.98, 1.18, 0.9]);
+const seam = M(new THREE.TorusGeometry(1, 0.012, 8, 160), glow, body, [0, -1.52, 0], [0.955, 0.875, 1], [Math.PI / 2 - 0.05, 0, 0]);
+seam.material = new THREE.MeshStandardMaterial({ color: 0x9ddcff, emissive: 0x4cc2ff, emissiveIntensity: 1.2, toneMapped: false, transparent: true, opacity: .75 });
+// small emblem: the Hyson logo on a glass disc
+M(new THREE.CylinderGeometry(0.27, 0.27, 0.03, 64), glass, body, [0, -1.25, 0.86], [1, 1, 1], [Math.PI / 2 - 0.22, 0, 0]);
+const logoMat = new THREE.MeshBasicMaterial({ transparent: true, toneMapped: false, color: 0xa9dcff });
+const logo = M(new THREE.CircleGeometry(0.21, 48), logoMat, body, [0, -1.247, 0.885], [1, 1, 1], [-0.22, 0, 0]);
 logo.visible = false;
 let logoUrl = null;
 function setLogo(url) { logoUrl = url; new THREE.TextureLoader().load(url, (t) => { t.colorSpace = THREE.SRGBColorSpace; logoMat.map = t; logoMat.needsUpdate = true; logo.visible = true; }); }
-halo(body, [0, -1.55, 1.0], 1.3);
-// shoulders + arms
+// floating hands (no arms: cleaner, and they can wave freely)
 const arms = {};
 for (const side of [-1, 1]) {
-  M(new THREE.SphereGeometry(0.46, 32, 24), white, body, [side * 1.33, -1.0, 0]);
-  M(new THREE.TorusGeometry(0.4, 0.03, 8, 40), glow, body, [side * 1.42, -1.0, 0], [1, 1, 1], [0, Math.PI / 2, 0]);
-  const shoulder = new THREE.Group(); shoulder.position.set(side * 1.45, -1.05, 0); body.add(shoulder);
-  M(new THREE.CapsuleGeometry(0.22, 0.6, 8, 16), navy, shoulder, [0, -0.5, 0]);
-  const elbow = new THREE.Group(); elbow.position.set(0, -0.95, 0); shoulder.add(elbow);
-  M(new THREE.SphereGeometry(0.22, 24, 16), navy, elbow);
-  M(new THREE.CapsuleGeometry(0.25, 0.55, 8, 16), white, elbow, [0, -0.45, 0]);
-  const hand = new THREE.Group(); hand.position.set(0, -0.95, 0); elbow.add(hand);
-  M(new THREE.SphereGeometry(0.26, 24, 16), white, hand, [0, -0.08, 0], [1, 0.8, 0.55]);
-  for (let f = 0; f < 4; f++) M(new THREE.CapsuleGeometry(0.055, 0.2, 4, 8), white, hand, [-0.15 + f * 0.1, -0.33, 0.02]);
-  M(new THREE.CapsuleGeometry(0.06, 0.16, 4, 8), white, hand, [side * -0.27, -0.12, 0.05], [1, 1, 1], [0, 0, side * 0.9]);
+  const shoulder = new THREE.Group(); shoulder.position.set(side * 1.22, -1.55, 0.05); body.add(shoulder);
+  const elbow = new THREE.Group(); shoulder.add(elbow);
+  const hand = M(new THREE.SphereGeometry(0.27, 48, 32), pearl, elbow, [0, 0, 0], [0.62, 1.18, 0.62], [0, 0, side * 0.18]);
   arms[side] = { shoulder, elbow, hand };
 }
-// right arm (viewer's left) reaches out, like the poster
 const R = arms[-1];
-R.shoulder.rotation.set(-1.15, 0, -0.35); R.elbow.rotation.set(-0.55, 0, 0.1); R.hand.rotation.set(-0.3, 0, 0);
-arms[1].shoulder.rotation.set(0.1, 0, 0.18); arms[1].elbow.rotation.set(-0.25, 0, 0);
-// neck + head
-M(new THREE.CylinderGeometry(0.3, 0.36, 0.42, 24), navy, body, [0, -0.5, 0]);
-for (const y of [-0.42, -0.58]) M(new THREE.TorusGeometry(0.33, 0.02, 8, 32), glowSoft, body, [0, y, 0], [1, 1, 1], [Math.PI / 2, 0, 0]);
-const head = new THREE.Group(); head.position.set(0, 0.55, 0); body.add(head);
-M(new THREE.SphereGeometry(1, 64, 48), white, head, [0, 0, 0], [1.18, 1.0, 1.02]);
-M(new THREE.TorusGeometry(0.98, 0.04, 10, 64, Math.PI * 0.6), navy, head, [0, 0.05, 0], [1.19, 1.02, 1], [0, Math.PI / 2, 0]);  // crest
-const visor = M(new THREE.SphereGeometry(1, 64, 48), visorMat, head, [0, -0.06, 0.38], [1.0, 0.8, 0.68]);
-// eyes: happy arcs + round "listening" rings, grouped so they can look around
-const eyes = new THREE.Group(); eyes.position.set(0, 0.08, 1.04); head.add(eyes);
+// neck: a soft gap of light (the head floats)
+const neckGlow = halo(body, [0, -0.42, 0], 1.0, .28);
+M(new THREE.CylinderGeometry(0.22, 0.26, 0.12, 48), seamMat, body, [0, -0.47, 0]);
+// head: one smooth rounded shape with a glass face
+const head = new THREE.Group(); head.position.set(0, 0.42, 0); body.add(head);
+M(new THREE.SphereGeometry(1, 96, 64), pearl, head, [0, 0, 0], [1.22, 0.92, 1.0]);
+const face = M(new THREE.SphereGeometry(1, 96, 64), glass, head, [0, -0.02, 0.24], [1.04, 0.72, 0.84]);
+// eyes: two soft pills that blink, squint when happy, become rings when listening
+const eyes = new THREE.Group(); eyes.position.set(0, 0.06, 1.06); head.add(eyes);
 const eye = {};
 for (const side of [-1, 1]) {
-  const g = new THREE.Group(); g.position.set(side * 0.36, 0, 0); eyes.add(g);
-  const arc = M(new THREE.TorusGeometry(0.17, 0.045, 12, 40, Math.PI), glow, g);
-  const ring = M(new THREE.TorusGeometry(0.13, 0.045, 12, 40), glow, g); ring.visible = false;
-  halo(g, [0, 0.05, -0.02], 0.75);
+  const g = new THREE.Group(); g.position.set(side * 0.34, 0, 0); eyes.add(g);
+  const arc = M(pill(0.2, 0.34), glow, g, [0, 0, 0], [1, 1, 0.35]);
+  const ring = M(new THREE.TorusGeometry(0.12, 0.035, 12, 48), glow, g); ring.visible = false;
   eye[side] = { g, arc, ring };
 }
-// mouth: glowing outline + equalizer bars
-const mouth = new THREE.Group(); mouth.position.set(0, -0.42, 0.98); mouth.rotation.x = -0.25; head.add(mouth);
-M(new THREE.TorusGeometry(0.27, 0.03, 10, 48), glow, mouth, [0, 0, 0], [1.45, 0.62, 1]);
+// mouth: five rounded dots that become a small equalizer when Nazar talks
+const mouth = new THREE.Group(); mouth.position.set(0, -0.36, 1.0); mouth.rotation.x = -0.32; head.add(mouth);
 const bars = [];
-for (let i = 0; i < 9; i++) bars.push(M(new THREE.BoxGeometry(0.035, 0.2, 0.02), glow, mouth, [-0.24 + i * 0.06, 0, 0.01]));
-halo(mouth, [0, 0, -0.02], 0.9);
-// headphones, antennas, mic boom
+for (let i = 0; i < 5; i++) bars.push(M(pill(0.05, 0.05), glow, mouth, [-0.16 + i * 0.08, 0, 0], [1, 1, 0.5]));
+// one antenna with a light
 const tips = [];
+const ant = new THREE.Group(); ant.position.set(0, 0.9, -0.05); head.add(ant);
+M(new THREE.CylinderGeometry(0.018, 0.03, 0.34, 16), seamMat, ant, [0, 0.16, 0]);
+tips.push(M(new THREE.SphereGeometry(0.065, 24, 16), glow, ant, [0, 0.36, 0]));
+halo(ant, [0, 0.36, 0], 0.5, .6);
+// ear pods
 for (const side of [-1, 1]) {
-  M(new THREE.CylinderGeometry(0.34, 0.34, 0.26, 32), white, head, [side * 1.14, 0.0, 0], [1, 1, 1], [0, 0, Math.PI / 2]);
-  M(new THREE.CylinderGeometry(0.24, 0.24, 0.1, 32), navy, head, [side * 1.29, 0.0, 0], [1, 1, 1], [0, 0, Math.PI / 2]);
-  M(new THREE.TorusGeometry(0.28, 0.025, 8, 40), glow, head, [side * 1.28, 0.0, 0], [1, 1, 1], [0, Math.PI / 2, 0]);
-  const ant = new THREE.Group(); ant.position.set(side * 1.12, 0.3, -0.05); ant.rotation.z = -side * 0.22; head.add(ant);
-  M(new THREE.CylinderGeometry(0.02, 0.045, 1.05, 12), navy, ant, [0, 0.52, 0]);
-  tips.push(M(new THREE.SphereGeometry(0.06, 16, 12), glow, ant, [0, 1.07, 0]));
+  M(new THREE.SphereGeometry(0.2, 48, 32), pearl, head, [side * 1.2, -0.02, 0], [0.45, 1, 1]);
+  M(new THREE.TorusGeometry(0.13, 0.012, 8, 48), glow, head, [side * 1.29, -0.02, 0], [1, 1, 1], [0, Math.PI / 2, 0]);
 }
-const boom = new THREE.CatmullRomCurve3([new THREE.Vector3(1.25, -0.15, 0.1), new THREE.Vector3(1.12, -0.62, 0.55), new THREE.Vector3(0.62, -0.78, 0.92)]);
-M(new THREE.TubeGeometry(boom, 24, 0.03, 8), navy, head);
-M(new THREE.SphereGeometry(0.07, 16, 12), navy, head, [0.6, -0.79, 0.93]);
-// platform: glowing rings like the poster
+// floor: a soft contact shadow + one faint light ring (no grid, no clutter)
 const base = new THREE.Group(); base.position.y = -3.25; scene.add(base);
-const rings = [];
-for (const [r, o] of [[2.1, .9], [2.6, .5], [3.2, .25]]) {
-  const m = new THREE.MeshBasicMaterial({ color: 0x4cb8ff, transparent: true, opacity: o, toneMapped: false });
-  rings.push(M(new THREE.TorusGeometry(r, 0.018, 8, 96), m, base, [0, 0, 0], [1, 1, 1], [Math.PI / 2, 0, 0]));
-}
-M(new THREE.CircleGeometry(2.1, 64), new THREE.MeshBasicMaterial({ color: 0x2d6bff, transparent: true, opacity: .12 }), base, [0, 0, 0], [1, 1, 1], [-Math.PI / 2, 0, 0]);
+const shadow = M(new THREE.PlaneGeometry(3.6, 3.6), new THREE.MeshBasicMaterial({ map: radial([[0, "rgba(20,45,110,.38)"], [.55, "rgba(20,45,110,.10)"], [1, "rgba(20,45,110,0)"]]),
+                 transparent: true, depthWrite: false }), base, [0, 0, 0], [1, 1, 1], [-Math.PI / 2, 0, 0]);
+const rings = [M(new THREE.TorusGeometry(1.55, 0.008, 8, 160), new THREE.MeshBasicMaterial({ color: 0x6cc4ff, transparent: true, opacity: .55, toneMapped: false }),
+                 base, [0, 0.01, 0], [1, 1, 1], [Math.PI / 2, 0, 0])];
 
 // ------------------------------------------------------------------ behaviour
 let mood = "idle", talkUntil = 0, energy = 0, waveUntil = 0, jumpAt = -9, blinkAt = performance.now() + 2500, blinkStart = -999;
@@ -284,40 +264,46 @@ function loop() {
   look.lerp(target, 0.08);
   // idle float + hop
   const hop = Math.max(0, 1 - (now - jumpAt) / 600);
-  robot.position.y = Math.sin(t * 1.6) * 0.06 + Math.sin(hop * Math.PI) * 0.35;
+  robot.position.y = Math.sin(t * 1.3) * 0.08 + Math.sin(hop * Math.PI) * 0.3;
   robot.rotation.y = look.x * 0.18;
-  head.rotation.y = look.x * 0.42 + Math.sin(t * 0.7) * 0.03;
+  head.rotation.y = look.x * 0.32 + Math.sin(t * 0.7) * 0.03;
   head.rotation.x = -look.y * 0.22 + (mood === "thinking" ? -0.15 : 0);
   head.rotation.z = Math.sin(t * 0.9) * 0.025 + (mood === "listening" ? 0.12 : 0);
-  // eyes follow the cursor + blink
-  eyes.position.x = look.x * 0.13; eyes.position.y = 0.08 + look.y * 0.07 + (mood === "thinking" ? 0.08 : 0);
-  if (now > blinkAt) { blinkStart = now; blinkAt = now + 2500 + Math.random() * 3500; }
-  const b = Math.max(0, 1 - Math.abs(now - blinkStart - 90) / 90);
-  for (const s of [-1, 1]) eye[s].g.scale.y = 1 - Math.min(0.92, b);
-  // mouth bars
+  // eyes follow the cursor + blink; happy squint while talking
+  eyes.position.x = look.x * 0.07; eyes.position.y = 0.06 + look.y * 0.04 + (mood === "thinking" ? 0.06 : 0);
+  if (now > blinkAt) { blinkStart = now; blinkAt = now + 2600 + Math.random() * 3600; }
+  const b = Math.max(0, 1 - Math.abs(now - blinkStart - 80) / 80);
   const talking = mood === "talking" && now < talkUntil;
   if (mood === "talking" && now >= talkUntil) setMood("idle");
+  const squint = talking ? 0.72 : mood === "thinking" ? 0.55 : 1;
+  for (const s of [-1, 1]) eye[s].g.scale.y += ((1 - Math.min(0.94, b)) * squint - eye[s].g.scale.y) * 0.35;
+  // mouth dots → equalizer
   energy = Math.max(0, energy - 0.04);
   bars.forEach((bar, i) => {
-    const mid = 1 - Math.abs(i - 4) / 5;
-    let h = 0.12;
-    if (talking) h = 0.2 + mid * (0.55 + 0.45 * Math.abs(Math.sin(t * 13 + i * 1.7))) * (0.7 + energy * 0.5);
-    else if (mood === "listening") h = 0.15 + 0.12 * Math.abs(Math.sin(t * 6 + i));
-    else if (mood === "thinking") h = 0.12 + 0.18 * Math.max(0, Math.sin(t * 4 - i * 0.6));
-    else h = 0.1 + 0.05 * mid * (1 + Math.sin(t * 2 + i));
-    bar.scale.y += (h / 0.2 - bar.scale.y) * 0.35;
+    const mid = 1 - Math.abs(i - 2) / 3;
+    let h = 1;
+    if (talking) h = 1 + mid * (2.4 + 1.8 * Math.abs(Math.sin(t * 12 + i * 1.9))) * (0.75 + energy * 0.4);
+    else if (mood === "listening") h = 1 + 0.9 * Math.abs(Math.sin(t * 6 + i));
+    else if (mood === "thinking") h = 1 + 1.2 * Math.max(0, Math.sin(t * 4 - i * 0.8));
+    bar.scale.y += (h - bar.scale.y) * 0.3;
   });
-  // arms: reaching hand breathes, waving on greeting
-  const w = now < waveUntil ? Math.sin(t * 9) : 0;
-  R.shoulder.rotation.x = -1.15 + Math.sin(t * 1.3) * 0.04 - (now < waveUntil ? 0.9 : 0);
-  R.shoulder.rotation.z = -0.35 - (now < waveUntil ? 0.5 : 0);
-  R.elbow.rotation.z = 0.1 + w * 0.55;
-  arms[1].shoulder.rotation.z = 0.18 + Math.sin(t * 1.1) * 0.03;
-  // glow pulses
-  const pulse = 2.2 + Math.sin(t * 3) * 0.6 + (mood === "listening" ? 1.5 : 0);
-  glow.emissiveIntensity = pulse;
-  tips.forEach((m, i) => m.scale.setScalar(1 + 0.25 * Math.sin(t * 5 + i * 2) + (mood === "listening" ? 0.5 : 0)));
-  rings.forEach((m, i) => { m.rotation.z = t * (0.2 + i * 0.1) * (i % 2 ? -1 : 1); m.material.opacity = [.9, .5, .25][i] * (0.75 + 0.25 * Math.sin(t * 2 + i)); });
+  // floating hands: gentle bob, the left one waves on greeting
+  const waving = now < waveUntil;
+  for (const s of [-1, 1]) {
+    const a = arms[s];
+    a.shoulder.position.y = -1.55 + Math.sin(t * 1.8 + s) * 0.05;
+    a.shoulder.position.x = s * (1.22 + (talking ? 0.04 * Math.sin(t * 5 + s) : 0));
+  }
+  R.shoulder.position.y += waving ? 0.85 : 0;
+  R.shoulder.position.x += waving ? -0.15 : 0;
+  R.elbow.rotation.z = waving ? Math.sin(t * 10) * 0.55 : R.elbow.rotation.z * 0.9;
+  // light breathes; brighter when listening
+  glow.emissiveIntensity = 2.1 + Math.sin(t * 2.4) * 0.35 + (mood === "listening" ? 1.2 : 0);
+  seam.material.opacity = 0.55 + 0.25 * Math.sin(t * 1.6);
+  neckGlow.material.opacity = 0.7 + 0.3 * Math.sin(t * 2);
+  tips.forEach((m) => m.scale.setScalar(1 + 0.18 * Math.sin(t * 4) + (mood === "listening" ? 0.4 : 0)));
+  shadow.scale.setScalar(1 - (robot.position.y) * 0.25);
+  rings[0].material.opacity = 0.35 + 0.2 * Math.sin(t * 1.4);
   renderer.render(scene, camera);
 }
 setMood("idle"); resize(); loop();

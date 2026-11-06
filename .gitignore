@@ -5,6 +5,7 @@
 # runtime logs and analyst decisions stay local
 *.parquet
 !app/data/*.parquet
+!app/data/star/*.parquet
 app/data/copilot_log*.jsonl
 app/data/decisions.csv
 *.zip
@@ -44,3 +45,5 @@ app/data/agent_log.jsonl
 
 # reference image for the 3D robot (local only)
 /nazar.png
+app/data/askdata_log.jsonl
+fabric/backups/

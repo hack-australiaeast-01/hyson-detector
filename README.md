@@ -78,11 +78,19 @@ Live link: **https://hyson-detector.streamlit.app**
 - Azure OpenAI: paste the values of [`app/.streamlit/secrets.toml.example`](app/.streamlit/secrets.toml.example) into the app's **Settings → Secrets** (never in Git). Without a key, the demo cases are answered from the pre-computed gpt-5-mini cache and other questions use offline mode.
 - Decisions recorded on the hosted app stay in its container (not written to OneLake).
 
+## Data: bronze → quality → silver → gold → star schema (notebook `05_quality_star`)
+
+- **Bronze** = raw tables loaded by the copy job; each run is logged in `bronze_ingestion_log` (rows, columns, schema fingerprint).
+- **Row-by-row quality**: 41 documented rules (`dq_rules`, ERROR / WARNING) run on **every row** of the 5 bronze tables (3.4 M records). Each failure is a row of `dq_issues` (table, record, rule, column, value, message); each record gets `OK` / `WARNING` / `REJECTED` in `dq_row_status`; rejected rows go to `quarantine_<table>`; `dq_summary` gives the rate per rule. Result: **0 rejected** (no duplicate, orphan key, impossible code, inconsistent status…), 11,756 warnings (39 amounts > 50,000 TND, 11,717 card-present operations without a place).
+- **Star schema** (gold, for analysis in natural language): `fact_transactions` (1.9 M, with the model's score / alert and `fraude_signalee` for the labelled period only) + `fact_digital_events` (782 k) and the dimensions `dim_date` (holidays, payday, model period), `dim_heure`, `dim_geo` (city → governorate → region, country), `dim_client` (age band, segment, residence, KYC risk; no gender), `dim_merchant`, `dim_channel`, `dim_card`. Reconciled in the notebook: bronze = accepted + quarantined, no missing key, no duplicate, no test label.
+- Snapshot for the hosted app: `python app/export_star.py` → `app/data/star/*.parquet` (30 MB). Deploy a notebook: `python fabric/deploy_notebook.py notebooks/05_quality_star.ipynb --run` (backs up the current definition first).
+
 ## Pages
 
-The app is branded **Hyson Detector** (light, bank-platform theme; FR/EN). The sidebar groups the 15 pages as *Bienvenue · Analyste · Enquête IA · Pilotage · Données*, plus one-click demo cases.
+The app is branded **Hyson Detector** (light, bank-platform theme; FR/EN). The sidebar groups the 16 pages as *Assistant · Analyste · Enquête IA · Pilotage · Données · Démo (optionnel)*; demo cases and system info are folded away.
 
-0. **Démarrer ici** (guide): headline KPIs and an 8-step guided tour for a first-time user (welcome dialog on first visit, a hint on each page).
+00. **Assistant IA** (`assistant.py` + `askdata.py`, the first page): one question box in the middle, like a chat assistant, on a soft blue aura. Any question in natural language (French, English, derja) → Azure OpenAI writes **one SQL query on the star schema** → the query is parsed and checked (`sqlglot`: a single SELECT, only the 9 star tables, no file / function / external access, 1,000-row cap) → run on the Fabric SQL endpoint (live; read-only by design) or DuckDB on the committed snapshot → short summary of the returned rows only (numbers copied, never computed by the AI), automatic chart (KPI, line, bars, map), the table, the SQL and follow-up questions. A question about one transaction (TX…) goes to the fraud copilot. Offline (no key) a rule-based translator handles count / sum / average · by dimension · filters, and the suggested questions are pre-computed.
+0. **Visite guidée** (demo, optional): headline KPIs and an 8-step guided tour for a first-time user (welcome dialog on first visit, a hint on each page).
 1. **File d'alertes** (alert queue): filters on period, date, channel, risk level and fraud type; risk colours; alerts per day.
 2. **Fiche transaction + copilote** (transaction view): score, risk factors (observed vs usual value), reassuring factors, decision with confidence and comment, and the chat with suggested questions (brief §9.7).
 3. **Vue client 360** (customer view): profile, habits, timeline of transactions and digital events, and a map when coordinates were exported.
@@ -106,7 +114,7 @@ The transaction page also has a stopwatch (alert opened → decision saved, stor
 
 ```powershell
 pip install -r requirements.txt pytest
-python -m pytest -q        # 94 tests, ~60 s, offline (snapshot), no Fabric / Azure OpenAI call
+python -m pytest -q        # 115 tests, ~3 min, offline (snapshot), no Fabric / Azure OpenAI call
 ```
 
 `tests/` checks: no test labels anywhere, 1 % alert budget, documented KPIs (117 / 3,221 vs 718 / 1,061), decision-rule bands, calibration of the measured fraud rate, habits computed on the past only, related cases count only frauds reported before, person search on approved filters, the hash-chained audit trail, explanations a banker can trust (habits verdict computed, risky-looking model factors never shown as reassuring), the Nazar agent (command parsing, decisions only after confirmation, logging), submission format, no secret in tracked files, copilot guardrails (unknown ID, decision, intents, demo calendar) and every page rendering in FR and EN. GitHub Actions runs them on every push. The copilot's answers themselves are evaluated by `app/eval_copilot.py` (18 golden questions, [report](docs/COPILOT_EVAL.md)).
