@@ -270,11 +270,19 @@ def page_onboarding(c, mode):
 
     # ---- 2. profile
     ui.section(L("2 · Profil de la source", "2 · Source profile"))
+    def _examples(x):
+        s = df[x].dropna()
+        if s.nunique() <= 20:
+            return ", ".join(map(str, s.astype(str).unique()[:3]))
+        num = pd.to_numeric(s, errors="coerce")
+        if pd.api.types.is_numeric_dtype(df[x]) or num.notna().mean() > 0.95:   # amounts: show the range, not values
+            return f"min {num.min():,.2f} · médiane {num.median():,.2f} · max {num.max():,.2f}".replace(",", " ")
+        return L("(masqué : identifiant / valeur libre)", "(masked: identifier / free value)")
+
     prof = pd.DataFrame({"column": df.columns, "type": [str(t) for t in df.dtypes],
                          "empty": [float(df[x].isna().mean() + (df[x].astype(str).str.strip() == "").mean()) for x in df.columns],
                          "distinct": [int(df[x].nunique()) for x in df.columns],
-                         "examples": [", ".join(map(str, df[x].dropna().astype(str).unique()[:3])) if df[x].nunique() <= 20
-                                      else L("(masqué : identifiant / valeur libre)", "(masked: identifier / free value)") for x in df.columns]})
+                         "examples": [_examples(x) for x in df.columns]})
     a, b, c3 = st.columns(3)
     a.metric(L("Lignes", "Rows"), f"{len(df):,}".replace(",", " "))
     b.metric(L("Colonnes", "Columns"), len(df.columns))
