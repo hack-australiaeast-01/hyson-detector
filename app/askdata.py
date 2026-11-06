@@ -76,6 +76,9 @@ Règles
 - Fraudes : fraude_signalee = 1 (seulement jusqu'au 2026-07-31) ; alertes du modèle : alerte_modele = TRUE.
 - Arrondis les montants à 3 décimales (TND), les pourcentages à 1 décimale. Nomme les colonnes en français lisible (snake_case).
 - Classements : ORDER BY ... DESC LIMIT n (n demandé, sinon 10). Listes détaillées : LIMIT 50 maximum.
+- Vie privée : jamais d'identifiant de personne (customer_id, card_id, beneficiaire_id, appareil_id, *_key) dans le SELECT final,
+  jamais de ligne par client : les données clients seulement en agrégats (COUNT(DISTINCT ...), AVG, SUM). Une demande sur UN client
+  nommé ou identifié → intent = "out_of_scope" (cela se fait dans la Vue client 360, accès tracé).
 - « Combien / how many / quel total » sans « par … » ni « évolution » : UNE ligne de total (pas de regroupement par date).
   Regroupe seulement si la question le demande (« par ville », « évolution », « compare », « top »). Évolution : dim_date.annee_mois.
 - Fraude ≠ alerte : un taux de fraude = SUM(fraude_signalee) / COUNT(*) sur les lignes WHERE fraude_signalee IS NOT NULL (période
@@ -83,9 +86,10 @@ Règles
 - Ajoute un dénominateur utile quand tu donnes un taux (nb total), jamais de colonne technique (keys).
 - Si la question porte sur UNE transaction (TX…) ou demande pourquoi une alerte est suspecte : intent = "alert", sql = null.
 - Si la question n'a rien à voir avec les données de la banque : intent = "out_of_scope", sql = null.
+- Si elle demande des personnes identifiées (liste de clients, un client nommé ou identifié, revenu d'une personne) : intent = "personal", sql = null.
 
 Réponds UNIQUEMENT en JSON :
-{"intent": "data" | "alert" | "out_of_scope", "understood": "<ce que tu as compris, 1 phrase courte en mots métier, SANS nom de table ni de colonne, langue de l'utilisateur>",
+{"intent": "data" | "alert" | "personal" | "out_of_scope", "understood": "<ce que tu as compris, 1 phrase courte en mots métier, SANS nom de table ni de colonne, langue de l'utilisateur>",
  "sql": "<requête>" | null, "chart": {"type": "bar" | "line" | "pie" | "map" | "kpi" | "table", "x": "<colonne>", "y": "<colonne>"},
  "title": "<titre court>"}
 
@@ -153,6 +157,7 @@ def guard(sql, max_rows=MAX_ROWS):
         name = (f.name if isinstance(f, exp.Anonymous) else f.sql_name()).lower()
         if re.match(r"(read_|glob|getenv|current_setting|load|install|query|sql_|system|pg_|duckdb_|http|s3)", name):
             raise Rejected(f"fonction non autorisée : {name}")
+    _privacy(t)
     lim = t.args.get("limit")
     n = None
     if lim is not None:
@@ -163,6 +168,31 @@ def guard(sql, max_rows=MAX_ROWS):
     if n is None or n > max_rows:
         t = t.limit(max_rows)
     return t.sql(dialect="duckdb")
+
+
+IDENTIFIERS = {"customer_id", "card_id", "beneficiaire_id", "appareil_id", "event_id", "client_key", "card_key"}
+K_MIN = 5          # smallest group of customers that may be shown (k-anonymity)
+
+
+def _privacy(t):
+    """Personal data only in aggregates (data minimisation, Tunisian law 2004-63 / GDPR art. 5): no direct identifier in the output,
+    no row-level customer data, and groups of customers smaller than K_MIN are suppressed."""
+    from sqlglot import exp
+    outer = t if isinstance(t, exp.Select) else t.find(exp.Select)
+    agg = (exp.AggFunc,)
+    for e in outer.expressions:
+        bare = [c for c in e.find_all(exp.Column) if c.name.lower() in IDENTIFIERS and not c.find_ancestor(*agg)]
+        if bare or (isinstance(e, exp.Star) or (isinstance(e, exp.Column) and isinstance(e.this, exp.Star))):
+            raise Rejected("identifiants personnels non restitués ici (seulement en agrégats) — pour un client précis : Vue client 360, accès tracé")
+    tables = {tb.name.lower(): (tb.alias_or_name) for tb in t.find_all(exp.Table)}
+    if "dim_client" in tables:
+        grouped = bool(outer.args.get("group"))
+        aggregated = grouped or any(e.find(*agg) for e in outer.expressions)
+        if not aggregated:
+            raise Rejected("les données clients ne sont restituées qu'en agrégats (comptes, moyennes) — pour un client précis : Vue client 360")
+        alias = tables["dim_client"]
+        if grouped and any(tb.alias_or_name == alias for tb in outer.find_all(exp.Table) if tb.find_ancestor(exp.Select) is outer):
+            outer.having(f"COUNT(DISTINCT {alias}.client_key) >= {K_MIN}", append=True, copy=False)
 
 
 # ---------------------------------------------------------------- execution
@@ -233,6 +263,8 @@ def _n(s):
 
 
 TX_ID = re.compile(r"\bTX\d{6,}\b", re.I)
+PERSONAL = re.compile(r"\b(liste|list|noms?|names?|qui sont|who are)\b.{0,30}\b(clients?|customers?|personnes?|people)\b|\bC\d{6}\b|"
+                      r"revenu (de|du) client|income of", re.I)
 CITIES = ["Tunis", "Ariana", "Ben Arous", "Manouba", "Nabeul", "Zaghouan", "Bizerte", "Beja", "Jendouba", "Kef", "Siliana", "Sousse",
           "Monastir", "Mahdia", "Sfax", "Kairouan", "Kasserine", "Sidi Bouzid", "Gabes", "Medenine", "Tataouine", "Gafsa", "Tozeur", "Kebili"]
 MONTHS = {"janvier": 1, "january": 1, "fevrier": 2, "february": 2, "mars": 3, "march": 3, "avril": 4, "april": 4, "mai": 5, "may": 5,
@@ -263,6 +295,8 @@ def rule_translate(question):
     q = _n(question)
     if TX_ID.search(question):
         return {"intent": "alert", "understood": "Question sur une transaction précise.", "sql": None}
+    if PERSONAL.search(q):
+        return {"intent": "personal", "understood": "", "sql": None}
     joins, where, understood = set(), [], []
     if re.search(r"\bmontant moyen|moyenne|average|panier moyen", q):
         measure, label = "ROUND(AVG(f.montant_tnd), 3)", "montant_moyen_tnd"
@@ -301,6 +335,8 @@ def rule_translate(question):
             joins.add("date"); where.append(f"d.mois = {month}")
         if year:
             joins.add("date"); where.append(f"d.annee = {year.group(1)}")
+    if not (group or where or label != "nb_transactions" or re.search(r"\bcombien|how many|nombre|total|count", q)):
+        return {"intent": "unclear", "understood": "", "sql": None}
     top = re.search(r"\btop ?(\d{1,2})\b|\b(\d{1,2}) (premiers|premieres|first|plus|most)\b", q)
     if group:
         joins.add(group[2]) if group[2] else None
@@ -365,7 +401,7 @@ def _log(rec):
 
 
 # ---------------------------------------------------------------- main entry
-def ask(question, lang="fr", history=None):
+def ask(question, lang="fr", history=None, analyst=None):
     """Returns {intent, understood, sql, engine, df, chart, title, summary, followups, tokens, latency_s, mode, error?}."""
     t0 = time.time()
     question = (question or "").strip()[:500]
@@ -392,7 +428,7 @@ def ask(question, lang="fr", history=None):
                chart=plan.get("chart") or {}, mode=mode)
     if out["intent"] != "data" or not plan.get("sql"):
         out["latency_s"] = round(time.time() - t0, 2)
-        _log({"ts": datetime.now(), "question": question, "intent": out["intent"], "mode": mode, "tokens": tokens})
+        _log({"ts": datetime.now(), "analyst": analyst, "question": question, "intent": out["intent"], "mode": mode, "tokens": tokens})
         return out
     sql = plan["sql"]
     try:
@@ -412,7 +448,7 @@ def ask(question, lang="fr", history=None):
             df = None
         if df is None:
             out.update(sql=sql, error=str(exc)[:300], latency_s=round(time.time() - t0, 2), tokens=tokens)
-            _log({"ts": datetime.now(), "question": question, "sql": sql, "error": str(exc)[:300], "mode": mode, "tokens": tokens})
+            _log({"ts": datetime.now(), "analyst": analyst, "question": question, "sql": sql, "error": str(exc)[:300], "mode": mode, "tokens": tokens})
             return out
     df = df.convert_dtypes(dtype_backend="numpy_nullable") if len(df.columns) else df
     out.update(sql=guard(sql), engine=engine, df=df)
@@ -443,7 +479,7 @@ def ask(question, lang="fr", history=None):
             CACHE_FILE.write_text(json.dumps(_cache, ensure_ascii=False), encoding="utf-8")
         except OSError:
             pass
-    _log({"ts": datetime.now(), "question": question, "intent": out["intent"], "sql": out["sql"], "engine": engine, "rows": int(len(df)),
+    _log({"ts": datetime.now(), "analyst": analyst, "question": question, "intent": out["intent"], "sql": out["sql"], "engine": engine, "rows": int(len(df)),
           "mode": mode, "cached": bool(cached), "tokens": tokens, "latency_s": out["latency_s"]})
     return out
 

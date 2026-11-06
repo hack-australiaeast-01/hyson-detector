@@ -109,6 +109,22 @@ def _render(ctx, i, msg):
             st.rerun()
         st.caption(r.get("meta", ""))
         return
+    if r.get("intent") == "personal":
+        st.markdown(L("Ici, les données des clients ne sont restituées qu'en **agrégats** (comptes, moyennes, groupes d'au moins 5 clients) : "
+                      "minimisation des données personnelles (loi tunisienne 2004-63, RGPD). Pour un client précis, ouvrez la **Vue client 360** "
+                      "(accès tracé). Exemple : *revenu moyen des clients retraités par gouvernorat*.",
+                      "Here, customer data is only returned as **aggregates** (counts, averages, groups of at least 5 customers): personal data "
+                      "minimisation (Tunisian law 2004-63, GDPR). For one customer, open **Customer 360** (logged access). Example: *average income "
+                      "of retired customers by governorate*."))
+        return
+    if r.get("intent") == "unclear":
+        st.markdown(L("Sans connexion à l'IA, je comprends les questions du type **combien / montant total / montant moyen / fraudes / alertes**, "
+                      "avec un lieu (*à Sfax*), une période (*en août 2026*, *hier*), un canal (*en ligne*, *DAB*) et un regroupement (*par mois*, "
+                      "*par ville*, *par catégorie*). Reformulez, ou choisissez une suggestion.",
+                      "Without the AI connection I understand **how many / total amount / average amount / frauds / alerts**, with a place "
+                      "(*in Sfax*), a period (*in August 2026*, *yesterday*), a channel (*online*, *ATM*) and a grouping (*by month*, *by city*, "
+                      "*by category*). Rephrase, or pick a suggestion."))
+        return
     if r.get("intent") == "out_of_scope":
         st.markdown(L("Je réponds aux questions sur les données de la banque : transactions, clients, lieux, commerçants, canaux, "
                       "fraudes et alertes. Essayez par exemple : *combien de retraits à Sfax en août ?*",
@@ -151,7 +167,7 @@ def _answer(ctx, question, history):
         out = copilot.ask(question, context_tx=tid, lang=lang)
         return {"kind": "copilot", "tid": tid, "answer": out["answer"],
                 "meta": f"{L('Copilote fraude', 'Fraud copilot')} · {out['mode']} · {out['tokens']['total']} tokens"}
-    r = askdata.ask(question, lang, history)
+    r = askdata.ask(question, lang, history, analyst=st.session_state.get("analyst"))
     if r.get("intent") == "alert":
         t = askdata.TX_ID.search(question)
         tid = t.group(0).upper() if t else st.session_state.get("tx")

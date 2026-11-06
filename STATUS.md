@@ -14,7 +14,7 @@ Sections 1–6 = **current state** (kept up to date). Section 7 = **work log** (
 | Data pipeline on Fabric | ✅ | Lakehouse `lh_fraud`, notebooks 01 · 02 · 03e · 04, pipeline `pl_hyson_retrain`, MLflow model `hyson-fraud-lightgbm` |
 | Validation vs current rules | ✅ | Top 1 %: 718 frauds vs 117, 1,061 false alerts vs 3,221 · backtest 69.4 % ± 2.1 recall over 4 periods |
 | Technical walkthrough | ✅ | `docs/ARCHITECTURE.md`, `docs/MODEL_CARD.md`, `docs/AUDIT_AND_BANK_INTEGRATION.md`, `README.md`, `JURY_HANDBOOK.md` |
-| Automated tests | ✅ | 115 pytest tests (`tests/`, offline, ~3 min: 30 page renders FR/EN, data/model, guardrails, **audit trail**, **Nazar agent**, **explanations**) run by GitHub Actions on every push |
+| Automated tests | ✅ | 128 pytest tests (`tests/`, offline, ~2 min: 30 page renders FR/EN, data/model, guardrails, **audit trail**, **Nazar agent**, **explanations**) run by GitHub Actions on every push |
 | Usage of GitHub Copilot | ✅ | `docs/AI_TOOLS_USAGE.md`: 12 real uses with commit + screenshot (`docs/copilot_evidence/`), 30/30 commits co-authored by Copilot, ≈ 7 person-days in ≈ 11 h (estimate), 30-second pitch script |
 | GitHub repo | ✅ | Code, Fabric notebooks (exported with outputs), `requirements.txt` (root + `app/`), README, tests + CI, no secret in files or history |
 | Score file (optional, brief §14) | ✅ | `submission/submission.csv` (187,628 rows, 1,876 alerts) |
@@ -528,3 +528,21 @@ Still open (team): Azure key in Streamlit Secrets, slides, rehearsal + backup vi
 - **Robot redesigned (minimal):** one pearl-white body, glass face with two soft pill eyes, five-dot mouth that becomes an equalizer, one antenna, floating hands, soft floor shadow; no arms / headphones / rings clutter.
 - **Checks:** 115/115 tests offline; browser: landing, 3 questions live (KPI, line chart, TX → copilot), 0 exceptions.
 - **Limits:** answers take 8–30 s live (two reasoning calls); summaries can still be a bit wordy; the snapshot adds 30 MB to the repo; on the public app only the 12 suggestions use AI (no key), other questions use the rule translator.
+
+### 7.21 Self-review (technical + legal) and personal context — the bank CEO's case (2026-11-06 12:45 → 14:00)
+**Self-review of 7.20 before reboot:**
+| Finding | Risk | Fix |
+|---|---|---|
+| The AI assistant could list identified customers with their income (`SELECT customer_id, revenu…`) and send those rows to Azure OpenAI for the summary | Data minimisation (law 2004-63, GDPR art. 5) | Guard: no identifier (customer / card / beneficiary / device / keys) in the output, customer data only aggregated, groups < 5 customers suppressed (`HAVING COUNT(DISTINCT client_key) >= 5` added automatically); prompt classifies "liste des clients…" as personal → refused with a pointer to Customer 360 (tested live and offline) |
+| `askdata_log.jsonl` did not record who asked | Audit trail | Analyst name logged with every question |
+| Offline, an unknown question returned the total of all transactions | Misleading answer | Offline translator now says what it understands and refuses personal listings |
+| `SELECT *` on the fact table would expose client / card keys | Same as above | Rejected (test) |
+| Fabric SQL endpoint collation is case / accent sensitive | 0 rows on "Béja" | Already handled: 0 rows → DuckDB snapshot with accent-insensitive comparisons |
+
+**Personal context** (`context.py`, `ctxpage.py`, `build_context.py`; page *Contexte personnel* + a line on the transaction page): 4,138 payments abroad in 2026 (fit on 2025: 6,599 operations, 640 frauds). ROC-AUC 0.858, PR-AUC 0.446 (base rate 8.1%).
+- Bands: coherent 1,577 ops / 1.1% fraud · to confirm 2,107 / 6.0% · hardly consistent 454 / 42%.
+- The coherent band holds 1,559 of the 3,802 false alerts of the current rules abroad (calls avoidable) for 18 of 336 frauds; June–July: 48 of the model's 191 false alerts abroad read coherent.
+- Guardrails: one direction per signal (measured weights that contradicted common sense on this synthetic data — "has travelled before" adds risk, "frequent destination for his profile" adds risk — are ignored); an amount never reassures (the data said a high amount abroad is ÷9 risk: artefact); out-of-pattern amount ≥ ×3 (policy, 47 cases); phone on site ±1.2 and travel notice −2.5 are policy weights, labelled as such.
+- Domestic "unusual city": every physical payment in Tunisia happens in the home city in this data → engine ready, weights to be measured on the bank's real data.
+- CEO's cases on C000308 (81, retired, Sfax): yacht 48,000 TND in Italy 5 h after a payment in Tunisia → *Peu cohérent*; first stay in Saudi Arabia → *À confirmer* (polite check), after a declared travel notice → *Voyage cohérent* (notification only); sample feed from another bank: Milan 1 h after Saudi Arabia → impossible travel. The AI explanation, stress-tested with "La Mecque" / "Mecca" / "Médine", never mentions religion, pilgrimage or family.
+- Checks: 128/128 tests offline (13 new); browser on live Fabric and in public mode (peak 397 MB, 0 exceptions).

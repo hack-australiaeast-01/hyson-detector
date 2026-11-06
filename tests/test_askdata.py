@@ -16,8 +16,10 @@ def test_guard_rejects_anything_but_one_select_on_the_star_schema(sql):
 
 
 def test_guard_caps_rows_and_keeps_ctes():
-    assert askdata.guard("SELECT * FROM fact_transactions").endswith("LIMIT 1000")
-    assert "LIMIT 5" in askdata.guard("WITH x AS (SELECT * FROM dim_geo) SELECT * FROM x LIMIT 5")
+    assert askdata.guard("SELECT transaction_id, montant_tnd FROM fact_transactions").endswith("LIMIT 1000")
+    assert "LIMIT 5" in askdata.guard("WITH x AS (SELECT ville, region FROM dim_geo) SELECT ville FROM x LIMIT 5")
+    with pytest.raises(askdata.Rejected):                      # SELECT * would expose client / card keys
+        askdata.guard("SELECT * FROM fact_transactions")
 
 
 def test_engine_cannot_read_files_even_without_the_guard():
@@ -55,3 +57,9 @@ def test_fraud_labels_never_exist_for_the_test_period():
 def test_question_language():
     assert askdata.question_lang("which customer segment has the highest decline rate?") == "en"
     assert askdata.question_lang("combien de clients premium à Sousse ?") == "fr"
+
+
+def test_offline_refuses_individual_requests_and_admits_when_it_does_not_understand():
+    assert askdata.rule_translate("liste des clients avec leur revenu")["intent"] == "personal"
+    assert askdata.rule_translate("quel est le revenu de C000308")["intent"] == "personal"
+    assert askdata.rule_translate("bonjour ça va")["intent"] == "unclear"

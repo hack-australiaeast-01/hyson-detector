@@ -34,6 +34,8 @@ _secrets_to_env()
 
 import copilot  # noqa: E402  (after the secrets bridge on purpose)
 import assistant
+import context
+import ctxpage
 import data_access as da
 import deepsearch
 import fairness
@@ -59,10 +61,10 @@ def L(fr, en):
 
 
 # internal page ids (stable across languages) -> labels, grouped like a banking platform menu
-PAGES = ["assist", "guide", "queue", "tx", "cust", "deep", "proces", "replay", "contre", "galaxy", "impact", "market", "perf", "pbi", "journal", "onboard"]
+PAGES = ["assist", "guide", "queue", "tx", "cust", "context", "deep", "proces", "replay", "contre", "galaxy", "impact", "market", "perf", "pbi", "journal", "onboard"]
 PAGE_LABEL = {"assist": ("Assistant IA", "AI assistant"), "guide": ("Visite guidée (démo)", "Guided tour (demo)"),
               "queue": ("File d'alertes", "Alert queue"), "tx": ("Fiche transaction & copilote", "Transaction & copilot"),
-              "cust": ("Vue client 360", "Customer 360"),
+              "cust": ("Vue client 360", "Customer 360"), "context": ("Contexte personnel", "Personal context"),
               "deep": ("Enquête approfondie", "Deep search"),
               "proces": ("Le Procès", "The Trial"), "replay": ("Reconstitution", "Crime-scene replay"),
               "contre": ("Contre-enquête", "Counter-inquiry"), "galaxy": ("Réseau de compromission", "Compromise network"),
@@ -71,12 +73,12 @@ PAGE_LABEL = {"assist": ("Assistant IA", "AI assistant"), "guide": ("Visite guid
               "journal": ("Journal & traçabilité", "Audit log"), "pbi": ("Tableau de bord Power BI", "Power BI dashboard"),
               "onboard": ("Nouvelle source de données", "New data source")}
 PAGE_ICON = {"assist": ":material/auto_awesome:", "guide": ":material/flag:", "queue": ":material/notifications_active:", "tx": ":material/manage_search:",
-             "cust": ":material/person:", "deep": ":material/troubleshoot:", "proces": ":material/gavel:", "replay": ":material/movie:",
+             "cust": ":material/person:", "context": ":material/flight_takeoff:", "deep": ":material/troubleshoot:", "proces": ":material/gavel:", "replay": ":material/movie:",
              "contre": ":material/alt_route:", "galaxy": ":material/hub:", "impact": ":material/insights:", "market": ":material/public:",
              "perf": ":material/monitoring:", "pbi": ":material/dashboard:", "journal": ":material/fact_check:",
              "onboard": ":material/upload_file:"}
 NAV_GROUPS = [(("Assistant", "Assistant"), ["assist"]),
-              (("Analyste", "Analyst"), ["queue", "tx", "cust"]),
+              (("Analyste", "Analyst"), ["queue", "tx", "cust", "context"]),
               (("Enquête IA", "AI investigation"), ["deep", "proces", "replay", "contre", "galaxy"]),
               (("Pilotage", "Steering"), ["impact", "market", "perf", "pbi", "journal"]),
               (("Données", "Data"), ["onboard"]),
@@ -405,6 +407,17 @@ def page_transaction():
                       f"**System recommendation: {dec_en[rs['decision']]}** ({conf_en[rs['confiance']]} confidence){prec_txt} "
                       f"— the analyst decides."), icon=":material/rule:")
 
+        if str(tx.get("country")) != "TN" and tx.get("channel") in context.PHYSICAL:      # personal context (abroad)
+            cr = context.assess(r.to_dict(), r.customer_id, lang=st.session_state.get("lang", "fr"))
+            if cr.get("score"):
+                lab, col = next(((fr if st.session_state.get("lang") != "en" else en), c) for k, fr, en, c in context.BANDS if k == cr["score"]["band"])
+                pro, con = context.evidence(cr, st.session_state.get("lang", "fr"))
+                top = (con[:1] + pro[:1]) if cr["score"]["band"] != "coherent" else (pro[:1] + con[:1])
+                cc1, cc2 = st.columns([4, 1.2], vertical_alignment="center")
+                cc1.markdown(f'<div class="factor"><span class="dot" style="background:{col}"></span><div><b>{L("Contexte personnel", "Personal context")} : '
+                             f'<span style="color:{col}">{ui.esc(lab)}</span></b> · {ui.esc(cr["place_label"])}<br><small>'
+                             + " · ".join(ui.esc(x["text"]) for x in top) + '</small></div></div>', unsafe_allow_html=True)
+                cc2.button(L("Détail", "Details"), on_click=open_tx, args=(tid, "context"), key=f"ctx_go_{tid}", width="stretch")
         with st.form(f"decision_{tid}", clear_on_submit=True):
             st.markdown(f"**{L('Décision de l’analyste', 'Analyst decision')}**")
             d1, d2 = st.columns(2)
@@ -886,7 +899,7 @@ if st.session_state.pop("open_welcome", False):              # the tour is optio
 elif st.session_state.pop("nazar_open", False):                 # one dialog at a time
     nazar.panel(ctx)
 studio.tour_hint(ctx, page)
-{"assist": lambda: assistant.page_assistant(ctx), "guide": lambda: studio.page_guide(ctx), "queue": page_queue, "tx": page_transaction, "cust": page_customer,
+{"assist": lambda: assistant.page_assistant(ctx), "guide": lambda: studio.page_guide(ctx), "queue": page_queue, "tx": page_transaction, "cust": page_customer, "context": lambda: ctxpage.page_context(ctx),
  "deep": lambda: studio.page_deep(ctx), "proces": lambda: studio.page_proces(ctx), "replay": lambda: studio.page_replay(ctx), "contre": lambda: studio.page_contre(ctx),
  "galaxy": lambda: studio.page_galaxy(ctx), "impact": lambda: studio.page_impact(ctx),
  "market": lambda: market.page_market(ctx, src.mode), "perf": page_performance,

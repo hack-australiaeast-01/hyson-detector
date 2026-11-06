@@ -47,3 +47,7 @@ app/data/agent_log.jsonl
 /nazar.png
 app/data/askdata_log.jsonl
 fabric/backups/
+app/data/travel_notices.csv
+app/data/feat_ctx_signals.parquet
+app/data/feat_ctx_eval.parquet
+app/data/feat_ctx_model_valid.parquet

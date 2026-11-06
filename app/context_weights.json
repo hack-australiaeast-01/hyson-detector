@@ -1,0 +1,105 @@
+{
+ "abroad": {
+  "prior": -2.231,
+  "lr": {
+   "visite_lieu": {
+    "non": 0.011,
+    "oui": -0.776
+   },
+   "deja_ailleurs": {
+    "non": 0.0,
+    "oui": 0.0
+   },
+   "preparation": {
+    "oui": -0.056,
+    "non": 0.171
+   },
+   "sejour": {
+    "debut": 0.814,
+    "en_cours": -0.24
+   },
+   "absence": {
+    "moins_24h": 1.454,
+    "1_7j": -0.362,
+    "plus_7j": -1.327,
+    "impossible": 1.63
+   },
+   "mode": {
+    "MAGSTRIPE": 0.392,
+    "CHIP": 0.097,
+    "SANS_CONTACT": -0.874
+   },
+   "canal": {
+    "TPE": -0.553,
+    "DAB": 1.909
+   },
+   "montant": {
+    "habituel": 0.052,
+    "eleve": 0.0,
+    "hors_norme": 1.099
+   },
+   "categorie": {
+    "connue": -0.039,
+    "nouvelle": 0.0
+   },
+   "affluence": {
+    "normale": 0.536,
+    "pic": -0.179
+   },
+   "profil": {
+    "rare": 0.0,
+    "frequent": 0.0
+   },
+   "telephone": {
+    "sur_place": -1.2,
+    "suspect": 1.2
+   }
+  },
+  "n_design": 6599,
+  "frauds_design": 640,
+  "ignored": [
+   "deja_ailleurs",
+   "profil"
+  ],
+  "policy": [
+   "montant ≥ 0, hors_norme ≥ ×3",
+   "telephone ±1.2 (non mesuré : trop peu de connexions depuis l'étranger)",
+   "avis de voyage −2.5 (déclaratif)"
+  ],
+  "cut_low": 0.0304,
+  "cut_high": 0.3058,
+  "bands": {
+   "coherent": {
+    "n": 1577,
+    "frauds": 18,
+    "fraud_rate": 0.0114
+   },
+   "verifier": {
+    "n": 2107,
+    "frauds": 127,
+    "fraud_rate": 0.0603
+   },
+   "incoherent": {
+    "n": 454,
+    "frauds": 191,
+    "fraud_rate": 0.4207
+   }
+  },
+  "test": {
+   "n": 4138,
+   "frauds": 336,
+   "base_rate": 0.0812,
+   "roc_auc": 0.858,
+   "pr_auc": 0.446,
+   "legacy_false_alerts": 3802,
+   "legacy_false_alerts_coherent": 1559,
+   "legacy_frauds": 336,
+   "frauds_in_coherent": 18,
+   "model_alerts_valid": 265,
+   "model_false_alerts_valid_coherent": 48,
+   "model_false_alerts_valid": 191
+  }
+ },
+ "notice_lr": -2.5,
+ "domestic_note": "Aucun paiement physique hors de la ville de résidence dans ces données synthétiques : le moteur gère ce cas, ses poids seront mesurés sur les données réelles de la banque."
+}
