@@ -4,6 +4,7 @@ The LLM never computes a score: it only reads what these functions return.
 """
 import csv
 import json
+import os
 from datetime import date, datetime, timedelta
 
 import numpy as np
@@ -445,42 +446,133 @@ def get_kpis():
             "rappel_par_typologie": [_row(x, ["fraud_scenario", "frauds", "recall_model", "recall_legacy"]) for _, x in rt.iterrows()]}
 
 
-DECISION_COLS = ["decided_at", "transaction_id", "decision", "confidence", "comment", "analyst", "source", "duration_s"]
+DECISION_COLS = ["decided_at", "transaction_id", "decision", "confidence", "comment", "analyst", "source", "duration_s",
+                 # audit (what the system said at decision time, which model / prompt) + tamper-evident chain
+                 "system_decision", "system_confidence", "score_model", "model_version", "prompt_version", "prev_hash", "row_hash"]
+MODEL_VERSION = "hyson-fraud-lightgbm · gold_scores 2026-11-05"      # MLflow registered model = production scores (corr. 1.0)
+_HASHED = DECISION_COLS[:-1]                                          # every column except row_hash itself
 
 
 def _nb(x):
     return f"{int(x):,}".replace(",", " ")
 
 
-def record_decision(transaction_id, decision, confidence="moyenne", comment="", analyst="analyste", source="copilote",
+def _chain(prev, fields):
+    """SHA-256 of the previous row's hash + this row's fields: editing or deleting any past row breaks every later hash."""
+    import hashlib
+    return hashlib.sha256((prev + "\x1f" + "\x1f".join(fields)).encode("utf-8")).hexdigest()
+
+
+def _read_journal():
+    return pd.read_csv(DECISIONS_FILE, dtype=str, keep_default_na=False) if DECISIONS_FILE.exists() else None
+
+
+def _upgrade_journal():
+    """Older journals (no audit columns): add them and seal the existing rows into the hash chain once."""
+    j = _read_journal()
+    if j is None or list(j.columns) == DECISION_COLS:
+        return
+    for c in DECISION_COLS:
+        if c not in j.columns:
+            j[c] = ""
+    prev = ""
+    for i in j.index:
+        j.at[i, "prev_hash"] = prev
+        prev = j.at[i, "row_hash"] = _chain(prev, [str(j.at[i, c]) for c in _HASHED])
+    j[DECISION_COLS].to_csv(DECISIONS_FILE, index=False)
+
+
+def verify_journal():
+    """Recompute the hash chain. Returns {"ok", "rows", "broken_at"} (first row whose content no longer matches)."""
+    _upgrade_journal()                              # a pre-audit journal is sealed once, the first time it is read
+    j = _read_journal()
+    if j is None or not len(j):
+        return {"ok": True, "rows": 0, "broken_at": None}
+    if "row_hash" not in j.columns:
+        return {"ok": False, "rows": len(j), "broken_at": 0, "note": "journal sans chaîne d'intégrité"}
+    prev = ""
+    for i, r in enumerate(j.itertuples(index=False)):
+        r = r._asdict()
+        if r["prev_hash"] != prev or _chain(prev, [str(r[c]) for c in _HASHED]) != r["row_hash"]:
+            return {"ok": False, "rows": len(j), "broken_at": i}
+        prev = r["row_hash"]
+    return {"ok": True, "rows": len(j), "broken_at": None, "last_hash": prev[:12]}
+
+
+def record_decision(transaction_id, decision, confidence="moyenne", comment="", analyst=None, source="copilote",
                     duration_s=None):
     decision = str(decision).upper()
     if decision not in DECISIONS:
         return {"erreur": f"Décision invalide : {decision}. Valeurs : {sorted(DECISIONS)}"}
     if _tx_row(transaction_id) is None:
         return _not_found(transaction_id)
-    if DECISIONS_FILE.exists():                     # upgrade an older journal (no duration column) in place
-        head = DECISIONS_FILE.read_text(encoding="utf-8").splitlines()[:1]
-        if head and "duration_s" not in head[0]:
-            old = pd.read_csv(DECISIONS_FILE)
-            old["duration_s"] = None
-            old[DECISION_COLS].to_csv(DECISIONS_FILE, index=False)
-    new = not DECISIONS_FILE.exists()
+    _upgrade_journal()
+    t = get_transaction(transaction_id)
+    rs, sc = t.get("recommandation_systeme") or {}, t.get("score") or {}
+    try:
+        import copilot
+        prompt_version = copilot.CACHE_VERSION
+    except Exception:
+        prompt_version = ""
+    j = _read_journal()
+    prev = str(j.row_hash.iloc[-1]) if j is not None and len(j) else ""
+    fields = [datetime.now().strftime("%Y-%m-%d %H:%M:%S"), transaction_id, decision, str(confidence), str(comment or ""),
+              str(analyst or os.getenv("APP_ANALYST", "analyste")), str(source),
+              "" if duration_s is None else str(round(float(duration_s), 1)),
+              str(rs.get("decision", "")), str(rs.get("confiance", "")),
+              "" if sc.get("score_modele") is None else str(sc["score_modele"]), MODEL_VERSION, prompt_version, prev]
+    row_hash = _chain(prev, fields)
+    new = j is None
     with DECISIONS_FILE.open("a", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
         if new:
             w.writerow(DECISION_COLS)
-        w.writerow([datetime.now().strftime("%Y-%m-%d %H:%M:%S"), transaction_id, decision, confidence, comment, analyst, source,
-                    None if duration_s is None else round(float(duration_s), 1)])
+        w.writerow(fields + [row_hash])
     da.source().push_feedback(DECISIONS_FILE)          # feedback loop: journal mirrored to OneLake
     return {"enregistre": True, "transaction_id": transaction_id, "decision": decision, "confiance": confidence,
-            "duree_s": None if duration_s is None else round(float(duration_s), 1)}
+            "duree_s": None if duration_s is None else round(float(duration_s), 1),
+            "recommandation_systeme": rs.get("decision"), "empreinte": row_hash[:12]}
 
 
 def decisions():
-    if not DECISIONS_FILE.exists():
-        return pd.DataFrame(columns=["decided_at", "transaction_id", "decision", "confidence", "comment", "analyst", "source"])
-    return pd.read_csv(DECISIONS_FILE)
+    j = _read_journal()
+    if j is None:
+        return pd.DataFrame(columns=DECISION_COLS)
+    for c in ("duration_s", "score_model"):
+        if c in j.columns:
+            j[c] = pd.to_numeric(j[c], errors="coerce")
+    return j
+
+
+FOUR_EYES_TND = 5000.0       # production design: blocks above this amount, or overriding a BLOQUER recommendation, need a supervisor
+
+
+def decision_event(row):
+    """Message the decision would send to the bank's systems (simulation: nothing is sent from the demo).
+
+    BLOQUER -> card management (block card) or core banking (hold transfer) + customer notification;
+    ESCALADER -> case management (level 2); VALIDER -> release, no customer contact. JSON over an API gateway / Service Bus.
+    """
+    tx = _tx_row(row["transaction_id"])
+    ttype = str(getattr(tx, "transaction_type", "") or "") if tx is not None else ""
+    card = _v(getattr(tx, "card_id", None)) if tx is not None else None
+    amount = float(getattr(tx, "amount_tnd", 0) or 0) if tx is not None else 0.0
+    dec = row["decision"]
+    if dec == "BLOQUER":
+        action = ({"system": "core_banking", "action": "HOLD_TRANSFER"} if ttype == "VIREMENT" or not card
+                  else {"system": "card_management", "action": "BLOCK_CARD", "card_id": card})
+        follow = ["notify_customer_sms", "open_case_level1"]
+    elif dec == "ESCALADER":
+        action, follow = {"system": "case_management", "action": "OPEN_CASE_LEVEL2"}, []
+    else:
+        action, follow = {"system": "case_management", "action": "CLOSE_ALERT_LEGITIMATE"}, []
+    overrides_block = row.get("system_decision") == "BLOQUER" and dec != "BLOQUER"
+    return {"event": "fraud_decision.v1", "event_id": str(row.get("row_hash", ""))[:16],
+            "decided_at": row.get("decided_at"), "transaction_id": row["transaction_id"], "amount_tnd": round(amount, 3),
+            "decision": dec, "analyst": row.get("analyst"), "system_recommendation": row.get("system_decision") or None,
+            "model_version": row.get("model_version"), "action": action, "follow_up": follow,
+            "four_eyes_required": bool((dec == "BLOQUER" and amount >= FOUR_EYES_TND) or overrides_block),
+            "audit_ref": row.get("row_hash")}
 
 
 # ---------------------------------------------------------------- function-calling schemas

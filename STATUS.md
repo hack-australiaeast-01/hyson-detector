@@ -1,8 +1,8 @@
 # Project status — Hyson Detector · AI Banking Copilot for Fraud Detection
-Updated: **2026-11-06 03:45** · ✅ done · 🟡 in progress · ❌ to do · Target level: **Gold ("Or")** (brief §6)
+Updated: **2026-11-06 03:50** · ✅ done · 🟡 in progress · ❌ to do · Target level: **Gold ("Or")** (brief §6)
 
 **Live demo:** https://hyson-detector.streamlit.app · **Repo (jury):** https://github.com/hack-australiaeast-01/hyson-detector ·
-**Architecture:** [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) (18 diagrams) · **Jury Q&A:** [JURY_HANDBOOK.md](JURY_HANDBOOK.md)
+**Architecture:** [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) (18 diagrams) · **Audit & bank IT:** [docs/AUDIT_AND_BANK_INTEGRATION.md](docs/AUDIT_AND_BANK_INTEGRATION.md) · **Jury Q&A:** [JURY_HANDBOOK.md](JURY_HANDBOOK.md)
 
 Sections 1–6 = **current state** (kept up to date). Section 7 = **work log** (dated history; figures there are as of that time).
 
@@ -13,8 +13,8 @@ Sections 1–6 = **current state** (kept up to date). Section 7 = **work log** (
 | Copilot (mandatory) | ✅ · 🟡 online key | `app/copilot.py` + 10 tools · **18/18 golden questions (incl. the brief's §9.7 wording), 99.5 % of cited numbers grounded** · public app still "Hors-ligne (règles)" until the key is in Streamlit Secrets (§5.1) |
 | Data pipeline on Fabric | ✅ | Lakehouse `lh_fraud`, notebooks 01 · 02 · 03e · 04, pipeline `pl_hyson_retrain`, MLflow model `hyson-fraud-lightgbm` |
 | Validation vs current rules | ✅ | Top 1 %: 718 frauds vs 117, 1,061 false alerts vs 3,221 · backtest 69.4 % ± 2.1 recall over 4 periods |
-| Technical walkthrough | ✅ | `docs/ARCHITECTURE.md`, `docs/MODEL_CARD.md`, `README.md`, `JURY_HANDBOOK.md` |
-| Automated tests | ✅ | 44 pytest tests (`tests/`, offline, ~30 s) run by GitHub Actions on every push |
+| Technical walkthrough | ✅ | `docs/ARCHITECTURE.md`, `docs/MODEL_CARD.md`, `docs/AUDIT_AND_BANK_INTEGRATION.md`, `README.md`, `JURY_HANDBOOK.md` |
+| Automated tests | ✅ | 49 pytest tests (`tests/`, offline, ~50 s: 30 page renders FR/EN, data/model, guardrails, **audit trail**) run by GitHub Actions on every push |
 | Usage of GitHub Copilot | 🟡 | `docs/AI_TOOLS_USAGE.md` declared; table of real uses + screenshots still to fill |
 | GitHub repo | ✅ | Code, Fabric notebooks (exported with outputs), `requirements.txt` (root + `app/`), README, tests + CI, no secret in files or history |
 | Score file (optional, brief §14) | ✅ | `submission/submission.csv` (187,628 rows, 1,876 alerts) |
@@ -80,13 +80,13 @@ Sections 1–6 = **current state** (kept up to date). Section 7 = **work log** (
 | 22 | Marché & benchmarks | ✅ | 6 cited public benchmarks, Tunisia-scale scenario, rules-engine audit, time to detect |
 | 23 | Performance du modèle | ✅ | Model vs rules, recall by type, drivers, leaderboard + **Robustesse et gouvernance** (backtest, CIs, **fairness by segment / age**, MLflow, copilot evaluation) |
 | 24 | Tableau de bord Power BI | ✅ | Secure embed (viewer signs in), page picker |
-| 25 | Journal & traçabilité | ✅ | Decisions (feedback loop) + copilot log (question, tools, tokens) |
+| 25 | Journal & traçabilité | ✅ | **Audit trail**: analyst identity (sidebar; production = Entra ID SSO), system recommendation + score at decision time, model / prompt version, SHA-256 hash chain + integrity check, override rate, `fraud_decision.v1` message to the bank's systems (simulated, four-eyes flag); copilot log (question, tools, tokens) |
 | 26 | Nouvelle source de données | ✅ | Profile → map/translate (rules, optional 1 AI call on names + stats) → accuracy + PSI → **human approval** → versioned data contract |
 | 27 | 10 tools (`tools.py`) | ✅ | get_alert_queue · get_transaction (+ measured fraud at this score, alerts in the period) · get_customer_profile · compare_to_habits (+ decline reason, 24 h card sequence) · get_customer_history · get_digital_events · find_related_cases · get_kpis (comparison in plain words) · find_customers · record_decision |
 | 28 | Copilot engine (`copilot.py`) | ✅ | Intent routing (incl. priority, person / customer ID / typed TX ID), prefetch → 1 LLM round, streaming, deterministic `recommandation_systeme`, demo calendar ("hier" = 2026-09-29), guardrails: off-topic refusal, unknown ID answered with 0 token, Azure content-filter refusal, no field names; cache, log, offline mode, hourly cap |
 | 29 | Azure OpenAI (Azure AI Foundry) | ✅ | Project `proj-fraud-australiaeast`, resource `aoai-fraud-australiaeast-vnxcy`, deployment **gpt-5-mini**, API 2024-12-01-preview, `reasoning_effort=low`, `max_completion_tokens` 2,400, timeout 60 s, 2 retries; ≈ 3,300 tokens (≈ 1,400–2,000 prompt-cached) and ≈ 7 s per new question |
-| 30 | Evaluation & cache | ✅ | `eval_copilot.py`: 18/18, 99.5 % grounded (`docs/COPILOT_EVAL.md`); `tests/` 44 tests + GitHub Actions; `warmup.py fr en`: 40 answers + 6 trials pre-computed |
-| 31 | Traceability | ✅ | `copilot_log.jsonl`, `decisions.csv` (→ OneLake), `onboarding_log.csv` |
+| 30 | Evaluation & cache | ✅ | `eval_copilot.py`: 18/18, 99.5 % grounded (`docs/COPILOT_EVAL.md`); `tests/` 49 tests + GitHub Actions; `warmup.py fr en`: 40 answers + 6 trials pre-computed |
+| 31 | Traceability | ✅ | `copilot_log.jsonl`, `decisions.csv` (hash-chained, → OneLake), `onboarding_log.csv` · `docs/AUDIT_AND_BANK_INTEGRATION.md` |
 | 32 | GitHub + Streamlit Cloud | ✅ | Repo owned by the team account; push to `main` redeploys; snapshot fits the 690 MB limit (peak ≈ 520 MB) — after a crash use **Reboot** |
 | 33 | Architecture & docs | ✅ | 18 diagrams (images + Mermaid source in `docs/diagrams/`), README, JURY_HANDBOOK, `fabric/README.md` |
 | 34 | GitHub Copilot usage evidence | 🟡 | `docs/AI_TOOLS_USAGE.md`: dev assistant = GitHub Copilot agent mode (VS Code); fill the table of real uses + screenshots |
@@ -138,6 +138,7 @@ Sections 1–6 = **current state** (kept up to date). Section 7 = **work log** (
 - Fairness: alert rates are even (0.9–1.1 %), but retirees / 60+ get lower precision (30–35 %) and recall (61–66 %) — shown, to monitor.
 - The Power BI page needs an Entra ID account of the tenant: a jury member without access sees a sign-in screen (the app pages carry the same KPIs).
 - Explanations of alerts without a business rule stay model-driven (e.g. TX01890379 still lists model factors before its decline reason).
+- Audit / bank IT: the analyst name is typed (no SSO yet), the four-eyes rule is only flagged (no supervisor approval queue), the decision message to card management / core banking is generated but **not sent**, the journal is a hash-chained CSV mirrored to OneLake (production: WORM storage + SIEM). See `docs/AUDIT_AND_BANK_INTEGRATION.md`.
 
 ## 7. Work log (dated history — figures as of that time; current state = §1–§6)
 
@@ -438,3 +439,9 @@ Checked: links in all Markdown files (0 broken) · fresh clone of the public rep
 | Docs said 9 tools, README missed 2 pages, eval figures 14/14 | README (15 pages, Tests section, badge, model card), JURY_HANDBOOK (10 tools, fairness + tests Q&A), AI_TOOLS_USAGE, diagrams 07a/07g re-rendered |
 
 Still open (team): Azure key in Streamlit Secrets, slides, rehearsal + backup video, GitHub Copilot usage table, archive `saitaflex/hyson-detector`, Fabric clean-up, personal e-mail decision (§5). Optional: LICENSE file (data belongs to the organisers).
+
+### 7.11 Audit trail and bank IT integration (2026-11-06 03:15 → 03:50)
+- **Gap found (bank audit view):** every decision was saved as analyst "analyste", without the recommendation the analyst saw, without model / prompt version, in an editable CSV; nothing showed how a BLOQUER reaches the card or the transfer; no document for audit / IT / compliance questions.
+- **Built:** `tools.record_decision` stores analyst (sidebar "Analyste connecté"), `system_decision` / `system_confidence` / `score_model` at decision time, `model_version`, `prompt_version`, `prev_hash` / `row_hash` (SHA-256 chain); older journals are upgraded and sealed once (your decision TX01575959 VALIDER kept); `tools.verify_journal`; Journal page: integrity ✅/❌, override rate + overrides to review, analysts count, `fraud_decision.v1` message (card → BLOCK_CARD, transfer → HOLD_TRANSFER, ESCALADER → level-2 case, VALIDER → close; four-eyes flag for blocks ≥ 5,000 TND or a set-aside BLOQUER; nothing sent).
+- **Docs:** `docs/AUDIT_AND_BANK_INTEGRATION.md` (audit trail, roles / segregation of duties, integration diagram, data protection incl. Tunisian law 2004-63, EU AI Act Annex III 5(b), resilience); 4 jury questions in `JURY_HANDBOOK.md`; README links.
+- **Tests:** `tests/test_audit_trail.py` (5): stores who + recommendation + versions, override visible, edited past row detected, old journal upgraded and sealed, decision message mapped to the right system. Full suite 49/49.

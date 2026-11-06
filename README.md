@@ -2,7 +2,7 @@
 
 # Hyson Detector — AI Banking Copilot for Fraud Detection (Microsoft Fabric + Azure OpenAI)
 
-**Live demo:** https://hyson-detector.streamlit.app · [![tests](https://github.com/hack-australiaeast-01/hyson-detector/actions/workflows/tests.yml/badge.svg)](https://github.com/hack-australiaeast-01/hyson-detector/actions/workflows/tests.yml) · [Model card](docs/MODEL_CARD.md) · [Architecture](docs/ARCHITECTURE.md)
+**Live demo:** https://hyson-detector.streamlit.app · [![tests](https://github.com/hack-australiaeast-01/hyson-detector/actions/workflows/tests.yml/badge.svg)](https://github.com/hack-australiaeast-01/hyson-detector/actions/workflows/tests.yml) · [Model card](docs/MODEL_CARD.md) · [Architecture](docs/ARCHITECTURE.md) · [Audit & bank IT](docs/AUDIT_AND_BANK_INTEGRATION.md)
 
 A copilot for a fraud analyst: it **detects** suspicious transactions (model score), **explains** them (facts compared with the customer's own history), **answers questions** in natural language (Azure OpenAI with function calling over the Gold tables), and helps the analyst **decide** (BLOQUER / ESCALADER / VALIDER, with a decision log). The model scores, the LLM only explains, and the analyst decides.
 
@@ -89,7 +89,7 @@ The app is branded **Hyson Detector** (light, bank-platform theme; FR/EN). The s
 4. **Performance**: model vs current engine, recall per fraud type, top drivers, champion vs challengers, and **Robustesse et gouvernance** (4-period backtest, confidence intervals, fairness by segment and age, copilot evaluation).
 4b. **Enquête approfondie** (`deepsearch.py`): watch list of medium alerts whose customer already had an alert (≈ 53 % fraud vs 16 %), evidence board E1…En (habits, digital events, linked customers, points of compromise, 25 most similar labelled alerts), one AI call to connect the dots.
 4c. **Tableau de bord Power BI**: the Fabric report (Direct Lake), embedded securely (viewer signs in with an Entra ID account).
-5. **Journal**: analyst decisions (the feedback loop) and copilot traceability (questions, tools, tokens, cache).
+5. **Journal**: audit trail of analyst decisions (who, what the system recommended, model / prompt version, SHA-256 hash chain with an integrity check, override rate, message to the bank's systems — simulated) and copilot traceability (questions, tools, tokens, cache). See [docs/AUDIT_AND_BANK_INTEGRATION.md](docs/AUDIT_AND_BANK_INTEGRATION.md).
 6. **Le Procès** (`courtroom.py`): an AI prosecutor and an AI defence argue the same Fabric facts in parallel, an AI judge rules; the analyst accepts or overrides the verdict (logged as a decision).
 7. **Reconstitution**: replays the hours before the alert step by step (transactions + digital events, risky signals in red, map, AI narration).
 8. **Contre-enquête**: counterfactual — neutralises the top SHAP factors one by one; "robust" if the alert survives, "sensitive" if it flips.

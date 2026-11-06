@@ -33,6 +33,7 @@ _secrets_to_env()
 import copilot  # noqa: E402  (after the secrets bridge on purpose)
 import data_access as da
 import deepsearch
+import fairness
 import features as fx
 import market
 import onboarding
@@ -167,6 +168,10 @@ with st.sidebar:
     ui.brand(L("Détecter · Expliquer · Décider", "Detect · Explain · Decide"))
     st.segmented_control("Langue / Language", ["fr", "en"], key="lang", format_func=lambda x: {"fr": "Français", "en": "English"}[x],
                          label_visibility="collapsed")
+    # who decides: written into every decision of the audit trail (production: Entra ID single sign-on instead of a typed name)
+    st.text_input(L("Analyste connecté", "Signed-in analyst"), key="analyst", value=st.session_state.get("analyst", "analyste.demo"),
+                  help=L("Nom enregistré avec chaque décision (piste d'audit). En production : identité Entra ID (SSO).",
+                         "Name stored with every decision (audit trail). In production: Entra ID identity (SSO)."))
     for (fr, en), ids in NAV_GROUPS:
         ui.side_label(L(fr, en))
         for pid in ids:
@@ -393,7 +398,8 @@ def page_transaction():
                          f"⏱️ Case open for {elapsed:.0f} s — target: decision in under 30 s"))
             if st.form_submit_button(L("Enregistrer la décision", "Save decision"), type="primary"):
                 dur = time.time() - opened.get(tid, time.time())
-                res = tools.record_decision(tid, decision, conf, comment, source="interface", duration_s=dur)
+                res = tools.record_decision(tid, decision, conf, comment, analyst=st.session_state.get("analyst"),
+                                            source="interface", duration_s=dur)
                 if res.get("enregistre"):
                     st.success(L(f"Décision {res['decision']} enregistrée en {dur:.0f} s", f"Decision {res['decision']} saved in {dur:.0f} s"))
                     mark("decide")
@@ -713,6 +719,8 @@ def page_robustness():
                  "4 times on the past only) · intervals by whole-day bootstrap (1,000 resamples) · model registered in MLflow "
                  "(\"hyson-fraud-lightgbm\", identical to production scores: correlation 1.0) · retraining orchestrated by the Fabric "
                  "pipeline \"pl_hyson_retrain\"."))
+    fairness.render_fairness(L, src.mode)
+    fairness.render_limits(L)
 
 
 # ---------------------------------------------------------------- 5. journal
@@ -727,8 +735,50 @@ def page_journal():
         c[i].metric(L(lab, {"BLOQUER": "BLOCK", "ESCALADER": "ESCALATE", "VALIDER": "VALIDATE"}[lab]),
                     int((d.decision == lab).sum()) if len(d) else 0)
     if len(d):
+        ui.section(L("Piste d'audit", "Audit trail"))
+        integ = tools.verify_journal()
+        with_reco = d[d.system_decision.astype(str).str.len() > 0] if "system_decision" in d else d.iloc[0:0]
+        over = with_reco[with_reco.decision != with_reco.system_decision]
+        a1, a2, a3 = st.columns(3)
+        a1.metric(L("Intégrité du journal", "Log integrity"), L("✅ intacte", "✅ intact") if integ["ok"] else L("❌ modifiée", "❌ altered"),
+                  help=L("Chaque décision porte l'empreinte SHA-256 de la précédente : modifier ou supprimer une ligne passée "
+                         "casse toute la chaîne.", "Each decision carries the SHA-256 fingerprint of the previous one: editing or "
+                         "deleting a past row breaks the whole chain."))
+        a2.metric(L("Désaccord analyste / recommandation", "Analyst overrides the recommendation"),
+                  f"{len(over) / max(len(with_reco), 1):.0%}" if len(with_reco) else "—",
+                  help=L("Part des décisions différentes de la recommandation système affichée au moment de la décision "
+                         "(supervision humaine, à revoir par le superviseur).",
+                         "Share of decisions that differ from the system recommendation shown at decision time "
+                         "(human oversight, for supervisor review)."))
+        a3.metric(L("Analystes", "Analysts"), d.analyst.nunique() if "analyst" in d else 0)
+        if integ["ok"]:
+            st.caption(L(f"Chaîne vérifiée sur {integ['rows']} décisions · dernière empreinte {integ.get('last_hash', '')}… · "
+                         f"modèle et version du prompt enregistrés avec chaque décision.",
+                         f"Chain verified on {integ['rows']} decisions · last fingerprint {integ.get('last_hash', '')}… · "
+                         "model and prompt version stored with every decision."))
+        else:
+            st.error(L(f"Le journal a été modifié hors application à partir de la décision n° {integ['broken_at'] + 1}.",
+                       f"The log was edited outside the application from decision #{integ['broken_at'] + 1}."))
+        if len(over):
+            st.caption(L("Désaccords à revoir : ", "Overrides to review: ") +
+                       " · ".join(f"{x.transaction_id} ({x.system_decision} → {x.decision}, {x.analyst})" for x in over.tail(5).itertuples()))
+        with st.expander(L("Intégration au SI de la banque · message de la dernière décision (simulation)",
+                           "Bank IT integration · message of the latest decision (simulation)"), icon=":material/hub:"):
+            ev = tools.decision_event(d.iloc[-1].to_dict())
+            st.json(ev)
+            st.caption(L("En production, ce message part par la passerelle API / Service Bus vers la monétique (blocage de carte), "
+                         "le core banking (gel du virement), la gestion de dossiers et la notification client ; le double contrôle "
+                         f"(« quatre yeux ») s'applique aux blocages ≥ {tools.FOUR_EYES_TND:,.0f} TND et aux décisions qui écartent "
+                         "un BLOQUER recommandé. Ici, rien n'est envoyé.".replace(",", " "),
+                         "In production this message goes through the API gateway / Service Bus to card management (block card), "
+                         "core banking (hold transfer), case management and customer notification; four-eyes approval applies to "
+                         f"blocks ≥ {tools.FOUR_EYES_TND:,.0f} TND and to decisions that set aside a recommended BLOCK. Nothing is sent "
+                         "from this demo.".replace(",", " ")))
         d = d.merge(queue[["transaction_id", "risk_level", "score_pct", "period"]], on="transaction_id", how="left")
-        st.dataframe(d.sort_values("decided_at", ascending=False), hide_index=True, width="stretch")
+        show = [x for x in ["decided_at", "transaction_id", "decision", "system_decision", "confidence", "analyst", "source",
+                            "duration_s", "comment", "risk_level", "model_version", "prompt_version", "row_hash"] if x in d.columns]
+        st.dataframe(d.sort_values("decided_at", ascending=False)[show], hide_index=True, width="stretch",
+                     column_config={"row_hash": st.column_config.TextColumn(L("Empreinte", "Fingerprint"), width="small")})
         st.download_button(L("Exporter (CSV)", "Export (CSV)"), d.to_csv(index=False).encode("utf-8"), "decisions.csv", "text/csv")
         st.caption(L("Boucle d'amélioration : ces décisions deviennent des labels pour le prochain réentraînement dans Fabric.",
                      "Improvement loop: these decisions become labels for the next retraining in Fabric."))

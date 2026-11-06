@@ -405,6 +405,7 @@ def page_proces(c):
         if b1.button(L(f"✅ Retenir le verdict ({dec})", f"✅ Accept the verdict ({DEC_EN[dec]})"), width="stretch"):
             opened = st.session_state.get("opened", {}).get(tid)
             res = tools.record_decision(tid, dec, reco.get("confiance", "moyenne"), L("Verdict du Procès retenu", "Trial verdict accepted"),
+                                        analyst=st.session_state.get("analyst"),
                                         source="proces", duration_s=(time.time() - opened) if opened else None)
             st.success(L(f"Décision {res['decision']} enregistrée", f"Decision {res['decision']} saved"))
             c.mark("decide")
@@ -906,6 +907,7 @@ def page_deep(c):
             if col.button(L(dec, en), key=f"deep_dec_{dec}", width="stretch"):
                 opened = st.session_state.setdefault("opened", {}).get(tid)
                 out = tools.record_decision(tid, dec, "moyenne", L("après enquête approfondie", "after deep search"),
+                                            analyst=st.session_state.get("analyst"),
                                             source="enquete_approfondie", duration_s=(time.time() - opened) if opened else None)
                 if out.get("enregistre"):
                     st.success(L(f"Décision {dec} enregistrée (journal + OneLake).", f"Decision {en} saved (log + OneLake)."))
