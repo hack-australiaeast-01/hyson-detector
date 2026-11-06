@@ -330,6 +330,12 @@ Read-only SQL on `lh_fraud`, then compared with the app (`tools.get_kpis`, `feat
 
 Also checked clean: no leakage (past-only windows, labels excluded, test labels NULL everywhere, no early stopping on valid), off-topic and unknown-ID handling live, no secret in the repo.
 
+### 13.2b Streamlit Cloud memory limit (2026-11-06 01:30)
+- **Symptom:** public app showed "This app has gone over its resource limits" after the full-history snapshot (J1) was added.
+- **Cause:** history + events loaded as plain strings = ~600 MB, peak 856 MB with one user (Community Cloud floor: 690 MB).
+- **Fix (`data_access.py`, snapshot files):** text columns stored and loaded as categories, coordinates float32, unused `session_id` dropped, Arrow buffers freed on load (`self_destruct` + `release_unused`), per-customer caches 96/128 entries. Data in memory 334 MB → ~80 MB.
+- **Measured** (real Streamlit server in cloud mode, 15 pages + 3 demo cases, 3 sessions): peak **520 MB**, 0 exceptions; same figures as live Fabric. After a crash the app needs a manual **Reboot** (share.streamlit.io → ⋮ → Reboot): it does not restart on push.
+
 ### 13.3 Verification
 - AppTest: 28 renders (14 pages × FR/EN) with no exception in **cloud mode** (no `.env`, no Fabric) and key pages in **live Fabric** mode.
 - Public app checked with Playwright after each push: snapshot label, no error banner, full history in Client 360, new queue columns, logo.
