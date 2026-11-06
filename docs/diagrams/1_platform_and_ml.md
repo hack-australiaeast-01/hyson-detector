@@ -55,68 +55,43 @@ flowchart LR
 ## Microsoft Fabric data platform
 <!-- img: 02_fabric_platform -->
 ```mermaid
-flowchart TB
-    subgraph ING["Ingestion"]
-        CJ["Copy job cj_bronze_load"]
+flowchart LR
+    SRC[("Bank database<br/>Azure SQL")] -->|"cj_bronze_load"| BR
+    subgraph LH["lh_fraud · schema-enabled lakehouse · dbo empty"]
+        direction LR
+        subgraph BR["bronze · raw"]
+            B1[("transactions_train / _test<br/>v_transactions_*<br/>customers · cards · merchants<br/>digital_events · fraud_labels_train<br/>legacy_rule_alerts_train<br/>ingestion_log")]
+        end
+        subgraph QU["quality · 05"]
+            Q1[("rules · issues<br/>row_status · summary<br/>quarantine_* × 5")]
+        end
+        subgraph SI["silver · 01"]
+            S1[("transactions<br/>1.9 M rows")]
+        end
+        subgraph GO["gold · 01–02"]
+            G1[("features (73)<br/>scores · alert_queue<br/>alert_explanations")]
+        end
+        subgraph ML["ml · 02, 04"]
+            M1[("model_metrics · leaderboard<br/>importance · recall_by_type<br/>ci · robustness")]
+        end
+        subgraph MA["mart · 05"]
+            D1[("dim_* × 7<br/>fact_transactions<br/>fact_digital_events")]
+        end
+        subgraph SV["serving · 03e"]
+            P1[("pbi_* × 8")]
+        end
+        subgraph MT["meta · 06"]
+            X1[("table_catalog<br/>migration_log")]
+        end
+        BR -->|"41 rules / row"| QU
+        BR --> SI --> GO --> ML
+        QU -->|"accepted rows"| MA
+        GO --> MA
+        GO --> SV
     end
-
-    subgraph BR["Bronze · raw Delta tables"]
-        B1[("transactions_train · transactions_test")]
-        B2[("fraud_labels_train · legacy_rule_alerts_train")]
-        B3[("customers · cards · merchants · digital_events")]
-        BV["views v_transactions_all · v_transactions_train_labeled"]
-    end
-
-    subgraph SI["Silver"]
-        S1[("silver_transactions<br/>1,908,228 rows · period train / valid / test<br/>labels NULL on test")]
-    end
-
-    subgraph GO["Gold"]
-        G1[("gold_features · 73 past-only features")]
-        G2[("gold_scores · gold_alert_queue")]
-        G3[("gold_alert_explanations · rules + SHAP")]
-        G4[("gold_model_metrics · leaderboard<br/>importance · recall_by_type")]
-        G5[("gold_model_robustness · _types · gold_model_ci")]
-        G6[("pbi_* · 8 reporting tables")]
-    end
-
-    subgraph FI["OneLake Files"]
-        F1["submission/submission_csv"]
-        F2["robustness/summary.json · runtime_versions.json"]
-        F3["app_feedback/decisions.csv"]
-    end
-
-    subgraph CMP["Compute · Spark notebooks"]
-        N1["01_silver_features"]
-        N2["02_score_explain"]
-        N3["03e_powerbi_dashboard"]
-        N4["04_robustness"]
-    end
-
-    subgraph SRV["Serving"]
-        EP["SQL analytics endpoint lh_fraud"]
-        SM["Direct Lake model sm_fraud_copilot · DAX"]
-        RP["Report Fraud Copilot — Dashboard · 8 pages FR/EN"]
-    end
-
-    subgraph MLO["Data science"]
-        EX["MLflow experiments<br/>02_score_explain · hyson-fraud-robustness"]
-        MM["ML model hyson-fraud-lightgbm v1"]
-    end
-
-    PIPE["Data pipeline pl_hyson_retrain<br/>01 → 02 → 03e ∥ 04 · not scheduled"]
-
-    CJ --> BR
-    BR --> N1
-    N1 --> S1
-    N1 --> G1
-    G1 --> N2 --> G2 & G3 & G4 & F1
-    G2 --> N3 --> G6 --> SM --> RP
-    G1 --> N4 --> G5 & F2 & EX
-    N4 --> MM
-    PIPE -.-> N1 & N2 & N3 & N4
-    G2 & G3 & G4 & G5 & S1 --> EP
-    F3 -. "labels for the next retraining" .-> N2
+    SV -->|"Direct Lake"| PBI["Power BI<br/>sm_fraud_copilot"]
+    GO & SI & MA -->|"SQL endpoint"| APP["Streamlit app<br/>copilot · agents"]
+    APP -->|"decisions"| FB["Files/feedback/<br/>analyst_decisions"]
 ```
 
 ## ML pipeline: features, training, scoring, explanations
@@ -133,7 +108,7 @@ flowchart TB
         A3 --> F5["Digital banking<br/>failed logins · new device · beneficiary added · phone change"]
         A3 --> F6["Network<br/>frauds already reported on merchant / device / beneficiary"]
         A3 --> F7["Calendar · profile<br/>night · payday · Ramadan · segment · KYC"]
-        F1 & F2 & F3 & F4 & F5 & F6 & F7 --> GF[("gold_features · 73 features")]
+        F1 & F2 & F3 & F4 & F5 & F6 & F7 --> GF[("gold.features · 73 features")]
     end
 
     subgraph N02["Notebook 02 · scoring + explanations (pandas · LightGBM)"]
@@ -150,6 +125,6 @@ flowchart TB
         SV & SC --> TH["Alert budget = top 1 % per period<br/>ELEVE = top 30 % of alerts · MOYEN = rest"]
         TH --> EXP["Explanations per alert<br/>TreeSHAP (pred_contrib): 3 factors for · 2 against<br/>+ up to 4 business rules fired"]
         TH --> DEMO["3 demo cases chosen automatically"]
-        EXP & TH & DEMO --> OUT[("gold_scores · gold_alert_queue<br/>gold_alert_explanations · gold_model_* · submission")]
+        EXP & TH & DEMO --> OUT[("gold.scores · gold.alert_queue<br/>gold.alert_explanations · ml.model_* · Files/exports/submission")]
     end
 ```

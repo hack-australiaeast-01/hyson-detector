@@ -4,6 +4,7 @@ Run:  python notebooks/gen_nb05.py
 Reads only the raw (bronze) tables; never modifies silver_transactions / gold_* used by the scoring (frozen for the pitch).
 """
 import json
+import sys
 from pathlib import Path
 
 CELLS = []
@@ -22,6 +23,9 @@ code('''
 %%configure -f
 {"defaultLakehouse": {"name": "lh_fraud"}}
 ''')
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "app"))
+import layout  # noqa: E402
+code("# Lakehouse layout (app/layout.py): logical name -> schema.table\nimport json as _json\nT = _json.loads('" + json.dumps({k: layout.fq(k) for k in layout.TABLES}) + "')")
 
 md('''
 # 05 · Data quality (row by row) and star schema
@@ -77,10 +81,10 @@ DOMAINS = {
 }
 TN_BBOX = (30.0, 37.6, 7.4, 11.7)   # lat min/max, lon min/max
 
-tx = (spark.table("transactions_train").withColumn("split", F.lit("train"))
-      .unionByName(spark.table("transactions_test").withColumn("split", F.lit("test"))))
-bronze = {"transactions": tx, "customers": spark.table("customers"), "cards": spark.table("cards"),
-          "merchants": spark.table("merchants"), "digital_events": spark.table("digital_events")}
+tx = (spark.table(T["transactions_train"]).withColumn("split", F.lit("train"))
+      .unionByName(spark.table(T["transactions_test"]).withColumn("split", F.lit("test"))))
+bronze = {"transactions": tx, "customers": spark.table(T["customers"]), "cards": spark.table(T["cards"]),
+          "merchants": spark.table(T["merchants"]), "digital_events": spark.table(T["digital_events"])}
 KEYS = {"transactions": "transaction_id", "customers": "customer_id", "cards": "card_id",
         "merchants": "merchant_id", "digital_events": "event_id"}
 ''')
@@ -92,8 +96,8 @@ for name, df in bronze.items():
     schema = ",".join(f"{f.name}:{f.dataType.simpleString()}" for f in df.schema.fields)
     log.append((RUN_TS, name, df.count(), len(df.columns), hashlib.sha256(schema.encode()).hexdigest()[:16], schema))
 spark.createDataFrame(log, "run_ts string, table_name string, rows long, columns int, schema_fingerprint string, schema string") \\
-     .write.mode("append").format("delta").saveAsTable("bronze_ingestion_log")
-display(spark.table("bronze_ingestion_log").orderBy(F.desc("run_ts")).limit(10))
+     .write.mode("append").format("delta").saveAsTable(T["bronze_ingestion_log"])
+display(spark.table(T["bronze_ingestion_log"]).orderBy(F.desc("run_ts")).limit(10))
 ''')
 
 md('''
@@ -187,7 +191,7 @@ RULES["digital_events"] = [
 CHECKED = {"transactions": t, "customers": c, "cards": k, "merchants": m, "digital_events": e}
 spark.createDataFrame([(tb, r, s, col, msg) for tb, rs in RULES.items() for r, s, col, _, msg in rs],
                       "table_name string, rule_id string, severity string, column_name string, description string") \\
-     .write.mode("overwrite").format("delta").saveAsTable("dq_rules")
+     .write.mode("overwrite").format("delta").saveAsTable(T["dq_rules"])
 ''')
 
 md('## 3 · Run every rule on every row → issues, row status, quarantine, summary')
@@ -212,20 +216,20 @@ for tb, df in CHECKED.items():
                           F.lit(sev).alias("severity"), F.lit(col).alias("column_name"), val.alias("value"), F.lit(msg).alias("message"))
         issues = part if issues is None else issues.unionByName(part)
         summary.append((RUN_TS, tb, rid, sev, msg, n, bad.count()))
-issues.withColumn("run_ts", F.lit(RUN_TS)).write.mode("overwrite").format("delta").option("overwriteSchema", "true").saveAsTable("dq_issues")
+issues.withColumn("run_ts", F.lit(RUN_TS)).write.mode("overwrite").format("delta").option("overwriteSchema", "true").saveAsTable(T["dq_issues"])
 row_status = None
 for st in statuses.values():
     row_status = st if row_status is None else row_status.unionByName(st)
-row_status.write.mode("overwrite").format("delta").option("overwriteSchema", "true").saveAsTable("dq_row_status")
+row_status.write.mode("overwrite").format("delta").option("overwriteSchema", "true").saveAsTable(T["dq_row_status"])
 spark.createDataFrame(summary, "run_ts string, table_name string, rule_id string, severity string, description string, rows_checked long, rows_failed long") \\
      .withColumn("fail_pct", F.round(F.col("rows_failed") / F.col("rows_checked") * 100, 4)) \\
-     .write.mode("overwrite").format("delta").option("overwriteSchema", "true").saveAsTable("dq_summary")
+     .write.mode("overwrite").format("delta").option("overwriteSchema", "true").saveAsTable(T["dq_summary"])
 for tb, df in bronze.items():
     rej = statuses[tb].filter("dq_status = 'REJECTED'").select(F.col("record_id").alias("_rid"), "dq_rules")
     df.join(rej, df[KEYS[tb]].cast("string") == F.col("_rid")).drop("_rid") \\
-      .write.mode("overwrite").format("delta").option("overwriteSchema", "true").saveAsTable(f"quarantine_{tb}")
-display(spark.table("dq_summary").orderBy("table_name", "rule_id"))
-display(spark.table("dq_row_status").groupBy("table_name", "dq_status").count().orderBy("table_name", "dq_status"))
+      .write.mode("overwrite").format("delta").option("overwriteSchema", "true").saveAsTable(T[f"quarantine_{tb}"])
+display(spark.table(T["dq_summary"]).orderBy("table_name", "rule_id"))
+display(spark.table(T["dq_row_status"]).groupBy("table_name", "dq_status").count().orderBy("table_name", "dq_status"))
 ''')
 
 md('''
@@ -307,8 +311,8 @@ dim_card = (bronze["cards"].withColumn("card_key", F.dense_rank().over(W.orderBy
                     F.col("contactless_enabled").cast("boolean").alias("sans_contact_active"),
                     F.col("daily_limit_tnd").alias("plafond_jour_tnd"), F.col("atm_daily_limit_tnd").alias("plafond_dab_jour_tnd")))
 
-labels = spark.table("fraud_labels_train").select("transaction_id", F.col("is_fraud").cast("int").alias("_f"))
-scores = spark.table("gold_scores").select("transaction_id", "score_model", F.col("is_alert").cast("boolean").alias("alerte_modele"),
+labels = spark.table(T["fraud_labels_train"]).select("transaction_id", F.col("is_fraud").cast("int").alias("_f"))
+scores = spark.table(T["gold_scores"]).select("transaction_id", "score_model", F.col("is_alert").cast("boolean").alias("alerte_modele"),
                                           F.col("risk_level").alias("niveau_risque"), F.col("legacy_alert").cast("boolean").alias("alerte_regles_actuelles"))
 f = (tx_ok.withColumn("_ts", F.to_timestamp("timestamp"))
      .join(dim_geo.select("geo_key", F.col("ville").alias("_v"), F.col("code_pays").alias("_p")),
@@ -336,23 +340,23 @@ fact_ev = (ev.join(dim_client.select("client_key", "customer_id"), "customer_id"
 
 for name, df in {"dim_date": dim_date, "dim_heure": dim_heure, "dim_geo": dim_geo, "dim_client": dim_client, "dim_merchant": dim_merchant,
                  "dim_channel": dim_channel, "dim_card": dim_card, "fact_transactions": fact, "fact_digital_events": fact_ev}.items():
-    df.write.mode("overwrite").format("delta").option("overwriteSchema", "true").saveAsTable(name)
-    print(name, spark.table(name).count())
+    df.write.mode("overwrite").format("delta").option("overwriteSchema", "true").saveAsTable(T.get(name, name))
+    print(name, spark.table(T.get(name, name)).count())
 ''')
 
 md('## 5 · Reconciliation (bronze = accepted + quarantined; facts = accepted)')
 code('''
 rec = []
 for tb in bronze:
-    n = bronze[tb].count(); q = spark.table(f"quarantine_{tb}").count()
+    n = bronze[tb].count(); q = spark.table(T[f"quarantine_{tb}"]).count()
     rec.append((tb, n, n - q, q))
 rec = spark.createDataFrame(rec, "table_name string, bronze_rows long, accepted long, quarantined long")
 display(rec)
-n_fact = spark.table("fact_transactions").count(); acc = rec.filter("table_name='transactions'").first()["accepted"]
+n_fact = spark.table(T["fact_transactions"]).count(); acc = rec.filter("table_name='transactions'").first()["accepted"]
 assert n_fact == acc, (n_fact, acc)
-assert spark.table("fact_transactions").filter("geo_key IS NULL OR client_key IS NULL OR channel_key IS NULL OR date_key IS NULL").count() == 0
-assert spark.table("fact_transactions").groupBy("transaction_id").count().filter("count > 1").count() == 0
-test_labels = spark.table("fact_transactions").join(spark.table("dim_date"), "date_key").filter("periode_modele = 'flux_test' AND fraude_signalee IS NOT NULL").count()
+assert spark.table(T["fact_transactions"]).filter("geo_key IS NULL OR client_key IS NULL OR channel_key IS NULL OR date_key IS NULL").count() == 0
+assert spark.table(T["fact_transactions"]).groupBy("transaction_id").count().filter("count > 1").count() == 0
+test_labels = spark.table(T["fact_transactions"]).join(spark.table(T["dim_date"]), "date_key").filter("periode_modele = 'flux_test' AND fraude_signalee IS NOT NULL").count()
 assert test_labels == 0, test_labels
 print("reconciled:", n_fact, "facts · 0 missing keys · 0 duplicates · 0 test labels")
 ''')

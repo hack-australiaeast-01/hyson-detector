@@ -3,6 +3,7 @@
     cd app && python export_star.py
 Needs `az login` and the Fabric SQL endpoint (.env). Columns not needed for analysis are dropped to keep the snapshot small.
 """
+import layout
 import sys
 import time
 
@@ -21,8 +22,8 @@ if __name__ == "__main__":
     askdata.STAR.mkdir(parents=True, exist_ok=True)
     for t in askdata.TABLES:
         t0 = time.time()
-        cols = [c for c in f.query(f"SELECT TOP 0 * FROM {t}").columns if c not in DROP.get(t, [])]
-        df = f.query(f"SELECT {', '.join(cols)} FROM {t}")
+        cols = [c for c in f.query(f"SELECT TOP 0 * FROM {layout.fq(t)}").columns if c not in DROP.get(t, [])]
+        df = f.query(f"SELECT {', '.join(cols)} FROM {layout.fq(t)}")
         for c in df.columns:
             if df[c].dtype == object and df[c].nunique(dropna=True) < 0.2 * max(len(df), 1):
                 df[c] = df[c].astype("category")

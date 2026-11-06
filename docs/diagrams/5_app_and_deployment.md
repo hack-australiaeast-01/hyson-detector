@@ -63,7 +63,7 @@ flowchart TB
     subgraph LOC["Pitch laptop · live mode"]
         L1["Streamlit app"] -- "az login → Entra ID token" --> L2["Fabric SQL endpoint · live Gold + full history"]
         L1 -- "key from app/.env (git-ignored)" --> L3["Azure OpenAI"]
-        L1 -- "decisions" --> L4["OneLake Files/app_feedback"]
+        L1 -- "decisions" --> L4["OneLake Files/feedback/analyst_decisions"]
     end
 
     subgraph CLOUD["Hosted demo · hyson-detector.streamlit.app"]

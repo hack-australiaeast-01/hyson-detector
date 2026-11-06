@@ -6,6 +6,7 @@ flagged (look-alike false alarms), all model alerts of the validation and live p
 Each record: a deterministic French summary (no names, no IDs, no gender) → text embedding (Azure OpenAI text-embedding-3-small,
 256 dims) + a behavioural vector (standardised model features, target-encoded risks excluded). Writes data/memory.parquet.
 """
+import layout
 import os
 import sys
 import time
@@ -77,11 +78,11 @@ if __name__ == "__main__":
                       "g.amount_tnd", "g.city", "g.country", "g.ip_country", "g.status", "g.decline_reason", "g.segment", "g.kyc_risk_level",
                       "g.card_type", "l.is_fraud", "l.fraud_scenario", "l.fraud_reported_date", "s.score_model", "s.risk_level",
                       "CAST(s.is_alert AS INT) AS is_alert"] + [f"g.{c}" for c in BEHAVIOUR])
-    base = (f"SELECT {cols} FROM gold_features g LEFT JOIN fraud_labels_train l ON l.transaction_id = g.transaction_id "
-            f"LEFT JOIN gold_scores s ON s.transaction_id = g.transaction_id ")
+    base = (f"SELECT {cols} FROM {layout.fq('gold_features')} g LEFT JOIN {layout.fq('fraud_labels_train')} l ON l.transaction_id = g.transaction_id "
+            f"LEFT JOIN {layout.fq('gold_scores')} s ON s.transaction_id = g.transaction_id ")
     frauds = f.query(base + "WHERE l.is_fraud = 1")
     alerts = f.query(base + "WHERE s.is_alert = 1")
-    legacy = f.query(base + "WHERE l.is_fraud = 0 AND g.transaction_id IN (SELECT TOP 4000 transaction_id FROM legacy_rule_alerts_train "
+    legacy = f.query(base + f"WHERE l.is_fraud = 0 AND g.transaction_id IN (SELECT TOP 4000 transaction_id FROM {layout.fq('legacy_rule_alerts_train')} "
                             "ORDER BY CHECKSUM(transaction_id))")
     df = pd.concat([frauds, alerts, legacy]).drop_duplicates("transaction_id").reset_index(drop=True)
     df["timestamp"] = pd.to_datetime(df.timestamp)

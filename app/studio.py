@@ -816,10 +816,10 @@ def case_file_html(c, tid):
         parts.append(f"<p>{L('Aucune décision enregistrée.', 'No decision saved.')}</p>")
     parts.append(f"<p class='muted'>{L('Le modèle score (LightGBM, validation hors échantillon), l’IA explique à partir des données '
                                        '(Azure OpenAI, outils tracés), l’analyste décide. Journal des appels IA : copilot_log.jsonl ; '
-                                       'décisions synchronisées dans OneLake (Files/app_feedback).',
+                                       'décisions synchronisées dans OneLake (Files/feedback/analyst_decisions).',
                                        'The model scores (LightGBM, out-of-time validation), AI explains from the data (Azure OpenAI, '
                                        'traced tools), the analyst decides. AI call log: copilot_log.jsonl; decisions synced to OneLake '
-                                       '(Files/app_feedback).')}</p></body></html>")
+                                       '(Files/feedback/analyst_decisions).')}</p></body></html>")
     return "".join(parts)
 
 

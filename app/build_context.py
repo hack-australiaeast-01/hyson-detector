@@ -4,6 +4,7 @@
 Design = 2025 (weights + thresholds), test = 2026-01 → 2026-07 (never used to fit). Only data before each operation is used.
 Writes: context_weights.json, data/feat_ctx_daily.parquet, data/feat_ctx_profile.parquet, data/feat_ctx_eval.parquet, ../docs/CONTEXT_EVAL.md
 """
+import layout
 import json
 import math
 import sys
@@ -29,16 +30,16 @@ SIGNALS = context.DATA / "feat_ctx_signals.parquet"
 def compute():
     t0 = time.time()
     f = da.FabricSQL()
-    tx = f.query("""SELECT t.transaction_id, t.customer_id, t.timestamp, t.channel, t.entry_mode, t.merchant_category, t.amount_tnd,
+    tx = f.query(f"""SELECT t.transaction_id, t.customer_id, t.timestamp, t.channel, t.entry_mode, t.merchant_category, t.amount_tnd,
                            t.city, t.country, l.is_fraud
-                    FROM silver_transactions t LEFT JOIN fraud_labels_train l ON l.transaction_id = t.transaction_id""")
+                    FROM {layout.fq('silver_transactions')} t LEFT JOIN {layout.fq('fraud_labels_train')} l ON l.transaction_id = t.transaction_id""")
     tx["timestamp"] = pd.to_datetime(tx.timestamp)
     for c in ("channel", "entry_mode", "merchant_category", "city", "country"):
         tx[c] = tx[c].astype("category")
-    cust = f.query("SELECT customer_id, age, segment, home_city, monthly_income_tnd FROM customers")
-    legacy = set(f.query("SELECT DISTINCT transaction_id FROM legacy_rule_alerts_train").transaction_id)
-    model = f.query("SELECT transaction_id, score_model, CAST(is_alert AS INT) is_alert FROM gold_scores WHERE period = 'valid'")
-    ev = f.query("""SELECT customer_id, timestamp, status, ip_country, device_id FROM digital_events WHERE event_type = 'CONNEXION'""")
+    cust = f.query(f"SELECT customer_id, age, segment, home_city, monthly_income_tnd FROM {layout.fq('customers')}")
+    legacy = set(f.query(f"SELECT DISTINCT transaction_id FROM {layout.fq('legacy_rule_alerts_train')}").transaction_id)
+    model = f.query(f"SELECT transaction_id, score_model, CAST(is_alert AS INT) is_alert FROM {layout.fq('gold_scores')} WHERE period = 'valid'")
+    ev = f.query(f"""SELECT customer_id, timestamp, status, ip_country, device_id FROM {layout.fq('digital_events')} WHERE event_type = 'CONNEXION'""")
     ev["timestamp"] = pd.to_datetime(ev.timestamp)
     print(f"pulled {len(tx):,} tx, {len(ev):,} logins in {time.time() - t0:.0f}s", flush=True)
 

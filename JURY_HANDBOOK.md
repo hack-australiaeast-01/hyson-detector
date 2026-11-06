@@ -25,7 +25,7 @@ Everything needed to present the solution and answer the jury's questions, organ
 | Management dashboard | **Power BI** on Fabric (Direct Lake, `pbi_*` tables, report generated as code) | KPIs for managers, embedded in the app | Complement |
 | Analyst interface | **Streamlit** (`app/app.py`), FR/EN | Queue, transaction card, customer 360, performance, journal, Power BI | Recommended |
 | App ↔ Fabric connection | **SQL analytics endpoint** of `lh_fraud` via `pyodbc` + ODBC Driver 17, **Microsoft Entra** token (`azure-identity`) | Live reads (option A §11); parquet snapshot as fallback (option B) | Recommended |
-| Feedback loop | **OneLake** (`azure-storage-file-datalake`) → `Files/app_feedback/decisions.csv` | Analyst decisions written back to Fabric | Gold level |
+| Feedback loop | **OneLake** (`azure-storage-file-datalake`) → `Files/feedback/analyst_decisions/decisions.csv` | Analyst decisions written back to Fabric | Gold level |
 | Generative AI | **Azure OpenAI**: resource `aoai-fraud-australiaeast-vnxcy`, deployment **gpt-5-mini** (GlobalStandard), API `2024-12-01-preview` | Explanations + dialogue, **function calling** over 9 tools | Recommended |
 | Development | **GitHub + GitHub Copilot** (VS Code chat/agent, Fabric Copilot in the notebooks) | Code, notebooks, tests, docs | Expected |
 | Languages | Python 3.13, PySpark, T-SQL, DAX | — | — |
@@ -176,7 +176,7 @@ External public figures are allowed if cited (§16 rule 1). Each one is shown in
 **Top drivers (LightGBM gain):** implied speed, amount, merchant category, channel, time since the previous transaction, new merchant, transaction type, entry mode, history length, contactless count in 24 h.
 
 ### 4.4 Test outputs
-- Submission file `Files/submission/submission_csv` (transaction_id, fraud_score, is_alert), one row per test transaction.
+- Submission file `Files/exports/submission/submission_csv` (transaction_id, fraud_score, is_alert), one row per test transaction.
 - Alerts: valid 1,779 (533 ELEVE / 1,246 MOYEN), test 1,876 (562 ELEVE / 1,314 MOYEN).
 
 ### 4.5 Robustness and governance (notebook `04_robustness`, Fabric)
@@ -323,7 +323,7 @@ Azure SQL (source) ──Copy job──► Fabric Lakehouse lh_fraud (bronze, De
         │  NB 02 (pandas/LightGBM): rules + 4 models → champion → SHAP → Gold tables + submission
         ▼
 Gold: gold_scores · gold_alert_queue · gold_alert_explanations · gold_model_* ── Power BI (Direct Lake, manager view)
-        │  SQL analytics endpoint (T-SQL, Entra token)         ▲ OneLake Files/app_feedback/decisions.csv
+        │  SQL analytics endpoint (T-SQL, Entra token)         ▲ OneLake Files/feedback/analyst_decisions
         ▼                                                       │ (feedback loop → future retraining)
 Streamlit app ── tools.py (10 tools, JSON) ── copilot.py ── Azure OpenAI gpt-5-mini (function calling)
                                               └─ cache, log, streaming, offline mode

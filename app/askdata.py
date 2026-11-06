@@ -245,7 +245,12 @@ def run_sql(sql):
     if src.mode == "fabric" and os.getenv("ASKDATA_ENGINE", "fabric") == "fabric":
         try:
             import sqlglot
-            df = src.sql.query(sqlglot.transpile(checked, read="duckdb", write="tsql")[0])
+            tree = sqlglot.parse_one(checked, read="duckdb")
+            ctes = {c.alias_or_name.lower() for c in tree.find_all(sqlglot.exp.CTE)}
+            for tb in tree.find_all(sqlglot.exp.Table):                    # star schema lives in the `mart` schema
+                if tb.name.lower() in TABLES and tb.name.lower() not in ctes:
+                    tb.set("db", sqlglot.exp.to_identifier("mart"))
+            df = src.sql.query(tree.sql(dialect="tsql"))
             if len(df) or not star_ready():
                 return df, "Fabric SQL endpoint (live)"
         except Exception:

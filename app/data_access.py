@@ -3,11 +3,12 @@
 Live mode (brief §11, option A): T-SQL against the lh_fraud SQL analytics endpoint, authenticated with
 Microsoft Entra (Azure CLI login, else browser). Small Gold tables are loaded once; customer history,
 digital events and related cases are queried on demand with server-side filters (full history since 2025).
-Analyst decisions are written back to OneLake (Files/app_feedback/decisions.csv) to close the feedback loop.
+Analyst decisions are written back to OneLake (Files/feedback/analyst_decisions/decisions.csv) to close the feedback loop.
 
 Local mode (option B / offline demo): the parquet files in app/data. Each successful live load refreshes
 this snapshot, so the demo keeps working without network.
 """
+import layout
 import os
 import struct
 import threading
@@ -158,7 +159,7 @@ class Source:
             df = None
             if self.mode == "fabric":
                 try:
-                    df = self.sql.query(f"SELECT * FROM dbo.{name}")
+                    df = self.sql.query(f"SELECT * FROM {layout.fq(name)}")
                     DATA.mkdir(exist_ok=True)
                     df.to_parquet(DATA / f"{name}.parquet", index=False)   # refresh offline snapshot
                 except Exception as exc:
@@ -173,14 +174,14 @@ class Source:
     def customer_tx(self, customer_id):
         if self.mode == "fabric":
             cols = ", ".join(TX_COLS)
-            return self.sql.query(f"SELECT {cols} FROM dbo.silver_transactions WHERE customer_id = ? ORDER BY timestamp",
+            return self.sql.query(f"SELECT {cols} FROM {layout.fq('silver_transactions')} WHERE customer_id = ? ORDER BY timestamp",
                                   (customer_id,))
         h = _local_history()
         return pd.DataFrame(columns=TX_COLS) if h is None else _plain(h[h.customer_id == customer_id], TX_COLS)
 
     def tx_by_id(self, transaction_id):
         if self.mode == "fabric":
-            df = self.sql.query(f"SELECT {', '.join(TX_COLS)} FROM dbo.silver_transactions WHERE transaction_id = ?",
+            df = self.sql.query(f"SELECT {', '.join(TX_COLS)} FROM {layout.fq('silver_transactions')} WHERE transaction_id = ?",
                                 (transaction_id,))
             return None if df.empty else df.iloc[0]
         h = _local_history()
@@ -199,7 +200,7 @@ class Source:
             return self.sql.query(
                 f"""SELECT transaction_id, timestamp, customer_id, card_id, amount_tnd, channel, city,
                            CASE WHEN is_fraud = 1 AND fraud_reported_date < CAST(? AS date) THEN 1 ELSE 0 END AS reported_fraud
-                    FROM dbo.silver_transactions
+                    FROM {layout.fq('silver_transactions')}
                     WHERE {key} = ? AND timestamp >= ? AND timestamp < ? AND customer_id <> ?""",
                 (end, value, start, end, exclude_customer))
         h = _local_history()
@@ -212,7 +213,7 @@ class Source:
 
     def events(self, customer_id, start=None, end=None):
         if self.mode == "fabric":
-            sql, params = f"SELECT {', '.join(EV_COLS)} FROM dbo.digital_events WHERE customer_id = ?", [customer_id]
+            sql, params = f"SELECT {', '.join(EV_COLS)} FROM {layout.fq('digital_events')} WHERE customer_id = ?", [customer_id]
             if start is not None:
                 sql, params = sql + " AND timestamp >= ?", params + [start]
             if end is not None:
@@ -233,7 +234,7 @@ class Source:
             df = None
             if self.mode == "fabric":
                 try:
-                    df = self.sql.query("SELECT * FROM dbo.customers")
+                    df = self.sql.query(f"SELECT * FROM {layout.fq('customers')}")
                     df = df.drop(columns=[c for c in ["gender"] if c in df.columns])   # never used (fairness)
                     df.to_parquet(DATA / "customers.parquet", index=False)
                 except Exception as exc:
@@ -248,7 +249,7 @@ class Source:
         return self._gold["customers"]
 
     def push_feedback(self, csv_path):
-        """Upload the decision journal to OneLake (Files/app_feedback) in the background."""
+        """Upload the decision journal to OneLake (Files/feedback/analyst_decisions) in the background."""
         if self.mode != "fabric" or not (WORKSPACE_ID and LAKEHOUSE_ID):
             return
 
@@ -257,7 +258,7 @@ class Source:
                 from azure.storage.filedatalake import DataLakeServiceClient
                 svc = DataLakeServiceClient("https://onelake.dfs.fabric.microsoft.com", credential=self.sql._cred)
                 f = svc.get_file_system_client(WORKSPACE_ID).get_file_client(
-                    f"{LAKEHOUSE_ID}/Files/app_feedback/decisions.csv")
+                    f"{LAKEHOUSE_ID}/{layout.FEEDBACK_FILE}")
                 f.upload_data(Path(csv_path).read_bytes(), overwrite=True)
                 self.feedback_synced = time.strftime("%H:%M:%S")
             except Exception as exc:

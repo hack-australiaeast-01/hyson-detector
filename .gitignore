@@ -53,3 +53,4 @@ app/data/feat_ctx_eval.parquet
 app/data/feat_ctx_model_valid.parquet
 app/data/cases.jsonl
 app/data/investigations.json
+fabric/backups/

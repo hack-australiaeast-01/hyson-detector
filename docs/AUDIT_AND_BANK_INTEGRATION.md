@@ -19,7 +19,7 @@ Everything marked *built* can be checked in the app or the tests (`tests/test_au
 
 Production: the journal is written to append-only storage (Azure Blob immutable / WORM policy, or a Delta table in OneLake with
 retention), mirrored to the bank's SIEM (Microsoft Sentinel or equivalent). Today it is a CSV mirrored to OneLake
-(`Files/app_feedback/decisions.csv`) plus the hash chain.
+(`Files/feedback/analyst_decisions/decisions.csv`) plus the hash chain.
 
 ## 2. Access and segregation of duties
 

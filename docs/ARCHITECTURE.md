@@ -44,17 +44,39 @@ Principle everywhere: **the model scores, the AI explains, the analyst decides.*
 
 <sub>Editable Mermaid source: [diagrams/1_platform_and_ml.md](diagrams/1_platform_and_ml.md#microsoft-fabric-data-platform)</sub>
 
-| Item | Content | Written by | Read by |
-|---|---|---|---|
-| Bronze | CSVs as delivered (train Jan 2025 → Jul 2026, test Aug → Sep 2026) | Copy job | Notebook 01 |
-| `silver_transactions` | Typed, joined (customer, card, merchant), `period` from the time split, labels nulled on test | 01 | 01, app (history, related cases), Power BI |
-| `gold_features` | 73 features computed with past-only windows | 01 | 02, 04 |
-| `gold_scores`, `gold_alert_queue` | Score, percentile, rank, top-1 % alert, risk level, demo cases | 02 | App, 03e, 04 |
-| `gold_alert_explanations` | Top factors per alert: rules + TreeSHAP for and against | 02 | App, copilot tools |
-| `gold_model_*` | Metrics, leaderboard, importance, recall by fraud type | 02 | App, 03e |
-| `gold_model_robustness*`, `gold_model_ci` | Rolling backtest, bootstrap intervals | 04 | App (Performance page) |
-| `pbi_*` | Reporting tables (FR + EN labels) | 03e | Direct Lake model |
-| `Files/app_feedback/decisions.csv` | Analyst decisions with time-to-decision | App | Next retraining |
+| Schema | Role | Tables | Content | Written by | Read by |
+|---|---|---|---|---|---|
+| `bronze` | Raw data as delivered by the bank | 11 | `transactions_train`, `transactions_test`, `customers`, `cards`, `merchants`, `digital_events`, `fraud_labels_train`, `legacy_rule_alerts_train`, `v_transactions_all`, `v_transactions_train_labeled`, `ingestion_log` | 05_quality_star, cj_bronze_load | 01, 05 |
+| `quality` | Row-level data quality and quarantine | 9 | `rules`, `issues`, `row_status`, `summary`, `quarantine_transactions`, `quarantine_customers`, `quarantine_cards`, `quarantine_merchants`, `quarantine_digital_events` | 05_quality_star | app (Données), audit |
+| `silver` | Cleaned, conformed and joined operations | 1 | `transactions` | 01_silver_features | 01, 03e, app (history, related cases, context) |
+| `gold` | Features, scores, alert queue, explanations | 4 | `features`, `scores`, `alert_queue`, `alert_explanations` | 01_silver_features, 02_score_explain | 02, 04, app, copilot tools |
+| `ml` | Model evaluation and robustness | 7 | `model_metrics`, `model_leaderboard`, `model_importance`, `model_recall_by_type`, `model_ci`, `model_robustness`, `model_robustness_types` | 02_score_explain, 04_robustness | app (Performance), 03e |
+| `mart` | Star schema for analysis | 9 | `dim_date`, `dim_heure`, `dim_geo`, `dim_client`, `dim_merchant`, `dim_channel`, `dim_card`, `fact_transactions`, `fact_digital_events` | 05_quality_star | app (Assistant IA, Intelligence fraude) |
+| `serving` | Tables served to the Power BI report | 8 | `pbi_alerts`, `pbi_compare`, `pbi_factors`, `pbi_importance`, `pbi_kpi`, `pbi_leaderboard`, `pbi_recall_type`, `pbi_recall_wide` | 03e_powerbi_dashboard | Direct Lake model sm_fraud_copilot |
+| `meta` | Data catalog and migration log | 2 | `table_catalog`, `migration_log` | 06_lakehouse_layout | data architects, audit |
+
+```mermaid
+flowchart LR
+    SRC[("Bank database<br/>db-fraud-australiaeast")] -->|cj_bronze_load| B
+    subgraph LH["lh_fraud · schema-enabled lakehouse (dbo = default, empty)"]
+        B["bronze<br/>11 raw tables + ingestion_log"] -->|05 · 41 rules row by row| Q["quality<br/>rules · issues · row_status · summary · quarantine_*"]
+        B -->|01 · clean, type, join| S["silver<br/>transactions"]
+        S -->|01 · past-only features| G["gold<br/>features · scores · alert_queue · alert_explanations"]
+        G -->|02 · 04| M["ml<br/>metrics · leaderboard · importance · ci · robustness"]
+        B -->|05 · accepted rows only| MA["mart<br/>dim_* × 7 · fact_transactions · fact_digital_events"]
+        G --> MA
+        G -->|03e| SV["serving<br/>pbi_* × 8"]
+        META["meta<br/>table_catalog · migration_log"]
+    end
+    SV -->|Direct Lake| PBI["Power BI · sm_fraud_copilot"]
+    G -->|SQL endpoint| APP["Streamlit app · copilot · agents"]
+    MA -->|SQL endpoint| APP
+    APP -->|decisions| FB["Files/feedback/analyst_decisions"]
+```
+
+**Files/** · `landing/partner_feeds/` (new bank feeds before validation) · `exports/app_snapshot/` (Gold snapshot for the hosted app) · `exports/submission/` (score file, brief §14) · `feedback/analyst_decisions/decisions.csv` (analyst decisions, hash-chained) · `ml/robustness/` (backtest summary, runtime versions) · `README.md`.
+
+Conventions: one schema per layer or purpose; bronze keeps the source names (traceable to the bank's database); redundant prefixes dropped elsewhere (`gold.scores`, not `gold.gold_scores`); `serving.pbi_*` is a contract with the Power BI model; the layout is code ([`app/layout.py`](../app/layout.py)) and is published in `meta.table_catalog` (role, producer, previous name, rows, columns). Migration: notebook `06_lakehouse_layout` (copy → verify counts and columns → repoint consumers → drop `dbo`), every step in `meta.migration_log`.
 
 ---
 
@@ -95,7 +117,7 @@ Principle everywhere: **the model scores, the AI explains, the analyst decides.*
 | Reproducibility | Seeds, same sampling, `fabric/environment.yml` (runtime versions) | ✅ |
 | Monitoring | PSI drift of the score distribution (Impact page), alert volume per day, fairness by segment / age (Performance page), copilot log | ✅ |
 | Testing | 93 pytest tests (`tests/`) on every push (GitHub Actions) + copilot golden evaluation (18 questions) | ✅ |
-| Feedback loop | `decisions.csv` → OneLake `Files/app_feedback` → labels for the next run | ✅ |
+| Feedback loop | `decisions.csv` → OneLake `Files/feedback/analyst_decisions` → labels for the next run | ✅ |
 | Next | Schedule the pipeline, champion/challenger in shadow mode, drift alert with Data Activator | Roadmap |
 
 ---
