@@ -1,5 +1,5 @@
 # Project status — Hyson Detector · AI Banking Copilot for Fraud Detection
-Updated: **2026-11-06 04:10** · ✅ done · 🟡 in progress · ❌ to do · Target level: **Gold ("Or")** (brief §6)
+Updated: **2026-11-06 04:25** · ✅ done · 🟡 in progress · ❌ to do · Target level: **Gold ("Or")** (brief §6)
 
 **Live demo:** https://hyson-detector.streamlit.app · **Repo (jury):** https://github.com/hack-australiaeast-01/hyson-detector ·
 **Architecture:** [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) (18 diagrams) · **Audit & bank IT:** [docs/AUDIT_AND_BANK_INTEGRATION.md](docs/AUDIT_AND_BANK_INTEGRATION.md) · **Jury Q&A:** [JURY_HANDBOOK.md](JURY_HANDBOOK.md)
@@ -120,6 +120,7 @@ Sections 1–6 = **current state** (kept up to date). Section 7 = **work log** (
 
 **Demo day checklist:**
 - Open https://hyson-detector.streamlit.app 5 min before (free apps sleep; first load ≈ 20 s). If it shows "over its resource limits": share.streamlit.io → ⋮ → **Reboot**.
+- **After any push, Reboot the public app** (share.streamlit.io → ⋮ → Reboot): Streamlit Cloud re-runs `app.py` but keeps already-imported page modules (`studio.py`…) in memory, so new page designs only appear after a reboot (seen 04:10: new sidebar label, old Constellation page).
 - Pitch laptop: `az login` → `cd app` → `streamlit run app.py` (sidebar shows Fabric live) → run the demo path once.
 - Do not click "Rafraîchir depuis Fabric" during the pitch (≈ 15 s reload). Do not run notebooks 01/02 or the pipeline.
 - Keep one Aug–Sep alert ready besides the 3 June demo cases (e.g. TX01890379, declined for limit exceeded).
@@ -467,3 +468,8 @@ Still open (team): Azure key in Streamlit Secrets, slides, rehearsal + backup vi
 - `docs/AI_TOOLS_USAGE.md` §1 filled from the real history: 12 uses (pipeline audit and split bug, live Fabric, copilot v4, showcase pages, 03e as a Fabric job, deployment, hostile-judge review, memory fix, person search + onboarding, robustness + tests, audit trail, Git), each with the request, result, team decision, time-saved estimate and commit; 10 screenshots in `docs/copilot_evidence/` (before / after where it matters); 30-second pitch script. Handbook §8 aligned.
 - `saitaflex/hyson-detector` archived (read-only), description + homepage → `hack-australiaeast-01/hyson-detector`; GitHub CLI switched back to the team account.
 - Local app on :8501 was started at 00:44 and runs older code (e.g. Journal without the integrity check) → **restart it before the pitch** (Ctrl+C, `streamlit run app.py`).
+
+### 7.15 New network / Reconstitution design not visible online (2026-11-06 04:10 → 04:25)
+- **Symptom:** the user's style update (Réseau de compromission, Reconstitution roadmap) looked "not pushed": the public app showed the new sidebar name but the old Constellation (stars, dark background) and the old timeline.
+- **Cause:** it *was* pushed (`965f769`, 03:43); Streamlit Cloud re-ran `app.py` on push but kept the old `studio.py` module loaded. No lost work: working tree clean, no stash / branch / other copy, VS Code history and git objects only hold older versions.
+- **Fix:** checked the pushed code on a fresh server (new designs, 0 errors), then the user rebooted the public app → both pages verified online. Demo checklist: reboot after every push.
