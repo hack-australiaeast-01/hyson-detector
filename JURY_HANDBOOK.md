@@ -358,15 +358,15 @@ Streamlit app ── tools.py (10 tools, JSON) ── copilot.py ── Azure Op
 ## 8. GitHub and GitHub Copilot (§13, §16)
 
 - **Repository:** `README.md`, `app/` (code), `notebooks/` (Fabric exports), `requirements.txt`, `.env.example`, a `.gitignore` excluding `.env`, data and third-party material. Commits `3ae7d57`, `2404a7d`, `7f7e7bf`, and more.
-- **Public repo:** https://github.com/hack-australiaeast-01/hyson-detector (pushed). Remaining: Fabric Git integration (Workspace settings → Git integration → GitHub, folder `fabric/`).
+- **Public repo:** https://github.com/hack-australiaeast-01/hyson-detector (the only active copy; the first copy `saitaflex/hyson-detector` is archived and points here). Optional: Fabric Git integration (Workspace settings → Git integration → GitHub, folder `fabric/`).
 
-**How Copilot was used (collect screenshots):**
+**How Copilot was used** — full table with 12 real uses, commits and screenshots in [docs/AI_TOOLS_USAGE.md](docs/AI_TOOLS_USAGE.md#1-github-copilot-official-delivery-accelerator):
 - **GitHub Copilot agent mode (VS Code)** — the only coding assistant used (details in [docs/AI_TOOLS_USAGE.md](docs/AI_TOOLS_USAGE.md)):
   - built the Streamlit app, the tools, the copilot and the offline mode;
   - wrote the AppTest tests and ran the live tests against Azure OpenAI;
   - found and fixed several bugs: the split bug, the target-encoding leak, a broken blend, an inconsistent KPI (1,780 → 1,779), and a percentile rounded to 3 decimals that gave 183 alerts too much confidence.
 - **Fabric Copilot (notebooks):** split fix, added features, rewrote notebook 02, ran the notebooks and summarised the outputs.
-- **Time saved:** estimate it honestly (e.g. app + copilot in an afternoon instead of 2–3 days).
+- **Time saved:** 30 commits in ≈ 11 h, all co-authored by Copilot; rough team estimate ≈ 7 person-days of work. Three examples for the pitch: the split bug, copilot cost 5,200 → 3,300 tokens per question, public-app memory 856 → 520 MB.
 
 ---
 

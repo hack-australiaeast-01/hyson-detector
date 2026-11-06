@@ -1,5 +1,5 @@
 # Project status — Hyson Detector · AI Banking Copilot for Fraud Detection
-Updated: **2026-11-06 04:00** · ✅ done · 🟡 in progress · ❌ to do · Target level: **Gold ("Or")** (brief §6)
+Updated: **2026-11-06 04:10** · ✅ done · 🟡 in progress · ❌ to do · Target level: **Gold ("Or")** (brief §6)
 
 **Live demo:** https://hyson-detector.streamlit.app · **Repo (jury):** https://github.com/hack-australiaeast-01/hyson-detector ·
 **Architecture:** [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) (18 diagrams) · **Audit & bank IT:** [docs/AUDIT_AND_BANK_INTEGRATION.md](docs/AUDIT_AND_BANK_INTEGRATION.md) · **Jury Q&A:** [JURY_HANDBOOK.md](JURY_HANDBOOK.md)
@@ -15,7 +15,7 @@ Sections 1–6 = **current state** (kept up to date). Section 7 = **work log** (
 | Validation vs current rules | ✅ | Top 1 %: 718 frauds vs 117, 1,061 false alerts vs 3,221 · backtest 69.4 % ± 2.1 recall over 4 periods |
 | Technical walkthrough | ✅ | `docs/ARCHITECTURE.md`, `docs/MODEL_CARD.md`, `docs/AUDIT_AND_BANK_INTEGRATION.md`, `README.md`, `JURY_HANDBOOK.md` |
 | Automated tests | ✅ | 49 pytest tests (`tests/`, offline, ~50 s: 30 page renders FR/EN, data/model, guardrails, **audit trail**) run by GitHub Actions on every push |
-| Usage of GitHub Copilot | 🟡 | `docs/AI_TOOLS_USAGE.md` declared; table of real uses + screenshots still to fill |
+| Usage of GitHub Copilot | ✅ | `docs/AI_TOOLS_USAGE.md`: 12 real uses with commit + screenshot (`docs/copilot_evidence/`), 30/30 commits co-authored by Copilot, ≈ 7 person-days in ≈ 11 h (estimate), 30-second pitch script |
 | GitHub repo | ✅ | Code, Fabric notebooks (exported with outputs), `requirements.txt` (root + `app/`), README, tests + CI, no secret in files or history |
 | Score file (optional, brief §14) | ✅ | `submission/submission.csv` (187,628 rows, 1,876 alerts) |
 | Pitch (slides, rehearsal, backup video) | ❌ | §5 |
@@ -89,7 +89,7 @@ Sections 1–6 = **current state** (kept up to date). Section 7 = **work log** (
 | 31 | Traceability | ✅ | `copilot_log.jsonl`, `decisions.csv` (hash-chained, → OneLake), `onboarding_log.csv` · `docs/AUDIT_AND_BANK_INTEGRATION.md` |
 | 32 | GitHub + Streamlit Cloud | ✅ | Repo owned by the team account; push to `main` redeploys; snapshot fits the 690 MB limit (peak ≈ 520 MB) — after a crash use **Reboot** |
 | 33 | Architecture & docs | ✅ | 18 diagrams (images + Mermaid source in `docs/diagrams/`), README, JURY_HANDBOOK, `fabric/README.md` |
-| 34 | GitHub Copilot usage evidence | 🟡 | `docs/AI_TOOLS_USAGE.md`: dev assistant = GitHub Copilot agent mode (VS Code); fill the table of real uses + screenshots |
+| 34 | GitHub Copilot usage evidence | ✅ | `docs/AI_TOOLS_USAGE.md` §1: 12 real uses (when, where, ask, result, team decision, time-saved estimate, commit + screenshot); pitch script; handbook §8 aligned |
 | 35 | Slides | ❌ | Problem, live demo, architecture (`docs/img/`), results, robustness, prototype → production, limits |
 | 36 | Pitch 5 min × 3 rehearsals + backup video | ❌ | Brief §10, §17 |
 
@@ -112,9 +112,9 @@ Sections 1–6 = **current state** (kept up to date). Section 7 = **work log** (
 1. 🔴 **Azure OpenAI key in Streamlit Cloud** — still "Copilote : Hors-ligne (règles)" on the public app (checked 03:00). share.streamlit.io → app ⋮ → Settings → Secrets → paste `app/.streamlit/secrets.toml.example` with the real key from `app/.env` → Save.
 2. 🔴 **Slides** (problem, live demo, architecture images, results + robustness, prototype → production, limits).
 3. 🔴 **Rehearse 3× (5 min) + record a backup video** of the demo path (§7.4.4).
-4. 🟠 **Fill the GitHub Copilot usage table** in `docs/AI_TOOLS_USAGE.md` with real uses + screenshots (`docs/copilot_evidence/`) — 30 s of the pitch.
-5. 🟠 **Archive `saitaflex/hyson-detector`** — still public and not archived (checked): github.com/saitaflex/hyson-detector/settings → Archive.
-6. 🟡 Fabric clean-up — still present (checked): notebooks `03_`, `03b_`, `03c_`, `03d_powerbi_dashboard` and semantic model `Saitaflex-model`.
+4. ✅ ~~Fill the GitHub Copilot usage table~~ — done 04:10 (12 rows, commits + 10 screenshots); adjust the time-saved estimates if the team sees them differently.
+5. ✅ ~~Archive `saitaflex/hyson-detector`~~ — archived 04:05, description and homepage point to `hack-australiaeast-01/hyson-detector`.
+6. 🟡 Fabric clean-up — notebooks 03/03b/03c/03d are gone; semantic model `Saitaflex-model` still present (checked 04:00).
 7. 🟡 Decide whether the personal e-mail in the public Git history is acceptable.
 8. 🟡 After the pitch only: publish an Environment from `fabric/environment.yml`, then schedule `pl_hyson_retrain` (re-scoring changes the demo IDs).
 
@@ -339,7 +339,7 @@ Read-only SQL on `lh_fraud`, then compared with the app (`tools.get_kpis`, `feat
 #### 7.7.1 Delivery
 | Item | Result |
 |---|---|
-| GitHub | Public repo **https://github.com/hack-australiaeast-01/hyson-detector** (created with the team account so it is owner/admin; first push went to `saitaflex/hyson-detector`, now a stale copy). Notebooks = Fabric exports with outputs; `submission/submission.csv`; secret scan of files + history clean |
+| GitHub | Public repo **https://github.com/hack-australiaeast-01/hyson-detector** (created with the team account so it is owner/admin; first push went to `saitaflex/hyson-detector`, now archived and pointing here). Notebooks = Fabric exports with outputs; `submission/submission.csv`; secret scan of files + history clean |
 | Streamlit Cloud | **https://hyson-detector.streamlit.app**, main file `app/app.py`, Python 3.12, redeploys on every push. Reads the committed Gold snapshot (no Entra login in the cloud). Secrets bridge accepts keys at root or under a `[section]`; `secrets.toml.example` provided |
 | Architecture | `docs/ARCHITECTURE.md` (rewritten 2026-11-06 02:40): **18 diagrams** — end-to-end, Fabric platform, ML pipeline, MLOps lifecycle + NB 04, Azure AI Foundry / OpenAI layer, ML vs DL map (+ DL roadmap), 8 AI pipelines one by one, app pages, demo path, deployment & security — shown as images (`docs/img/`), editable Mermaid source in `docs/diagrams/` (5 pages ≤ 4 diagrams: GitHub stops rendering after ~7 per page), `python docs/diagrams/render.py` regenerates the images; linked from README and JURY_HANDBOOK §7 |
 | AI tools declaration | `docs/AI_TOOLS_USAGE.md`: development assistant = **GitHub Copilot agent mode (VS Code)** only; Azure OpenAI = in-product copilot |
@@ -462,3 +462,8 @@ Still open (team): Azure key in Streamlit Secrets, slides, rehearsal + backup vi
 - **Conflict resolved:** the old fairness table (`features.fairness()`, alert rate / precision / recall) and the new `fairness.py` (false-alert rate model vs rules) wrote the **same snapshot** `feat_fairness.parquet` with different columns → the old block would crash the Performance page online. Old block and `features.fairness()` removed; `fairness.py` kept (its snapshot committed).
 - **Pushed together:** prompt-injection guard (`copilot._sanitize`), fairness + limits cards, "Réseau de compromission" and the Reconstitution roadmap (§7.12), 3D emblem removed; data files only rewritten by the live app (identical content) left out.
 - **Checks:** full suite on the exact tree pushed (offline snapshot, as CI and Streamlit Cloud), GitHub Actions green, public app checked after redeploy.
+
+### 7.14 GitHub Copilot usage evidence and old repo archived (2026-11-06 04:00 → 04:10)
+- `docs/AI_TOOLS_USAGE.md` §1 filled from the real history: 12 uses (pipeline audit and split bug, live Fabric, copilot v4, showcase pages, 03e as a Fabric job, deployment, hostile-judge review, memory fix, person search + onboarding, robustness + tests, audit trail, Git), each with the request, result, team decision, time-saved estimate and commit; 10 screenshots in `docs/copilot_evidence/` (before / after where it matters); 30-second pitch script. Handbook §8 aligned.
+- `saitaflex/hyson-detector` archived (read-only), description + homepage → `hack-australiaeast-01/hyson-detector`; GitHub CLI switched back to the team account.
+- Local app on :8501 was started at 00:44 and runs older code (e.g. Journal without the integrity check) → **restart it before the pitch** (Ctrl+C, `streamlit run app.py`).
