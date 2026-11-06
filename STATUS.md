@@ -1,29 +1,49 @@
 # Project status — Hyson Detector · AI Banking Copilot for Fraud Detection
-Updated: 2026-11-06 02:15 · ✅ done · 🟡 in progress · ❌ to do · Target level: **Gold ("Or")** (brief §6) · Full work log: §8 · Latest: §13–15
+Updated: **2026-11-06 03:00** · ✅ done · 🟡 in progress · ❌ to do · Target level: **Gold ("Or")** (brief §6)
 
-**Live demo:** https://hyson-detector.streamlit.app · **Repo (jury):** https://github.com/hack-australiaeast-01/hyson-detector · last commit `014cd04`
+**Live demo:** https://hyson-detector.streamlit.app · **Repo (jury):** https://github.com/hack-australiaeast-01/hyson-detector ·
+**Architecture:** [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) (18 diagrams) · **Jury Q&A:** [JURY_HANDBOOK.md](JURY_HANDBOOK.md)
 
-## 1. Pipeline & model (frozen: do not rerun notebook 02, or the demo IDs change)
+Sections 1–6 = **current state** (kept up to date). Section 7 = **work log** (dated history; figures there are as of that time).
+
+## 0. At a glance — deliverables (brief §13)
+| Deliverable | Status | Where / evidence |
+|---|---|---|
+| Working application | ✅ | 15 pages FR/EN · local = **live Fabric** · public = https://hyson-detector.streamlit.app (Gold snapshot) |
+| Copilot (mandatory) | ✅ · 🟡 online key | `app/copilot.py` + 10 tools · **14/14 golden questions, 99.3 % of cited numbers grounded** · public app still "Hors-ligne (règles)" until the key is in Streamlit Secrets (§5.1) |
+| Data pipeline on Fabric | ✅ | Lakehouse `lh_fraud`, notebooks 01 · 02 · 03e · 04, pipeline `pl_hyson_retrain`, MLflow model `hyson-fraud-lightgbm` |
+| Validation vs current rules | ✅ | Top 1 %: 718 frauds vs 117, 1,061 false alerts vs 3,221 · backtest 69.4 % ± 2.1 recall over 4 periods |
+| Technical walkthrough | ✅ | `docs/ARCHITECTURE.md`, `README.md`, `JURY_HANDBOOK.md` |
+| Usage of GitHub Copilot | 🟡 | `docs/AI_TOOLS_USAGE.md` declared; table of real uses + screenshots still to fill |
+| GitHub repo | ✅ | Code, Fabric notebooks (exported with outputs), `requirements.txt`, README, no secret in files or history |
+| Score file (optional, brief §14) | ✅ | `submission/submission.csv` (187,628 rows, 1,876 alerts) |
+| Pitch (slides, rehearsal, backup video) | ❌ | §5 |
+
+## 1. Pipeline & model on Microsoft Fabric (frozen: do not re-run notebooks 01/02, or the demo IDs change)
 | # | Item | Status | Notes |
 |---|---|---|---|
-| 1 | Fabric workspace `ws-hack-fraud-australiaeast`, lakehouse `lh_fraud`, copy job | ✅ | 1,908,228 transactions, 3,500 customers (larger than the brief) |
-| 2 | Time split | ✅ | train 2025-01→2026-05 · valid 2026-06→07 · test 2026-08→09 (no labels) |
-| 3 | NB 01: silver + `gold_features` (73 features, past-only) | ✅ | Behaviour, velocity, novelty, geography/speed, channel, digital timing, graph (already-reported frauds only), calendar |
-| 4 | Leak checks | ✅ | 0 test labels, 0 duplicates, no label columns; target-encoded `*_risk` features excluded |
-| 5 | NB 02: rules + HGB / LightGBM / LambdaRank / blend, champion chosen on valid | ✅ | Champion **LightGBM**: the same model scores and explains (SHAP) |
-| 6 | Gold tables + submission CSV (§14) | ✅ | gold_scores, gold_alert_queue, gold_alert_explanations, gold_model_metrics/leaderboard/importance/recall_by_type, Files/submission/submission_csv · copy in the repo: `submission/submission.csv` (187,628 rows, 1,876 alerts) |
-| 7 | App ↔ Fabric | ✅ | **Live** via SQL analytics endpoint (Entra token): Gold tables, full history with lat/long, 781k digital events, related cases across the whole bank; decisions written to OneLake `Files/app_feedback`; parquet fallback |
-| 7a | NB 04 robustness + MLflow + pipeline | ✅ | Rolling backtest 4 folds: top-1 % recall **69.4 % ± 2.1** (worst 66.7 %); 95 % CI Jun–Jul recall 70.9 % [68.3–73.0], precision 40.4 % [34.9–45.0]; ML model `hyson-fraud-lightgbm` v1 = production scores (corr 1.0); pipeline `pl_hyson_retrain` (not scheduled); `fabric/environment.yml` (§15) |
+| 1 | Workspace `ws-hack-fraud-australiaeast`, lakehouse `lh_fraud`, copy job `cj_bronze_load` | ✅ | 1,908,228 transactions, 3,500 customers, 781k digital events (larger than the brief) |
+| 2 | Time split | ✅ | train 2025-01 → 2026-05 · valid 2026-06 → 07 · test 2026-08 → 09 (labels NULL) |
+| 3 | NB 01 `silver_transactions` + `gold_features` | ✅ | 73 features, past-only windows: amount vs habits, velocity, novelty, geography/speed, digital banking, network (frauds already reported), calendar/profile |
+| 4 | Leak checks | ✅ | 0 test labels anywhere, leak `assert`, target-encoded `*_risk` excluded (never in the 18,280 SHAP rows), no early stopping on valid |
+| 5 | NB 02 scoring + explanations | ✅ | Rules · HGB · **LightGBM (champion)** · LambdaRank · blend; refit on train+valid for Aug–Sep; top 1 % per period; TreeSHAP (3 for, 2 against) + up to 4 rules per alert |
+| 6 | Gold tables + submission | ✅ | `gold_scores`, `gold_alert_queue` (3,656), `gold_alert_explanations`, `gold_model_*`, `Files/submission/submission_csv` · repo copy `submission/submission.csv` |
+| 7 | NB 04 robustness + MLflow | ✅ | Rolling backtest (4 × 2 months), day-block bootstrap CIs, `gold_model_robustness` / `gold_model_ci`; ML model **`hyson-fraud-lightgbm` v1** = production scores (rank corr 1.0) |
+| 8 | Data pipeline + environment | ✅ | `pl_hyson_retrain` (01 → 02 → 03e ∥ 04, retry 1) **created, never run, not scheduled**; versions pinned in `fabric/environment.yml` (Environment item not published) |
+| 9 | Power BI as code (NB 03e) | ✅ | `pbi_*` tables → Direct Lake `sm_fraud_copilot` (DAX) → report "Fraud Copilot — Dashboard", 8 pages FR/EN, icon navigation; exact counts 1,779 / 718 / 1,061 / 117 / 3,221. Do not edit the report by hand (03e rewrites it). 03/03b/03c/03d = older versions |
+| 10 | App ↔ Fabric | ✅ | Local: **live** T-SQL on the SQL endpoint with the Entra token, decisions written to OneLake `Files/app_feedback`. Public: committed snapshot (Gold + 999,946 history rows + 402,553 events of the 1,814 alert customers, no test labels) |
 
 ## 2. Results (validation Jun–Jul 2026, out-of-time, final)
-| | Alerts | Frauds caught | Recall | Precision |
-|---|---|---|---|---|
-| Current rules engine | 3,338 | 117 / 1,013 | 11.5 % | 3.5 % |
-| Model, same alert volume | 3,338 | 787 | 77.7 % | 23.6 % |
-| **Model, top 1 %** | **1,779** | **718** | **70.9 %** | **40.4 %** |
-| Model, top 0.5 % | ~890 | ~590 | 58.2 % | 66.4 % |
+| | Alerts | Frauds caught | False alerts | Recall | Precision |
+|---|---|---|---|---|---|
+| Current rules engine | 3,338 | 117 / 1,013 | 3,221 | 11.5 % | 3.5 % |
+| Model, same alert volume | 3,338 | 787 | 2,551 | 77.7 % | 23.6 % |
+| **Model, top 1 % (analyst capacity)** | **1,779** | **718** | **1,061** | **70.9 %** | **40.4 %** |
+| Model, top 0.5 % | ~890 | ~590 | ~300 | 58.2 % | 66.4 % |
 
-- PR-AUC 0.646 (rules 0.014).
+- PR-AUC **0.646** [0.610–0.675] (rules 0.014) · recall 70.9 % [68.3–73.0] · precision 40.4 % [34.9–45.0] · false alerts avoided 2,160 [1,971–2,335] (95 % day-block bootstrap).
+- **Robustness:** re-trained on the past only and tested on 4 periods → top-1 % recall **69.4 % ± 2.1** (worst 66.7 %), fraud value caught 72.5 %; rules 12.6 % / 3.7 % on the same periods.
+- Fraud value: 78,059 TND caught (68 %) vs 25,462 TND (22 %) for the rules; legitimate payments flagged 97,857 TND vs 8.08 M TND.
 - Recall by fraud type, model vs current engine:
 
   | Fraud type | Model | Current engine |
@@ -35,64 +55,147 @@ Updated: 2026-11-06 02:15 · ✅ done · 🟡 in progress · ❌ to do · Target
   | Card testing | 61 % | 0 % |
   | Cloned card abroad | 91 % | 100 % (legacy rule kept as a complement) |
 
-- Pitch line: "Half the alerts, about 6× more frauds caught, about 67 % fewer false alerts (1,061 vs 3,221)."
-- Demo cases:
-  - TX01555470, obvious fraud: 3 night-time web transfers in 4 h (00:54, 03:30, 04:49), 3 failed logins in the previous 24 h.
-  - TX01585580, subtle fraud: 7.69 TND online at 02:03 at a new merchant, after 2 other micro-purchases (card testing).
-  - TX01575959, false positive avoided: 3,361 TND chip purchase in Tunis, daytime, retired customer. The current engine raised an alert; the model scores it in the bottom 0.01 %.
+- In the Aug–Sep queue (1,876 alerts) the validation predicts ≈ 649 real frauds: 562 "Bloquer" (87 % measured), 1,314 "Vérifier".
+- Demo cases (June, chosen automatically in NB 02 for their ground truth):
+  - TX01555470, obvious fraud: 3 night-time web transfers in 4 h, 3 failed logins from an Italian IP, beneficiary added at 23:33 → BLOQUER.
+  - TX01585580, subtle fraud: 7.685 TND online at 02:03 at a new merchant after 2 micro-purchases (card testing) → BLOQUER.
+  - TX01575959, false positive avoided: 3,360.634 TND chip purchase in Tunis, daytime, retired customer; legacy alert, model bottom 0.01 % → VALIDER.
+- Pitch line: "Half the alerts, 6× more frauds caught, 67 % fewer false alerts — and it holds on every period we tested."
 
-## 3. Application & copilot (`app/`)
-| # | Item (brief §) | Status | Notes |
+## 3. Application & copilot (`app/`, Streamlit, FR/EN)
+| # | Page / component | Status | Notes |
 |---|---|---|---|
-| 8 | Alert queue: filters (period/date/channel/risk/fraud type), risk colours, alerts per day (§10) | ✅ | `app.py` · banner "une alerte n'est pas une fraude" + columns **Fraudes mesurées** (validation rate for that score) and **Action conseillée** (§13) |
-| 9 | Transaction view: score, risk and reassuring factors (observed vs usual), decision + confidence + comment, no scrolling (§10) | ✅ | |
-| 10 | Customer 360: profile, habits, timeline with digital events, map (§10) | ✅ | Live from Fabric · habits = customer's past **before the open alert** (same 409 ops / 189.305 TND as the copilot) |
-| 11 | 9 copilot tools (§9.2): get_alert_queue, get_transaction, get_customer_profile, compare_to_habits, get_customer_history, get_digital_events, find_related_cases, get_kpis, record_decision | ✅ | `tools.py`, compact JSON, unknown IDs handled |
-| 12 | Copilot: prompt §9.3, 5-part format §9.4, function calling, cache, guardrails (§9.8) | ✅ | `copilot.py` v4: intent routing + prefetch (1 LLM round), streaming + live tool steps, deterministic recommendation (`recommandation_systeme`), FR/EN, off-topic & injection guardrails, prompt caching, timeout/retries, offline fallback |
-| 13 | Copilot traceability: question, tools, tokens, latency → `data/copilot_log.jsonl` + Journal page (§9.8) | ✅ | |
-| 14 | Decision journal + feedback (`data/decisions.csv`) (§10) | ✅ | |
-| 15 | KPI page: model vs current engine, recall per type, drivers, leaderboard (§10) | ✅ | |
-| 16 | Azure OpenAI: `app/.env` (endpoint, key, deployment) | ✅ | Deployment **gpt-5-mini**, API 2024-12-01-preview, `reasoning_effort=low`, `max_completion_tokens` 2,400, timeout 60 s, 2 retries |
-| 17 | Tested live on the §9.7 questions: 6 per demo case + 2 global, FR and EN = 40 answers | ✅ | `python warmup.py fr en` (cache). Recommendations 100 % consistent: TX01555470 BLOQUER · TX01585580 BLOQUER · TX01575959 VALIDER. Avg **3,300 tokens (≈1,400 from prompt cache), 7 s**, 1 round; instant from cache |
-| 18 | Power BI report on Gold (manager view, complement) | ✅ | Built as code by `notebooks/03d_powerbi_dashboard.ipynb`: 8 `pbi_*` tables → Direct Lake model `sm_fraud_copilot` (25 DAX measures) → report "Fraud Copilot — Dashboard", 4 dark-theme pages (executive view, alert queue, why?, fraud types). 03d = final design pass (title line, slicer height, no "K" units, no "—" row, legend titles) — **run in Fabric and verified on all pages**. Local 03d also auto-attaches `lh_fraud` (`%%configure`). To do: delete old notebooks `03_`, `03b_`, `03c_` in Fabric |
-| 18a | Power BI icon navigation + FR/EN | ✅ | `notebooks/03e_powerbi_dashboard.ipynb` **run in Fabric as a job (Completed)**: report rebuilt, 8 pages (4 FR + 4 EN), 4 icons; `pbi_*` = 1,779 alerts / 718 / 1,061 / 117 / 3,221 (demo FAIBLE row excluded). Job-safe: plain `pip`, PBIR-aware report update, session stop only when interactive. Do not edit the report by hand (03e overwrites it) |
-| 18c | App FR/EN + icon navigation | ✅ | Sidebar "Français / English" switch translates every page; Power BI page uses the same 4 icons + titles to change report page and opens the EN report pages in English. Tested in the browser (FR + EN) |
-| 18d | "Marché & benchmarks" page (FR/EN) | ✅ | `app/market.py`: 6 cited public benchmarks (EBA/ECB 2024 + Dec 2025, UK Finance 2025/2026, BCT 2024, PwC/McKinsey FP estimate) · same KPIs on our data (live Fabric SQL, snapshot `data/feat_market.parquet`) · Tunisia-scale scenario with editable assumptions · fraud rate by channel / entry mode, 3-D Secure lever · **rules-engine audit** (R04, R01, R05 to switch off: ≈ 17,483 fewer false alerts for 2 solo frauds) · **time to detect** (median 11 days, 32.8 % within 7 days). Snapshots `feat_legacy_rules`, `feat_time_to_detect`. Tested FR + EN (AppTest) and in the browser |
-| 18b | Power BI embedded in the app | ✅ | Page "📈 Tableau de bord Power BI" in `app.py`: secure embed (`reportEmbed`, viewer signs in with the org account, nothing public), page picker + "Ouvrir dans Power BI". IDs in `.env.example` (`PBI_REPORT_ID`, `PBI_TENANT_ID`). Tested: page renders, no errors |
-| 19 | GitHub repo + hosted demo | ✅ | Public repo **hack-australiaeast-01/hyson-detector** (owner/admin = team account), full Git history, no secret in files or history (key scanned). Streamlit Community Cloud: https://hyson-detector.streamlit.app (auto-redeploys on push). Old copy `saitaflex/hyson-detector` still public → archive it. Fabric Git integration not done (optional) |
-| 20 | GitHub Copilot usage evidence (screenshots, time saved) | 🟡 | `docs/AI_TOOLS_USAGE.md` ready: Copilot log table to fill with real uses + screenshots in `docs/copilot_evidence/`; GitHub Copilot agent mode (VS Code) and Azure OpenAI usage declared (§13, §16.4, §17); commits carry the `Co-authored-by: Copilot` trailer |
-| 21 | Slides: problem, demo, architecture, results, prototype → production, limits | ❌ | §17 · diagrams ready: `docs/ARCHITECTURE.md` + PNGs in `docs/img/` |
-| 22 | Pitch 5 min ×3 rehearsals + backup video | ❌ | §10, §17 |
+| 11 | Shell | ✅ | Hyson Detector brand + team logo, light bank theme, sidebar groups Bienvenue · Analyste · Enquête IA · Pilotage · Données, FR/EN switch, splash, welcome dialog, 3 demo-case buttons |
+| 12 | Démarrer ici | ✅ | 4 headline KPIs, 8-step guided tour, hint on every page |
+| 13 | File d'alertes | ✅ | Filters, risk colours, alerts/day; banner "une alerte n'est pas une fraude"; columns **Fraudes mesurées** (validation rate for that score) and **Action conseillée**; deep-search flags |
+| 14 | Fiche transaction & copilote | ✅ | Score, measured fraud at this score, factors for/against (observed vs usual), recommendation, chat with suggested questions, decision + stopwatch, printable case file |
+| 15 | Vue client 360 | ✅ | Habits **before the open alert** (same 409 ops / 189.305 TND as the copilot), timeline with digital events, map, "Rechercher un client par description" |
+| 16 | Enquête approfondie | ✅ | Watch list of medium alerts (≈ 53 % fraud vs 16 %), evidence board E1…En (incl. 25 nearest labelled alerts), one-call AI synthesis |
+| 17 | Le Procès | ✅ | AI prosecutor + defence (parallel) → judge; analyst accepts/overrides → decision log |
+| 18 | Reconstitution | ✅ | Hours before the alert step by step, red signals, map, AI narration |
+| 19 | Contre-enquête | ✅ | Neutralise top SHAP factors → robust / sensitive |
+| 20 | Constellation | ✅ | 29 points of compromise, 294 exposed alerts; shown as an investigation lead (not predictive in validation) |
+| 21 | Impact & processus | ✅ | TND caught / flagged, workload (editable), process flow, recommendation mix, decision time, AI cost per alert, PSI drift |
+| 22 | Marché & benchmarks | ✅ | 6 cited public benchmarks, Tunisia-scale scenario, rules-engine audit, time to detect |
+| 23 | Performance du modèle | ✅ | Model vs rules, recall by type, drivers, leaderboard + **Robustesse et gouvernance** (backtest, CIs, MLflow, copilot evaluation) |
+| 24 | Tableau de bord Power BI | ✅ | Secure embed (viewer signs in), page picker |
+| 25 | Journal & traçabilité | ✅ | Decisions (feedback loop) + copilot log (question, tools, tokens) |
+| 26 | Nouvelle source de données | ✅ | Profile → map/translate (rules, optional 1 AI call on names + stats) → accuracy + PSI → **human approval** → versioned data contract |
+| 27 | 10 tools (`tools.py`) | ✅ | get_alert_queue · get_transaction · get_customer_profile · compare_to_habits (+ decline reason, 24 h card sequence) · get_customer_history · get_digital_events · find_related_cases · get_kpis (comparison in plain words) · find_customers · record_decision |
+| 28 | Copilot engine (`copilot.py`) | ✅ | Intent routing (incl. person / customer ID / typed TX ID), prefetch → 1 LLM round, streaming, deterministic `recommandation_systeme`, demo calendar ("hier" = 2026-09-29), guardrails: off-topic refusal, unknown ID answered with 0 token, Azure content-filter refusal, no field names; cache, log, offline mode, hourly cap |
+| 29 | Azure OpenAI (Azure AI Foundry) | ✅ | Project `proj-fraud-australiaeast`, resource `aoai-fraud-australiaeast-vnxcy`, deployment **gpt-5-mini**, API 2024-12-01-preview, `reasoning_effort=low`, `max_completion_tokens` 2,400, timeout 60 s, 2 retries; ≈ 3,300 tokens (≈ 1,400–2,000 prompt-cached) and ≈ 7 s per new question |
+| 30 | Evaluation & cache | ✅ | `eval_copilot.py`: 14/14, 99.3 % grounded (`docs/COPILOT_EVAL.md`); `warmup.py fr en`: 40 answers + 6 trials pre-computed |
+| 31 | Traceability | ✅ | `copilot_log.jsonl`, `decisions.csv` (→ OneLake), `onboarding_log.csv` |
+| 32 | GitHub + Streamlit Cloud | ✅ | Repo owned by the team account; push to `main` redeploys; snapshot fits the 690 MB limit (peak ≈ 520 MB) — after a crash use **Reboot** |
+| 33 | Architecture & docs | ✅ | 18 diagrams (images + Mermaid source in `docs/diagrams/`), README, JURY_HANDBOOK, `fabric/README.md` |
+| 34 | GitHub Copilot usage evidence | 🟡 | `docs/AI_TOOLS_USAGE.md`: dev assistant = GitHub Copilot agent mode (VS Code); fill the table of real uses + screenshots |
+| 35 | Slides | ❌ | Problem, live demo, architecture (`docs/img/`), results, robustness, prototype → production, limits |
+| 36 | Pitch 5 min × 3 rehearsals + backup video | ❌ | Brief §10, §17 |
 
 ## 4. Decision log
-- Time split, never random; valid = last 2 labelled months (§8.3).
-- No gender, IDs, fraud_scenario, fraud_reported_date (except "already reported" graph features) or legacy decisions as features (§8.6).
+- Time split, never random; valid = last 2 labelled months (brief §8.3).
+- No gender, IDs, `fraud_scenario`, `fraud_reported_date` (except "already reported" network features) or legacy decisions as features (brief §8.6).
 - Target-encoded entity risk dropped (not point-in-time).
 - Train = all frauds + 10 % of legitimate transactions (weight 10); valid/test kept complete.
 - Champion = LightGBM when within 1 pt of the best top-1 % recall, so one model both scores and explains.
-- Alert budget = 1 % per period (analyst capacity, §8.4).
-- The model scores, the LLM explains only from tool JSON, the analyst decides (§9.1). Offline deterministic mode if the LLM is unavailable.
-- Streamlit = analyst tool + copilot, reading Fabric **live** (SQL analytics endpoint, option A §11) with a parquet fallback (option B); Power BI = manager KPIs (complement only).
-- Out of scope (no data): AML flows, first-party/internal fraud.
-- Dataset differs from the brief (3,500 customers, 2025-01→2026-09, 1.9 M tx). The current engine measured on our valid period = 3.5 % precision / 11.5 % recall (the brief's 15 % / 42 % is on its own train period).
+- Alert budget = 1 % per period (analyst capacity; = the brief's ~1,000 alerts on its 101,730 test rows).
+- **ML for the score, DL (LLM) only for language**: gradient boosting is the reference on tabular data and auditable; deep-learning scoring models are roadmap challengers (sequence model, GNN, autoencoder) to validate with the same backtest.
+- The model scores, the LLM explains only from tool facts, a documented rule recommends, the analyst decides. Offline deterministic mode if the LLM is unavailable.
+- The pipeline is **frozen** for the pitch: robustness, MLflow and evaluation were added without re-scoring.
+- Streamlit = analyst tool + copilot (Fabric live = brief §11 option A; snapshot for the hosted demo = option B); Power BI = manager KPIs (complement).
+- Out of scope (no data): AML flows, first-party / internal fraud.
+- Dataset differs from the brief (3,500 customers, 2025-01 → 2026-09, 1.9 M tx); the current engine measured on our validation period = 3.5 % precision / 11.5 % recall.
 
-## 5. Next actions (as of 2026-11-06 01:00)
+## 5. Next actions (checked 2026-11-06 03:00)
 **Blocking for the pitch — only the team can do these:**
-1. 🔴 **Azure OpenAI key in Streamlit Cloud** → share.streamlit.io → app ⋮ → Settings → Secrets → paste `app/.streamlit/secrets.toml.example` with the real key from `app/.env` → Save. Today the public app says "Copilote : Hors-ligne (règles)": demo cases answer from the gpt-5-mini cache, new questions get the offline template.
-2. 🔴 **Slides** (problem, live demo, architecture from `docs/img/`, results, prototype → production, limits) — §17.
-3. 🔴 **Rehearse 3× (5 min) + record a backup video** of the demo path (§10.4) — §10, §17.
-4. 🟠 **Fill the GitHub Copilot usage table** in `docs/AI_TOOLS_USAGE.md` with real uses + screenshots (`docs/copilot_evidence/`) — §13 deliverable, 30 s of the pitch.
-5. 🟠 **Archive `saitaflex/hyson-detector`** (older copy, still public) so the jury only finds `hack-australiaeast-01/hyson-detector` (github.com/saitaflex/hyson-detector/settings → Archive).
-6. 🟡 Fabric workspace clean-up: delete old notebooks `03_`, `03b_`, `03c_` (and `03d_` if 03e is the final), check `Saitaflex-model`.
-7. 🟡 Decide whether the personal e-mail in the public Git history (`saitaflex <…@gmail.com>`) is acceptable.
+1. 🔴 **Azure OpenAI key in Streamlit Cloud** — still "Copilote : Hors-ligne (règles)" on the public app (checked 03:00). share.streamlit.io → app ⋮ → Settings → Secrets → paste `app/.streamlit/secrets.toml.example` with the real key from `app/.env` → Save.
+2. 🔴 **Slides** (problem, live demo, architecture images, results + robustness, prototype → production, limits).
+3. 🔴 **Rehearse 3× (5 min) + record a backup video** of the demo path (§7.4.4).
+4. 🟠 **Fill the GitHub Copilot usage table** in `docs/AI_TOOLS_USAGE.md` with real uses + screenshots (`docs/copilot_evidence/`) — 30 s of the pitch.
+5. 🟠 **Archive `saitaflex/hyson-detector`** — still public and not archived (checked): github.com/saitaflex/hyson-detector/settings → Archive.
+6. 🟡 Fabric clean-up — still present (checked): notebooks `03_`, `03b_`, `03c_`, `03d_powerbi_dashboard` and semantic model `Saitaflex-model`.
+7. 🟡 Decide whether the personal e-mail in the public Git history is acceptable.
+8. 🟡 After the pitch only: publish an Environment from `fabric/environment.yml`, then schedule `pl_hyson_retrain` (re-scoring changes the demo IDs).
 
 **Demo day checklist:**
-- Open https://hyson-detector.streamlit.app 5 min before (free apps sleep; first load ≈ 20 s).
-- Pitch laptop: `az login` → `cd app` → `streamlit run app.py` (live Fabric) → run the demo path once to warm the cache.
-- Do not click "Rafraîchir depuis Fabric" during the pitch (≈ 15 s reload). Do not re-run notebooks 01/02 (demo IDs would change).
-- Have one Aug–Sep alert ready besides the 3 demo cases (they are June cases chosen for their ground truth).
+- Open https://hyson-detector.streamlit.app 5 min before (free apps sleep; first load ≈ 20 s). If it shows "over its resource limits": share.streamlit.io → ⋮ → **Reboot**.
+- Pitch laptop: `az login` → `cd app` → `streamlit run app.py` (sidebar shows Fabric live) → run the demo path once.
+- Do not click "Rafraîchir depuis Fabric" during the pitch (≈ 15 s reload). Do not run notebooks 01/02 or the pipeline.
+- Keep one Aug–Sep alert ready besides the 3 June demo cases (e.g. TX01890379, declined for limit exceeded).
 
-## 7. Review findings (2026-11-05 evening) — status after fixes
+## 6. Known limits (say them before the jury does)
+- ≈ 62 % of alerts have no business-rule factor → their explanation rests on model factors; the "concordant signals" of the recommendation count strong model factors (precision of each band is measured and shown).
+- Demo cases are June (validation) cases chosen for their ground truth; keep an Aug–Sep alert ready.
+- Champion picked among 4 models on the same validation period that is reported (they are within ~1 pt; test labels are with the jury) — mitigated by the 4-period backtest (69.4 % ± 2.1).
+- gpt-5-mini has no temperature setting (brief §9.8 asks 0–0.2): stability comes from the deterministic recommendation rule + low reasoning effort.
+- Online, "related cases" only see the 1,814 alert customers (answer says "extrait local"); live Fabric sees the whole bank.
+- Batch scoring, not at authorisation time.
+- The fraud score is classical ML; deep learning is used only through the LLM (no DL scoring model yet).
+- Data onboarding stops at the approved data contract: OneLake → Bronze → re-scoring is documented, not run live.
+- The retraining pipeline exists but has never run (frozen demo); the Environment is pinned in a file, not published.
+
+## 7. Work log (dated history — figures as of that time; current state = §1–§6)
+
+### 7.1 Fabric pipeline and first app (2026-11-05 afternoon)
+> State at 2026-11-05 ~18:00. Since then: pushed to GitHub, notebooks replaced by the Fabric exports, 10 tools, 15 pages, ≈ 3,300 tokens per question.
+
+#### 7.1.1 Data pipeline in Fabric (notebooks 01 and 02)
+| Step | What was done | Why / result |
+|---|---|---|
+| Diagnostic SQL | Date ranges per `split` + frauds per month on the SQL endpoint | Found train = 2025-01→2026-07, test = 2026-08→09 (not the brief's dates) |
+| Split bug fixed (NB 01) | `period` was built from `F.month()` only, so it ignored the year: Aug–Sep **2025** train rows were labelled "test" (the "234 test frauds"). Now: keep `split`; `valid` = first day of the month before `max(train)` → 2026-06-01, computed on the full train table; labels nulled on test | Not a data leak, a code bug. Result: train 1,542,647 rows / 8,494 frauds (0.551 %), valid 177,953 / 1,013 (0.569 %), test 187,628 / NULL |
+| Session error | `NameError: SAMPLE` came from running one cell after `mssparkutils.session.stop()` | Always "Run all" |
+| Features 57 → 68 → 73 | Fabric Copilot added digital timings, sequence flags, graph distinct counts; we added `f_new_category`, `f_key_contactless_24h`, `f_key_new_merchants_24h`, `f_round_amount`, `f_benef_n_customers_before`, Ramadan 2025 | Contactless recall 63 → 68 %, card testing 50 → 61 % |
+| Leak found and removed | `f_merchant_risk`, `f_device_risk`, `f_beneficiary_risk` were target-encoded on all train labels (each row saw its own label and future labels) | Excluded in NB 02 (`LEAKY` set); point-in-time version documented but not needed |
+| NB 02 rewritten | Memory-safe load (all frauds + 10 % legit, weight 10; valid/test complete) instead of `toPandas()` on 1.9 M rows; inf → NaN; leak assert; MLflow autolog off; `%%configure` attaches `lh_fraud` (fixed "No default context") | Runs in ~10 min without OOM |
+| Champion vs challengers | HGB, LightGBM, LambdaRank (one query per day), rank blend; blend bug fixed (rules weight dominated the top) | LightGBM PR-AUC 0.646; champion forced to LightGBM when within 1 pt so **the same model scores and explains** (SHAP via `pred_contrib`) |
+| Explanations | Per alert: up to 5 rule factors (observed vs usual), 3 SHAP factors for fraud, 2 against (= reassuring), French labels | Feeds the transaction page and the copilot |
+| Gold outputs | `gold_scores` (valid+test only), `gold_alert_queue` (3,656, `demo_case` column), `gold_alert_explanations` (20,145), `gold_model_metrics`, `gold_model_leaderboard`, `gold_model_importance`, `gold_model_recall_by_type`, `Files/submission/submission_csv` | Test labels nulled in Spark before writing (check = 0) |
+| Demo cases | Picked from valid by rule: highest-scored fraud, fraud caught with weak rules, legacy alert the model scores lowest | TX01555470, TX01585580, TX01575959 |
+
+#### 7.1.2 Analyst application (`app/`)
+| File | Content |
+|---|---|
+| `app.py` | Streamlit, 5 pages: alert queue (filters, risk colours, alerts/day, click-to-open), transaction card (score, risk and reassuring factors with observed vs usual, decision form, chat with 6 suggested questions), customer 360 (profile, habits, timeline incl. digital events, map with the alert highlighted), performance (model vs engine, recall per type, drivers, leaderboard), journal (decisions + copilot log). Sidebar: demo buttons, data source, copilot mode, token counter, "Rafraîchir depuis Fabric" |
+| `data_access.py` | Source layer. **Fabric live**: pyodbc + ODBC Driver 17, Entra token (`AzureCliCredential`, else browser) on `lh_fraud` SQL endpoint; small Gold tables loaded once; customer history / digital events / related cases queried with server-side filters; decisions uploaded to OneLake `Files/app_feedback/decisions.csv`. **Fallback**: parquet in `app/data` (refreshed on each live load). Test labels nulled; `gender` dropped |
+| `tools.py` | 9 tools returning compact JSON: `get_alert_queue`, `get_transaction`, `get_customer_profile` (habits optionally before a transaction), `compare_to_habits` (past only: ratio, p95, countries, city/merchant/device/beneficiary seen and seen > 24 h, night share, previous op, 24 h activity, card bursts, distance and implied speed), `get_customer_history`, `get_digital_events` (≥ 24 h window), `find_related_cases` (bank-wide, counts only frauds **reported before** the transaction), `get_kpis`, `record_decision` |
+| `copilot.py` | Azure OpenAI function calling (≤ 4 tool rounds), brief §9.3 prompt + explicit decision rule, 5-part format, open transaction pre-injected, tool output capped (3,500 chars), disk cache (`copilot_cache.json`), log of every call (`copilot_log.jsonl`), deterministic offline mode (also used if the LLM fails), `COPILOT_OFFLINE=1` switch |
+| `warmup.py` | Pre-computes 20 answers (6 questions × 3 demo cases + 2 global) |
+| `test_aoai.py` | Connectivity check |
+| `requirements.txt`, `.env.example` | Dependencies; config template (no secrets) |
+
+#### 7.1.3 Azure OpenAI
+- Found with `az cognitiveservices`: resource `aoai-fraud-australiaeast-vnxcy`, only deployment **gpt-5-mini** (GlobalStandard, 70k TPM).
+- `.env` written locally from `az ... keys list` (git-ignored, key never printed); `test_aoai.py` → "OK copilote".
+- gpt-5-mini is a reasoning model: rejects temperature/max_tokens → code uses `max_completion_tokens` + `reasoning_effort=low`.
+- Prompt iterations from live tests: no invented IDs, always compare to habits, call digital events for web/transfers, recent device/beneficiary (< 24 h) is not reassuring, BLOQUER/ESCALADER/VALIDER rule, French level names, no recommendation on KPI questions.
+- Measured: ~5,200 tokens and ~12 s per uncached question (was ~7,500 / 16 s before pre-injection); unknown ID handled.
+
+#### 7.1.4 Verification done
+- All 5 pages rendered headless (`streamlit.testing.AppTest`) on local data and on live Fabric: no exception.
+- Decision written via the UI → `decisions.csv` → mirrored in OneLake (read back, then deleted).
+- Live answers on the demo cases: TX01555470 BLOQUER (3 failed logins from IT IP, beneficiary added 23:33, 814 TND = 4.3× usual) · TX01585580 BLOQUER · TX01575959 VALIDER (chip, Tunis, daytime, 936 past ops all in TN).
+- Server health check `http://localhost:8501/_stcore/health` → ok.
+
+#### 7.1.5 Repository and docs
+- Deleted 6 outdated docs (they wrongly called the split bug a data leak).
+- `README.md`: architecture, results, run steps, live Fabric mode, token discipline.
+- `.gitignore`: `.env`, `app/data/`, parquet, zip, test/, third-party McKinsey files.
+- Local git: `3ae7d57` (initial app + notebooks), `2404a7d` (live Fabric). Not pushed. Left uncommitted on purpose (other session): `COPILOT_HANDOFF.md` edits, `notebooks/03c_powerbi_dashboard.ipynb`.
+- `notebooks/` holds older local copies: replace them with the final Fabric versions (Fabric Git integration or download) before pushing.
+
+#### 7.1.6 How to run (demo day)
+```powershell
+az login                                  # Fabric + Azure OpenAI access
+cd C:\Users\oussa\Desktop\dsi\app
+python warmup.py                          # optional: instant answers for the demo questions
+streamlit run app.py                      # http://localhost:8501 — sidebar must show "🟢 Fabric live"
+```
+Demo path: sidebar "Fraude évidente" → ask "Pourquoi … suspecte ?" → BLOQUER → "Faux positif évité" → "Pourquoi … pas une fraude ?" → VALIDER → Performance page.
+
+### 7.2 First review findings (2026-11-05 evening)
+> All six findings were fixed the same evening; token figures were then reduced further by copilot v4 (§7.3).
+
 - R1 ✅ open transaction pre-injected + tool output capped → 5,224 tokens / 12 s avg (was ~7,500 / 16 s); non-reasoning deployment still recommended.
 - R2 ✅ app now reads Fabric live: copilot and transaction page use the same full history (usual amount 189.305 TND everywhere).
 - R3 ✅ offline mode leads with reassuring factors when risk is FAIBLE; tiny percentiles shown as « < 0.01 % ».
@@ -112,79 +215,8 @@ Checked by running the copilot: offline path on 4 cases, plus **one live call**.
 
 Verified OK: unknown ID handled ("TX99999999 introuvable"), KPI answer computed without LLM (now from exact counts: 2,160 false alerts avoided, 601 more frauds), call logged in `data/copilot_log.jsonl` with tools, tokens and latency.
 
-## 6. Fabric cell: complete customer export (run alone at the end of notebook 02, never "Run all")
-```python
-from pyspark.sql import functions as F
-q_cust = spark.table("gold_alert_queue").select("customer_id").distinct()
-cols = ["transaction_id", "timestamp", "period", "customer_id", "card_id", "merchant_id", "beneficiary_id", "device_id",
-        "session_id", "transaction_type", "channel", "entry_mode", "merchant_category", "amount_tnd", "city", "country",
-        "latitude", "longitude", "ip_country", "status", "decline_reason"]
-(spark.table("silver_transactions").filter(F.col("timestamp") >= "2026-03-01").join(q_cust, "customer_id").select(*cols)
-      .coalesce(1).write.mode("overwrite").parquet("Files/app_export/customer_history"))
-(spark.table("digital_events").join(q_cust, "customer_id").filter(F.col("timestamp") >= "2026-03-01")
-      .coalesce(1).write.mode("overwrite").parquet("Files/app_export/digital_events"))
-```
-
-
-## 8. Detailed work log (what was done, how, and why)
-
-### 8.1 Data pipeline in Fabric (notebooks 01 and 02)
-| Step | What was done | Why / result |
-|---|---|---|
-| Diagnostic SQL | Date ranges per `split` + frauds per month on the SQL endpoint | Found train = 2025-01→2026-07, test = 2026-08→09 (not the brief's dates) |
-| Split bug fixed (NB 01) | `period` was built from `F.month()` only, so it ignored the year: Aug–Sep **2025** train rows were labelled "test" (the "234 test frauds"). Now: keep `split`; `valid` = first day of the month before `max(train)` → 2026-06-01, computed on the full train table; labels nulled on test | Not a data leak, a code bug. Result: train 1,542,647 rows / 8,494 frauds (0.551 %), valid 177,953 / 1,013 (0.569 %), test 187,628 / NULL |
-| Session error | `NameError: SAMPLE` came from running one cell after `mssparkutils.session.stop()` | Always "Run all" |
-| Features 57 → 68 → 73 | Fabric Copilot added digital timings, sequence flags, graph distinct counts; we added `f_new_category`, `f_key_contactless_24h`, `f_key_new_merchants_24h`, `f_round_amount`, `f_benef_n_customers_before`, Ramadan 2025 | Contactless recall 63 → 68 %, card testing 50 → 61 % |
-| Leak found and removed | `f_merchant_risk`, `f_device_risk`, `f_beneficiary_risk` were target-encoded on all train labels (each row saw its own label and future labels) | Excluded in NB 02 (`LEAKY` set); point-in-time version documented but not needed |
-| NB 02 rewritten | Memory-safe load (all frauds + 10 % legit, weight 10; valid/test complete) instead of `toPandas()` on 1.9 M rows; inf → NaN; leak assert; MLflow autolog off; `%%configure` attaches `lh_fraud` (fixed "No default context") | Runs in ~10 min without OOM |
-| Champion vs challengers | HGB, LightGBM, LambdaRank (one query per day), rank blend; blend bug fixed (rules weight dominated the top) | LightGBM PR-AUC 0.646; champion forced to LightGBM when within 1 pt so **the same model scores and explains** (SHAP via `pred_contrib`) |
-| Explanations | Per alert: up to 5 rule factors (observed vs usual), 3 SHAP factors for fraud, 2 against (= reassuring), French labels | Feeds the transaction page and the copilot |
-| Gold outputs | `gold_scores` (valid+test only), `gold_alert_queue` (3,656, `demo_case` column), `gold_alert_explanations` (20,145), `gold_model_metrics`, `gold_model_leaderboard`, `gold_model_importance`, `gold_model_recall_by_type`, `Files/submission/submission_csv` | Test labels nulled in Spark before writing (check = 0) |
-| Demo cases | Picked from valid by rule: highest-scored fraud, fraud caught with weak rules, legacy alert the model scores lowest | TX01555470, TX01585580, TX01575959 |
-
-### 8.2 Analyst application (`app/`)
-| File | Content |
-|---|---|
-| `app.py` | Streamlit, 5 pages: alert queue (filters, risk colours, alerts/day, click-to-open), transaction card (score, risk and reassuring factors with observed vs usual, decision form, chat with 6 suggested questions), customer 360 (profile, habits, timeline incl. digital events, map with the alert highlighted), performance (model vs engine, recall per type, drivers, leaderboard), journal (decisions + copilot log). Sidebar: demo buttons, data source, copilot mode, token counter, "Rafraîchir depuis Fabric" |
-| `data_access.py` | Source layer. **Fabric live**: pyodbc + ODBC Driver 17, Entra token (`AzureCliCredential`, else browser) on `lh_fraud` SQL endpoint; small Gold tables loaded once; customer history / digital events / related cases queried with server-side filters; decisions uploaded to OneLake `Files/app_feedback/decisions.csv`. **Fallback**: parquet in `app/data` (refreshed on each live load). Test labels nulled; `gender` dropped |
-| `tools.py` | 9 tools returning compact JSON: `get_alert_queue`, `get_transaction`, `get_customer_profile` (habits optionally before a transaction), `compare_to_habits` (past only: ratio, p95, countries, city/merchant/device/beneficiary seen and seen > 24 h, night share, previous op, 24 h activity, card bursts, distance and implied speed), `get_customer_history`, `get_digital_events` (≥ 24 h window), `find_related_cases` (bank-wide, counts only frauds **reported before** the transaction), `get_kpis`, `record_decision` |
-| `copilot.py` | Azure OpenAI function calling (≤ 4 tool rounds), brief §9.3 prompt + explicit decision rule, 5-part format, open transaction pre-injected, tool output capped (3,500 chars), disk cache (`copilot_cache.json`), log of every call (`copilot_log.jsonl`), deterministic offline mode (also used if the LLM fails), `COPILOT_OFFLINE=1` switch |
-| `warmup.py` | Pre-computes 20 answers (6 questions × 3 demo cases + 2 global) |
-| `test_aoai.py` | Connectivity check |
-| `requirements.txt`, `.env.example` | Dependencies; config template (no secrets) |
-
-### 8.3 Azure OpenAI
-- Found with `az cognitiveservices`: resource `aoai-fraud-australiaeast-vnxcy`, only deployment **gpt-5-mini** (GlobalStandard, 70k TPM).
-- `.env` written locally from `az ... keys list` (git-ignored, key never printed); `test_aoai.py` → "OK copilote".
-- gpt-5-mini is a reasoning model: rejects temperature/max_tokens → code uses `max_completion_tokens` + `reasoning_effort=low`.
-- Prompt iterations from live tests: no invented IDs, always compare to habits, call digital events for web/transfers, recent device/beneficiary (< 24 h) is not reassuring, BLOQUER/ESCALADER/VALIDER rule, French level names, no recommendation on KPI questions.
-- Measured: ~5,200 tokens and ~12 s per uncached question (was ~7,500 / 16 s before pre-injection); unknown ID handled.
-
-### 8.4 Verification done
-- All 5 pages rendered headless (`streamlit.testing.AppTest`) on local data and on live Fabric: no exception.
-- Decision written via the UI → `decisions.csv` → mirrored in OneLake (read back, then deleted).
-- Live answers on the demo cases: TX01555470 BLOQUER (3 failed logins from IT IP, beneficiary added 23:33, 814 TND = 4.3× usual) · TX01585580 BLOQUER · TX01575959 VALIDER (chip, Tunis, daytime, 936 past ops all in TN).
-- Server health check `http://localhost:8501/_stcore/health` → ok.
-
-### 8.5 Repository and docs
-- Deleted 6 outdated docs (they wrongly called the split bug a data leak).
-- `README.md`: architecture, results, run steps, live Fabric mode, token discipline.
-- `.gitignore`: `.env`, `app/data/`, parquet, zip, test/, third-party McKinsey files.
-- Local git: `3ae7d57` (initial app + notebooks), `2404a7d` (live Fabric). Not pushed. Left uncommitted on purpose (other session): `COPILOT_HANDOFF.md` edits, `notebooks/03c_powerbi_dashboard.ipynb`.
-- `notebooks/` holds older local copies: replace them with the final Fabric versions (Fabric Git integration or download) before pushing.
-
-### 8.6 How to run (demo day)
-```powershell
-az login                                  # Fabric + Azure OpenAI access
-cd C:\Users\oussa\Desktop\dsi\app
-python warmup.py                          # optional: instant answers for the demo questions
-streamlit run app.py                      # http://localhost:8501 — sidebar must show "🟢 Fabric live"
-```
-Demo path: sidebar "Fraude évidente" → ask "Pourquoi … suspecte ?" → BLOQUER → "Faux positif évité" → "Pourquoi … pas une fraude ?" → VALIDER → Performance page.
-
-## 9. Copilot v4 — Azure OpenAI improvements (2026-11-05 evening)
-
-### 9.1 What was wrong (found in the real log `copilot_log_before_v3.jsonl` and the cached answers)
+### 7.3 Copilot v4 — Azure OpenAI improvements (2026-11-05 evening)
+#### 7.3.1 What was wrong (found in the real log `copilot_log_before_v3.jsonl` and the cached answers)
 | # | Problem | Evidence | Fix |
 |---|---|---|---|
 | C1 | "Top 10 most risky" answer broken | 10,410 tokens, 2 tool calls, JSON cut at 3,500 chars → "valeur partielle", "TX0190xxxx" | Compact `get_alert_queue` rows + `_compact()` trims lists item by item (never cuts JSON) |
@@ -199,14 +231,14 @@ Demo path: sidebar "Fraude évidente" → ask "Pourquoi … suspecte ?" → BLOQ
 | C10 | No off-topic / injection guardrail, no timeout | brief §9.8 | prompt rules; client timeout 60 s, 2 retries |
 | C11 | Offline answers were written to the cache (served as if they were LLM answers) | 2 entries | only Azure answers are cached; offline answers recomputed |
 
-### 9.2 How the copilot works now (`app/copilot.py`)
+#### 7.3.2 How the copilot works now (`app/copilot.py`)
 1. `detect_intent()` (FR + EN keywords): analyse · habits · before · related · summary · kpi · queue · general.
 2. `_prefetch()` calls the needed tools in Python (e.g. analyse = transaction + habits + digital events for MOBILE/WEB/VIREMENT) and gives them to the LLM as **FAITS**; the LLM can still call any of the 9 tools for missing facts (≤ 4 rounds).
 3. Static system prompt first (eligible for Azure prompt caching), then a dynamic message (language, intent, open transaction, facts), last 2 exchanges, question.
 4. Streaming (`stream=True`, usage included): tokens shown as written, tool steps shown live; all calls logged with intent, language, tokens (incl. cached), rounds, latency.
 5. Decision = `recommandation_systeme` (documented rule + measured validation precision); the LLM explains it and may flag a contradicting fact without changing it.
 
-### 9.3 Decision rule (`tools.recommend`, measured on Jun–Jul 2026 validation alerts)
+#### 7.3.3 Decision rule (`tools.recommend`, measured on Jun–Jul 2026 validation alerts)
 | Condition | Decision | Confidence | Validation precision | Alerts (valid + test) |
 |---|---|---|---|---|
 | percentile ≥ 0.998 and ≥ 2 concordant signals | BLOQUER | élevée | 94 % | 734 |
@@ -214,7 +246,7 @@ Demo path: sidebar "Fraude évidente" → ask "Pourquoi … suspecte ?" → BLOQ
 | ELEVE otherwise, or MOYEN | ESCALADER | moyenne | 20 % (MOYEN) | 2,560 |
 | FAIBLE | VALIDER | élevée, or moyenne if a business rule still alerted | — | 1 (demo) |
 
-### 9.4 Results
+#### 7.3.4 Results
 | | Before | After (v4) |
 |---|---|---|
 | Tokens per new question | ~5,200 (top 10: 10,410) | **~3,300**, of which ~1,400 served from Azure prompt cache |
@@ -226,11 +258,10 @@ Demo path: sidebar "Fraude évidente" → ask "Pourquoi … suspecte ?" → BLOQ
 
 Verified: 12 page renders (6 pages × FR/EN) without exception on live Fabric; FR chat (suggestion from cache 0.2 s, new question 8.5 s / 3,028 tokens with 2,432 cached); off-topic question refused in one sentence; unknown ID handled. Note: Streamlit `AppTest` cannot replay the EN decision radio (translated `format_func` labels) — harness limitation, not an app error.
 
-## 10. Hyson Detector — showcase features for bank judges (2026-11-06)
-
+### 7.4 Hyson Detector — showcase features for bank judges (2026-11-06)
 Goal: go beyond "a chat on top of a model" and speak the bank's language (KPIs, process, governance), with a friendly first-time experience.
 
-### 10.1 What was added
+#### 7.4.1 What was added
 | Feature | File | What it shows | Honesty notes |
 |---|---|---|---|
 | Brand + light theme | `ui.py`, `.streamlit/config.toml`, `app.py` | "Hyson Detector" logo, bank-platform palette, grouped sidebar (Bienvenue/Analyste/Enquête IA/Pilotage), branded splash while Fabric loads | — |
@@ -242,22 +273,21 @@ Goal: go beyond "a chat on top of a model" and speak the bank's language (KPIs, 
 | Impact & processus | `features.impact/drift`, `studio.page_impact` | fraud TND caught 78,059 (68 %) vs 25,462 (22 %); legitimate TND interrupted 97,857 vs 8,081,081; false alerts 1,061 vs 3,221 (−67 %); frauds 718 vs 117 (×6.1); analyst hours; process flow; reco mix; median decision time; AI cost/alert; PSI 0.0027 | workload assumptions editable on screen |
 | Stopwatch + case file | `app.py`, `tools.record_decision(duration_s)`, `studio.case_file_html` | alert → decision time; printable HTML dossier | old decisions.csv auto-upgraded with `duration_s` |
 
-### 10.2 Corrections made on the way
+#### 7.4.2 Corrections made on the way
 - Legacy engine catches **117** frauds (exact recount from `silver_transactions`), not 116; `get_kpis` now uses `features.impact()` → 3,221 false alerts. Cached KPI answers regenerated (no more "3,222").
 - Plotly log funnel rendered "NaN×10^Infinity" → replaced by step cards (`ui.flow`).
 - Metric deltas with a unicode minus were shown red/up → ASCII "-".
 - Judge pasted raw JSON / wrote "BLOQUER" in English mode → plain-text recommendation + language rule (cache key `proces-p2`).
 
-### 10.3 Verification
+#### 7.4.3 Verification
 - AppTest: 24 renders (12 pages × FR/EN), 0 exceptions; interactions (hearing, accept verdict, replay, narrate, contre verdicts, stopwatch, dossier, tour, welcome dialog) OK.
 - Playwright (Edge) screenshots of every new page checked visually.
 - `python warmup.py fr en`: 40 copilot answers + 6 trials cached → demo is instant.
 
-### 10.4 Demo path (≈ 3 min)
+#### 7.4.4 Demo path (≈ 3 min)
 Démarrer ici → Fraude évidente TX01555470 → ask "Pourquoi suspecte ?" → Le Procès → Reconstitution → decide (< 30 s on the stopwatch) → Faux positif évité TX01575959 → Contre-enquête (robust clearance) → Constellation → Impact & processus.
 
-## 11. Marché & benchmarks — the "killing blow" page (2026-11-06)
-
+### 7.5 Marché & benchmarks — the "killing blow" page (2026-11-06)
 **Why:** every team shows precision/recall on synthetic data; few answer the jury's real question, "how does it compare to real banks, and what does the bank do with it?" (business relevance = 20 %).
 
 **What (`app/market.py`, FR/EN, sidebar → Pilotage):**
@@ -274,8 +304,7 @@ Démarrer ici → Fraude évidente TX01555470 → ask "Pourquoi suspecte ?" → 
 
 **Pitch line (20 s):** "Real banks' rule engines generate 90–95 % false alerts; we measured 96.5 % on this bank's and cut it to 59.6 %. And without any AI, the bank can switch off three rules tomorrow: 17,000 fewer false alerts, two frauds lost."
 
-## 12. Fraud-number audit (2026-11-06) — Fabric = source of truth
-
+### 7.6 Fraud-number audit (2026-11-06) — Fabric = source of truth
 Read-only SQL on `lh_fraud`, then compared with the app (`tools.get_kpis`, `features.impact`, `market.py`), the Power BI tables and the docs.
 
 **Canonical numbers (validation Jun–Jul 2026, 177,953 transactions, 1,013 frauds):**
@@ -300,9 +329,8 @@ Read-only SQL on `lh_fraud`, then compared with the app (`tools.get_kpis`, `feat
 2. ✅ Repo notebooks 01/02/03d/03e replaced by the versions exported from Fabric (with outputs); Data Wrangler "titanic" leftover cells removed from 02 (repo + Fabric).
 3. Still optional, for code readability: in notebook 01, stop creating `f_merchant_risk`, `f_device_risk`, `f_beneficiary_risk` (or add a comment "not used: not point-in-time") so a reviewer does not flag them. Re-running 01/02 would change demo IDs, so only edit the code comment if the pipeline stays frozen.
 
-## 13. Judge review, deployment and polish (2026-11-05 22:30 → 2026-11-06 01:00)
-
-### 13.1 Delivery
+### 7.7 Judge review, deployment and polish (2026-11-05 22:30 → 2026-11-06 01:00)
+#### 7.7.1 Delivery
 | Item | Result |
 |---|---|
 | GitHub | Public repo **https://github.com/hack-australiaeast-01/hyson-detector** (created with the team account so it is owner/admin; first push went to `saitaflex/hyson-detector`, now a stale copy). Notebooks = Fabric exports with outputs; `submission/submission.csv`; secret scan of files + history clean |
@@ -312,7 +340,7 @@ Read-only SQL on `lh_fraud`, then compared with the app (`tools.get_kpis`, `feat
 | Logo | Team PNG logo (cropped, white + blue variants, favicon) in sidebar, splash, welcome dialog, "Démarrer ici", printable case file, README (`app/static/brand/`) |
 | New page (other session) | **Enquête approfondie** (`app/deepsearch.py`): watch list of medium alerts whose customer already had an alert (≈ 53 % fraud vs 16 % for other medium alerts, validation), evidence board E1…En, one-call AI synthesis (cached) |
 
-### 13.2 "Hostile judge" review — findings and fixes
+#### 7.7.2 "Hostile judge" review — findings and fixes
 | # | Finding (what a judge would hit first) | Fix | Verified |
 |---|---|---|---|
 | J1 | Hosted app only had history since **June 2026** and **no digital events**: "5 past operations, 236 TND average, no failed logins" for the obvious fraud | Snapshot = full history since 2025 (999,946 rows) + 402,553 digital events for the 1,814 alert customers; categories in memory; `reported_date` only for train/valid frauds (0 on test) | Same values as live Fabric: 409 ops / 189.305 TND / 3 failed logins; ~500 MB RAM |
@@ -331,28 +359,19 @@ Read-only SQL on `lh_fraud`, then compared with the app (`tools.get_kpis`, `feat
 
 Also checked clean: no leakage (past-only windows, labels excluded, test labels NULL everywhere, no early stopping on valid), off-topic and unknown-ID handling live, no secret in the repo.
 
-### 13.2b Streamlit Cloud memory limit (2026-11-06 01:30)
+#### 7.7.2b Streamlit Cloud memory limit (2026-11-06 01:30)
 - **Symptom:** public app showed "This app has gone over its resource limits" after the full-history snapshot (J1) was added.
 - **Cause:** history + events loaded as plain strings = ~600 MB, peak 856 MB with one user (Community Cloud floor: 690 MB).
 - **Fix (`data_access.py`, snapshot files):** text columns stored and loaded as categories, coordinates float32, unused `session_id` dropped, Arrow buffers freed on load (`self_destruct` + `release_unused`), per-customer caches 96/128 entries. Data in memory 334 MB → ~80 MB.
 - **Measured** (real Streamlit server in cloud mode, 15 pages + 3 demo cases, 3 sessions): peak **520 MB**, 0 exceptions; same figures as live Fabric. After a crash the app needs a manual **Reboot** (share.streamlit.io → ⋮ → Reboot): it does not restart on push.
 
-### 13.3 Verification
+#### 7.7.3 Verification
 - AppTest: 28 renders (14 pages × FR/EN) with no exception in **cloud mode** (no `.env`, no Fabric) and key pages in **live Fabric** mode.
 - Public app checked with Playwright after each push: snapshot label, no error banner, full history in Client 360, new queue columns, logo.
 - Live copilot re-tested on §9.7 questions (yesterday's top 10, why suspicious on a random Aug–Sep alert, why not fraud, unknown ID, off-topic).
 
-### 13.4 Known limits to assume in Q&A
-- ≈ 62 % of alerts have no business-rule factor → their explanation rests on model factors; the "concordant signals" of the recommendation count strong model factors (precision of each band is measured and shown).
-- Demo cases are June (validation) cases chosen for their ground truth; keep an Aug–Sep alert ready.
-- Champion picked among 4 models on the same validation period that is reported (they are within ~1 pt; test labels are with the jury).
-- gpt-5-mini has no temperature setting (brief §9.8 asks 0–0.2): stability comes from the deterministic recommendation rule + low reasoning effort.
-- Online, "related cases" only see the 1,814 alert customers (answer says "extrait local"); live Fabric sees the whole bank.
-- Batch scoring, not at authorisation time.
-
-## 14. Ask about a person + new data source onboarding (2026-11-06)
-
-### 14.1 "Ask the AI about someone in the tables" (`app/person_search.py`, `copilot.py`, `tools.py`)
+### 7.8 Ask about a person + new data source onboarding (2026-11-06)
+#### 7.8.1 "Ask the AI about someone in the tables" (`app/person_search.py`, `copilot.py`, `tools.py`)
 - **Gap found:** the copilot always answered about the transaction open on screen; an ID or a person typed in the question was ignored.
 - **Now:** (1) a `TX…` ID in the question overrides the open transaction; (2) a `C…` customer ID → profile + 30-day history; (3) a description ("le client retraité de Sfax de plus de 70 ans avec des alertes", "doctor customers from Tunis aged between 30 and 40") → approved filters (city, segment, occupation, age, KYC, digital, with alerts) → new read-only tool `find_customers` → short list with alert counts and the riskiest alert. 0 tokens offline; with Azure OpenAI the facts are prefetched and the LLM is told not to issue BLOCK/VALIDATE for a person search.
 - **UI:** "Rechercher un client par description" box on Vue client 360; "Ouvrir" jumps to the customer on their riskiest alert.
@@ -360,7 +379,7 @@ Also checked clean: no leakage (past-only windows, labels excluded, test labels 
 - **Routing guard (review fix):** questions about the open case ("ce client…", "le client a-t-il…", "même commerçant", "other customers", "this transaction") are never treated as a person search — the demo button "D'autres clients sont-ils passés par le même commerçant…" was being routed to a list of *commerçant* customers. 15 routing cases checked (demo buttons, §9.7 questions, descriptions, IDs).
 - **Jury answer — why not free SQL:** security (no injection, only approved tables), reliability (the LLM only states what tools return, §9.1), cost (aggregates, not tables), traceability (every call logged). On a real bank database the same filters run as parameterised queries with personal data masked.
 
-### 14.2 New data source onboarding (`app/onboarding.py`, page "Nouvelle source de données", group Données)
+#### 7.8.2 New data source onboarding (`app/onboarding.py`, page "Nouvelle source de données", group Données)
 1. Load a CSV (or the synthetic `app/samples/partner_bank_sample.csv`: English columns, POS/ATM/ECOM codes, EUR + TND, ISO3 countries, dd/mm/yyyy).
 2. Profile (types, empty cells, distinct values; identifiers masked).
 3. Proposed mapping to our schema with a confidence per field (rules: name similarity 60 % + value fit 40 %, 0 tokens), editable; optional "Affiner avec l'IA" = 1 Azure OpenAI call on column names + statistics only (logged with tokens). Codes, countries, dates and currencies are translated (rates editable, indicative).
@@ -370,8 +389,7 @@ Also checked clean: no leakage (past-only windows, labels excluded, test labels 
 
 **Restart the app** (Ctrl+C, `streamlit run app.py`): new modules are only loaded at start. Onboarding outputs (`data/staging/`, `data/onboarding_log.csv`) are git-ignored.
 
-## 15. Robustness, MLflow, pipeline and copilot evaluation (2026-11-06 01:35 → 02:15)
-
+### 7.9 Robustness, MLflow, pipeline and copilot evaluation (2026-11-06 01:35 → 02:15)
 Goal: prove the result is not a lucky period and that the solution is industrialisable, **without touching the frozen pipeline** (no re-run of 01/02, demo IDs unchanged).
 
 | Item | What | Result |
@@ -394,3 +412,8 @@ Goal: prove the result is not a lucky period and that the solution is industrial
 Also: `.env.example` documents every setting the app reads (`COPILOT_HOURLY_CAP`, `COPILOT_OFFLINE`, `COPILOT_TIMEOUT`, `COPILOT_REASONING`, `DEEP_REASONING`, `ODBC_DRIVER`).
 
 **Pitch line (15 s):** "We froze the model and invested in proof: four periods, ±2 points; confidence intervals; the exact production model registered in MLflow; a retraining pipeline in Fabric; and a copilot evaluated on 14 reference questions where 99 % of the numbers it cites come from the data."
+
+### 7.10 Architecture rewrite and STATUS clean-up (2026-11-06 02:20 → 03:00)
+- `docs/ARCHITECTURE.md` rewritten: **18 diagrams** — end-to-end, Fabric platform (every table), ML pipeline (NB 01/02), MLOps lifecycle + NB 04, Azure AI Foundry / Azure OpenAI layer, where ML and DL are used (+ DL roadmap), the 8 AI pipelines one by one, app pages, demo path, deployment & security; each with a method table.
+- GitHub stops rendering Mermaid after ~7 diagrams per page → `ARCHITECTURE.md` shows images (`docs/img/`, also for slides); editable Mermaid source split into `docs/diagrams/` (5 pages ≤ 4 diagrams, all render); `python docs/diagrams/render.py` regenerates the images. Checked on GitHub: 18/18 images, 18/18 diagrams.
+- STATUS restructured: current state (§0–§6) separated from the dated work log (§7); obsolete Fabric export cell removed (replaced by the full snapshot, §7.7); open items re-checked against Fabric, GitHub and the public app.

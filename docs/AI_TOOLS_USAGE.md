@@ -37,7 +37,7 @@ What the Copilot agent was used for in this project (facts):
 | App | Streamlit app, 9 copilot tools, Azure OpenAI copilot (intent routing, prefetch, streaming, cache), Hyson Detector pages (Le Procès, Reconstitution, Contre-enquête, Constellation, Impact), FR/EN, Power BI embed | Team tested the demo path |
 | Tests & deploy | AppTest on every page FR/EN, browser screenshots, live Azure OpenAI tests, secret scan, GitHub repo + push, Streamlit Cloud preparation, architecture diagrams (`docs/ARCHITECTURE.md`) | Team reviewed results and deployed |
 | Market research | Searched public sources (EBA/ECB, UK Finance, BCT) and built the "Marché & benchmarks" page: cited benchmarks, same KPIs on our data, Tunisian scenario, rules-engine audit, time to detect | Team checked the sources and the wording of every comparison |
-| Reviews | Token-cost review of the copilot (§7 of `STATUS.md`), consistency checks between app, dashboard and docs | Team decided which fixes to apply |
+| Reviews | Token-cost review of the copilot (§7.2 of `STATUS.md`), consistency checks between app, dashboard and docs | Team decided which fixes to apply |
 
 **Decided by the team, not by the agent:** the final model and threshold, the demo cases, the design choices, the pitch. Every agent change was run and reviewed before commit.
 
