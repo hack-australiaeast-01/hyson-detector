@@ -2,7 +2,7 @@
 
 # Hyson Detector — AI Banking Copilot for Fraud Detection (Microsoft Fabric + Azure OpenAI)
 
-**Live demo:** https://hyson-detector.streamlit.app · [![tests](https://github.com/hack-australiaeast-01/hyson-detector/actions/workflows/tests.yml/badge.svg)](https://github.com/hack-australiaeast-01/hyson-detector/actions/workflows/tests.yml) · [Model card](docs/MODEL_CARD.md) · [Architecture](docs/ARCHITECTURE.md) · [Audit & bank IT](docs/AUDIT_AND_BANK_INTEGRATION.md)
+**Live demo:** https://hyson-detector.streamlit.app · [![tests](https://github.com/hack-australiaeast-01/hyson-detector/actions/workflows/tests.yml/badge.svg)](https://github.com/hack-australiaeast-01/hyson-detector/actions/workflows/tests.yml) · [Model card](docs/MODEL_CARD.md) · [Architecture](docs/ARCHITECTURE.md) · [Audit & bank IT](docs/AUDIT_AND_BANK_INTEGRATION.md) · [Handoff](HANDOFF.md)
 
 A copilot for a fraud analyst: it **detects** suspicious transactions (model score), **explains** them (facts compared with the customer's own history), **answers questions** in natural language (Azure OpenAI with function calling over the Gold tables), and helps the analyst **decide** (BLOQUER / ESCALADER / VALIDER, with a decision log). The model scores, the LLM only explains, and the analyst decides.
 
