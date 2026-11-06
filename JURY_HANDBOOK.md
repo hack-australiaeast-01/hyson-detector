@@ -313,7 +313,7 @@ streamlit run app.py
 ## 7. Technical coherence (15 %): architecture
 
 Full diagrams: **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** (global architecture, AI workflow, Le Procès, page workflow, demo path). PNGs for slides:
-[global](docs/img/1_global_architecture.png) · [AI copilot workflow](docs/img/2_ai_copilot_workflow.png) · [Le Procès](docs/img/3_le_proces_sequence.png) · [pages](docs/img/4_page_workflow.png) · [demo path](docs/img/5_demo_path.png)
+[end-to-end](docs/img/01_end_to_end.png) · [Fabric platform](docs/img/02_fabric_platform.png) · [ML pipeline](docs/img/03_ml_pipeline.png) · [MLOps lifecycle](docs/img/04a_mlops_lifecycle.png) · [robustness NB 04](docs/img/04b_robustness_nb04.png) · [Azure AI Foundry](docs/img/05_foundry_openai.png) · [ML vs DL](docs/img/06_ml_vs_dl.png) · AI pipelines: [copilot](docs/img/07a_copilot_pipeline.png), [Le Procès](docs/img/07b_le_proces.png), [Enquête approfondie](docs/img/07c_enquete_approfondie.png), [Reconstitution](docs/img/07d_reconstitution.png), [person search](docs/img/07e_person_search.png), [data onboarding](docs/img/07f_data_onboarding.png), [copilot evaluation](docs/img/07g_copilot_evaluation.png), [Power BI as code](docs/img/07h_powerbi_as_code.png) · [pages](docs/img/08a_app_pages.png) · [demo path](docs/img/08b_demo_path.png) · [deployment & security](docs/img/09_deployment_security.png)
 
 ```
 Azure SQL (source) ──Copy job──► Fabric Lakehouse lh_fraud (bronze, Delta)
