@@ -1,20 +1,20 @@
 # Project status — Hyson Detector · AI Banking Copilot for Fraud Detection
-Updated: **2026-11-06 10:55** · ✅ done · 🟡 in progress · ❌ to do · Target level: **Gold ("Or")** (brief §6)
+Updated: **2026-11-06 21:10** · ✅ done · 🟡 in progress · ❌ to do · Target level: **Gold ("Or")** (brief §6) · Handoff: [HANDOFF.md](HANDOFF.md)
 
 **Live demo:** https://hyson-detector.streamlit.app · **Repo (jury):** https://github.com/hack-australiaeast-01/hyson-detector ·
-**Architecture:** [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) (18 diagrams) · **Audit & bank IT:** [docs/AUDIT_AND_BANK_INTEGRATION.md](docs/AUDIT_AND_BANK_INTEGRATION.md) · **Jury Q&A:** [JURY_HANDBOOK.md](JURY_HANDBOOK.md)
+**Architecture:** [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) (12 sections, 18 diagram images + Mermaid flows for §10–12) · **Audit & bank IT:** [docs/AUDIT_AND_BANK_INTEGRATION.md](docs/AUDIT_AND_BANK_INTEGRATION.md) · **Jury Q&A:** [JURY_HANDBOOK.md](JURY_HANDBOOK.md)
 
 Sections 1–6 = **current state** (kept up to date). Section 7 = **work log** (dated history; figures there are as of that time).
 
 ## 0. At a glance — deliverables (brief §13)
 | Deliverable | Status | Where / evidence |
 |---|---|---|
-| Working application | ✅ | 16 pages FR/EN, **AI assistant first** (ask the data in natural language) + **Nazar work agent** · local = **live Fabric** · public = https://hyson-detector.streamlit.app (Gold snapshot) |
-| Copilot (mandatory) | ✅ · 🟡 online key | `app/copilot.py` + 10 tools · **18/18 golden questions (incl. the brief's §9.7 wording), 99.5 % of cited numbers grounded** · public app still "Hors-ligne (règles)" until the key is in Streamlit Secrets (§5.1) |
+| Working application | ✅ | 21 pages FR/EN, **AI assistant first** (ask the data in natural language) + **Nazar work agent** + **Intégration bancaire** (any bank, any schema) + **Rapports IA** (professional reports) · local = **live Fabric** · public = https://hyson-detector.streamlit.app (Gold snapshot, AI on) |
+| Copilot (mandatory) | ✅ | `app/copilot.py` + 10 tools · **18/18 golden questions (incl. the brief's §9.7 wording), 99.5 % of cited numbers grounded** · public app now on Azure OpenAI (key in Streamlit Secrets, checked 21:05) |
 | Data pipeline on Fabric | ✅ | Lakehouse `lh_fraud`, notebooks 01 · 02 · 03e · 04, pipeline `pl_hyson_retrain`, MLflow model `hyson-fraud-lightgbm` |
 | Validation vs current rules | ✅ | Top 1 %: 718 frauds vs 117, 1,061 false alerts vs 3,221 · backtest 69.4 % ± 2.1 recall over 4 periods |
 | Technical walkthrough | ✅ | `docs/ARCHITECTURE.md`, `docs/MODEL_CARD.md`, `docs/AUDIT_AND_BANK_INTEGRATION.md`, `README.md`, `JURY_HANDBOOK.md` |
-| Automated tests | ✅ | 166 pytest tests (`tests/`, offline, ~3 min: 30 page renders FR/EN, data/model, guardrails, **audit trail**, **Nazar agent**, **explanations**) run by GitHub Actions on every push |
+| Automated tests | ✅ | 166 pytest tests (`tests/`, offline, ~3 min: 42 page renders FR/EN, data/model, guardrails, audit trail, Nazar agent, explanations, **bank integration + REST API**, **AI reports**) run by GitHub Actions on every push |
 | Usage of GitHub Copilot | ✅ | `docs/AI_TOOLS_USAGE.md`: 12 real uses with commit + screenshot (`docs/copilot_evidence/`), 30/30 commits co-authored by Copilot, ≈ 7 person-days in ≈ 11 h (estimate), 30-second pitch script |
 | GitHub repo | ✅ | Code, Fabric notebooks (exported with outputs), `requirements.txt` (root + `app/`), README, tests + CI, no secret in files or history |
 | Score file (optional, brief §14) | ✅ | `submission/submission.csv` (187,628 rows, 1,876 alerts) |
@@ -66,7 +66,7 @@ Sections 1–6 = **current state** (kept up to date). Section 7 = **work log** (
 ## 3. Application & copilot (`app/`, Streamlit, FR/EN)
 | # | Page / component | Status | Notes |
 |---|---|---|---|
-| 11 | Shell | ✅ | Hyson Detector brand + team logo, light bank theme, sidebar groups Bienvenue · Analyste · Enquête IA · Pilotage · Données, FR/EN switch, splash, welcome dialog, 3 demo-case buttons |
+| 11 | Shell | ✅ | Hyson Detector brand + team logo, light bank theme, sidebar groups Assistant · Analyste · Enquête IA · Pilotage · Données · Démo, compact FR/EN switch, floating Nazar eye, demo cases folded away; **form fields white with a visible border and a blue focus ring, « Étape 1 » marker** (§7.26) |
 | 12 | Démarrer ici | ✅ | 4 headline KPIs, 8-step guided tour, hint on every page |
 | 13 | File d'alertes | ✅ | Filters, risk colours, alerts/day; banner "une alerte n'est pas une fraude"; columns **Fraudes mesurées** (validation rate for that score) and **Action conseillée**; deep-search flags |
 | 14 | Fiche transaction & copilote | ✅ | Score, measured fraud at this score, factors for/against (observed vs usual), recommendation, chat with suggested questions, decision + stopwatch, printable case file |
@@ -86,13 +86,16 @@ Sections 1–6 = **current state** (kept up to date). Section 7 = **work log** (
 | 27 | 10 tools (`tools.py`) | ✅ | get_alert_queue · get_transaction (+ measured fraud at this score, alerts in the period) · get_customer_profile · compare_to_habits (+ decline reason, 24 h card sequence) · get_customer_history · get_digital_events · find_related_cases · get_kpis (comparison in plain words) · find_customers · record_decision |
 | 28 | Copilot engine (`copilot.py`) | ✅ | Intent routing (incl. priority, person / customer ID / typed TX ID), prefetch → 1 LLM round, streaming, deterministic `recommandation_systeme`, demo calendar ("hier" = 2026-09-29), guardrails: off-topic refusal, unknown ID answered with 0 token, Azure content-filter refusal, no field names; cache, log, offline mode, hourly cap |
 | 29 | Azure OpenAI (Azure AI Foundry) | ✅ | Project `proj-fraud-australiaeast`, resource `aoai-fraud-australiaeast-vnxcy`, deployment **gpt-5-mini**, API 2024-12-01-preview, `reasoning_effort=low`, `max_completion_tokens` 2,400, timeout 60 s, 2 retries; ≈ 3,300 tokens (≈ 1,400–2,000 prompt-cached) and ≈ 7 s per new question |
-| 30 | Evaluation & cache | ✅ | `eval_copilot.py`: 18/18 (live re-run 10:15), 99.4 % grounded (`docs/COPILOT_EVAL.md`); `tests/` 115 tests + GitHub Actions; `warmup.py fr en`: 40 answers + 6 trials pre-computed |
+| 30 | Evaluation & cache | ✅ | `eval_copilot.py`: 18/18 (live re-run 10:15), 99.4 % grounded (`docs/COPILOT_EVAL.md`); `tests/` 166 tests + GitHub Actions; `warmup.py fr en`: 40 answers + 6 trials pre-computed |
 | 31 | Traceability | ✅ | `copilot_log.jsonl`, `agent_log.jsonl` (Nazar), `decisions.csv` (hash-chained, → OneLake), `onboarding_log.csv` · `docs/AUDIT_AND_BANK_INTEGRATION.md` |
-| 32 | GitHub + Streamlit Cloud | ✅ | Repo owned by the team account; push to `main` redeploys; snapshot fits the 690 MB limit (peak ≈ 520 MB) — after a crash use **Reboot** |
+| 32 | GitHub + Streamlit Cloud | ✅ | Repo owned by the team account; push to `main` redeploys; snapshot fits the 690 MB limit (public-mode peak ≈ 490 MB; generating a report adds ≈ 110 MB) — after a crash or a push use **Reboot**; AI key in Secrets (on since 21:05) |
 | 33 | Architecture & docs | ✅ | 18 diagrams (images + Mermaid source in `docs/diagrams/`), README, JURY_HANDBOOK, `fabric/README.md` |
 | 34 | GitHub Copilot usage evidence | ✅ | `docs/AI_TOOLS_USAGE.md` §1: 12 real uses (when, where, ask, result, team decision, time-saved estimate, commit + screenshot); pitch script; handbook §8 aligned |
 | 35 | Slides | ❌ | Problem, live demo, architecture (`docs/img/`), results, robustness, prototype → production, limits |
 | 36 | Pitch 5 min × 3 rehearsals + backup video | ❌ | Brief §10, §17 |
+| 37 | Intelligence & investigation (§7.23) | ✅ | Case file that reopens on new events, behavioural memory (16,302 cases), prosecution / defence + Azure AI Foundry judge `judge-patern`, steering drilldown |
+| 38 | Intégration bancaire (§7.25) | ✅ | Any bank, any schema: discovery, AI mapping, readiness, named approval, activation, bank model, per-bank memory, REST API `app/api.py`; 3 simulated banks reconciled exactly |
+| 39 | Rapports IA (§7.26) | ✅ | Plain-language request (FR/EN/AR) → SQL facts → verification → insights → audience-adapted report → named approval → PDF / DOCX / HTML / XLSX |
 
 ## 4. Decision log
 - Time split, never random; valid = last 2 labelled months (brief §8.3).
@@ -108,16 +111,18 @@ Sections 1–6 = **current state** (kept up to date). Section 7 = **work log** (
 - Out of scope (no data): AML flows, first-party / internal fraud.
 - Dataset differs from the brief (3,500 customers, 2025-01 → 2026-09, 1.9 M tx); the current engine measured on our validation period = 3.5 % precision / 11.5 % recall.
 
-## 5. Next actions (checked 2026-11-06 03:00)
+## 5. Next actions (checked 2026-11-06 21:05)
 **Blocking for the pitch — only the team can do these:**
-1. 🔴 **Azure OpenAI key in Streamlit Cloud** — still "Copilote : Hors-ligne (règles)" on the public app (checked 03:00). share.streamlit.io → app ⋮ → Settings → Secrets → paste `app/.streamlit/secrets.toml.example` with the real key from `app/.env` → Save.
-2. 🔴 **Slides** (problem, live demo, architecture images, results + robustness, prototype → production, limits).
+1. ✅ ~~Azure OpenAI key in Streamlit Cloud~~ — done: no "IA non connectée" banner, the assistant answers live on the public app (Béja → 39,156, checked 21:05); new pages visible, so the app was rebooted.
+2. 🔴 **Slides** (problem, live demo, architecture images, results + robustness, the CEO's "be human" example, universal integration, AI reports, prototype → production, limits).
 3. 🔴 **Rehearse 3× (5 min) + record a backup video** of the demo path (§7.4.4).
 4. ✅ ~~Fill the GitHub Copilot usage table~~ — done 04:10 (12 rows, commits + 10 screenshots); adjust the time-saved estimates if the team sees them differently.
 5. ✅ ~~Archive `saitaflex/hyson-detector`~~ — archived 04:05, description and homepage point to `hack-australiaeast-01/hyson-detector`.
-6. 🟡 Fabric clean-up — notebooks 03/03b/03c/03d are gone; semantic model `Saitaflex-model` still present (checked 04:00).
+6. 🟡 Fabric clean-up — notebooks 03/03b/03c/03d are gone; semantic model `Saitaflex-model` still present (checked 04:00, not re-checked since).
 7. 🟡 Decide whether the personal e-mail in the public Git history is acceptable.
 8. 🟡 After the pitch only: publish an Environment from `fabric/environment.yml`, then schedule `pl_hyson_retrain` (re-scoring changes the demo IDs).
+9. 🟡 **Restart the local app** (the process on port 8501 dates from 00:44, before today's pages) and approve the DAB quarterly report on *Rapports IA* if it is shown as a finished document (§7.27).
+10. 🔴 After the hackathon: **rotate the Azure OpenAI key** (it was shared in chat), then update `app/.env` and the Streamlit Secrets.
 
 **Demo day checklist:**
 - Open https://hyson-detector.streamlit.app 5 min before (free apps sleep; first load ≈ 20 s). If it shows "over its resource limits": share.streamlit.io → ⋮ → **Reboot**.
@@ -586,3 +591,9 @@ Still open (team): Azure key in Streamlit Secrets, slides, rehearsal + backup vi
 - **AI reporting engine (brief):** `report_interpret.py` (request → spec, FR/EN/AR, defaults listed, questions only when essential), `report_sources.py` (one canonical SQL surface over the Hyson star schema or any tenant), `report_analysis.py` (facts F# / tables T# by fixed SQL, verification), `report_insights.py` (documented rules → insights I# and recommendations), `report_compose.py` (sections by type / audience / depth, charts, optional grounded AI writer), `report_render.py` (HTML, PDF with Arabic shaping and right-to-left wrapping, DOCX with `w:bidi`, XLSX), `report_store.py` (versions, edits, section regeneration, comments, diff, named approval, archived files with SHA-256, templates, branding, hash-chained audit), page **Rapports IA**, API `…/reports` for tenants.
 - **Measured:** the brief's example request → periodic report for management, Q2 vs Q1 2026, ATM, detailed, with cyber and processing sections, ~4 s (39 figures, 9 tables, 5 charts, 8 insights, 6/6 checks); Jun–Jul figures equal the documented KPIs (1,779 alerts, 718 frauds caught); Aug 2026 report has no confirmed-fraud figure (labels not in yet), only suspected alerts, and states it; model / rules coverage counted only where they were computed (rules alerts are unknown, not 0, on the live stream). Memory: +110 MB peak while generating (DuckDB capped at 100 MB, 1 thread).
 - **Checks:** 166 tests (11 new in `tests/test_reports.py`); browser flow request → understood config → generate → approve → archived files: 0 exceptions, 0 console errors.
+
+### 7.27 Public AI on, law wording, handoff, DAB report (2026-11-06 19:45 → 21:10)
+- **Public app AI:** the "L'IA n'est pas connectée sur ce serveur" banner came from the missing key in Streamlit Secrets (`.env` is never in Git). The team pasted the secrets and rebooted: checked 21:05 — no banner, the assistant answers live ("Combien de transactions à Béja ?" → 39,156, same as local), *Rapports IA* and *Intégration bancaire* in the menu.
+- **Law wording on synthetic data** (`bec7688`): the assistant's privacy refusal cited "loi tunisienne 2004-63, RGPD" on 100 % synthetic data. It now says the demo data is synthetic and that the platform already applies the minimisation rule it will apply to a bank's real customers; the refusal itself is unchanged. The law stays only in the docs (jury handbook, audit & bank IT) as a production requirement, and in code comments. Checked in a browser: "2004" no longer appears.
+- **Handoff** (`16041d3`): [HANDOFF.md](HANDOFF.md) — state, what was built (12 blocks with commits), where everything lives (Fabric, Azure, settings by name, repo map), to-do in order, demo-day checklist, how to run, rules, limits. `COPILOT_HANDOFF.md` marked as the day-1 task list.
+- **DAB quarterly report** (the reporting brief's example) regenerated with the live AI writer: Q2 vs Q1 2026, ATM, management, 13 pages, 39 figures, 8 findings, 5 charts; both AI paragraphs passed the number check. Main findings: confirmed frauds +27 % (339 vs 267), Mastercard Gold 14 → 38, magnetic stripe 23.9 % of frauds for 8.3 % of operations, 39,100 TND of confirmed frauds approved. Still a **draft** (approval on *Rapports IA*). Exports kept outside the repo (session folder). Weak points noted: the AI summary rounds alerts to "4 per day" (small numbers ≤ 12 pass the grounding check) and quotes model figures without repeating, in that sentence, that scores start on 1 June (the next line says it). Old test drafts deleted from `app/data/reports/` (git-ignored).
