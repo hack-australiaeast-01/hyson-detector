@@ -1,0 +1,329 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  html, body { margin: 0; padding: 0; background: transparent; overflow: hidden; font-family: Inter, system-ui, sans-serif; }
+  #wrap { position: relative; width: 100%; height: 400px; }
+  canvas { display: block; }
+  #bubble { position: absolute; top: 14px; right: 12px; max-width: 46%; padding: 10px 14px; border-radius: 16px;
+    background: rgba(9, 22, 58, .88); color: #eaf3ff; font-size: 13.5px; line-height: 1.4; border: 1px solid rgba(80, 170, 255, .55);
+    box-shadow: 0 0 22px rgba(60, 150, 255, .35); opacity: 0; transform: translateY(-6px); transition: all .35s ease; pointer-events: none; }
+  #bubble.on { opacity: 1; transform: none; }
+  #bubble b { color: #5cc8ff; }
+  #mic { position: absolute; right: 16px; bottom: 16px; width: 58px; height: 58px; border-radius: 50%;
+    border: 2px solid #5cc8ff; background: radial-gradient(circle, #13306e, #08133a); color: #fff; font-size: 24px; cursor: pointer;
+    box-shadow: 0 0 18px rgba(80, 180, 255, .55); display: none; }
+  #mic.on { display: block; }
+  #mic.live { background: radial-gradient(circle, #ff4d6d, #8a1030); border-color: #ff8fa3; animation: pulse 1s infinite; }
+  @keyframes pulse { 0%, 100% { box-shadow: 0 0 10px rgba(255, 80, 110, .6); } 50% { box-shadow: 0 0 34px rgba(255, 80, 110, .95); } }
+  #state { position: absolute; left: 12px; top: 12px; font-size: 12px; color: #3a6fd8; background: rgba(255, 255, 255, .8);
+    border: 1px solid #c9d8f5; padding: 3px 10px; border-radius: 999px; }
+  #hint { position: absolute; left: 12px; bottom: 14px; font-size: 11.5px; color: #6b7a99; }
+</style>
+<script type="importmap">
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+               "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/" } }
+</script>
+</head>
+<body>
+<div id="wrap">
+  <div id="state">🧿 Nazar</div>
+  <div id="bubble"></div>
+  <button id="mic" title="Push to talk">🎙</button>
+  <div id="hint"></div>
+</div>
+<script type="module">
+import * as THREE from "three";
+import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
+
+// ------------------------------------------------------------------ Streamlit bridge (no npm needed)
+const send = (type, extra) => window.parent.postMessage({ isStreamlitMessage: true, type, ...extra }, "*");
+let ARGS = { lang: "fr", voice: false, say: "", say_id: 0, height: 400 };
+let lastSay = -1, heardId = 0, first = true;
+window.addEventListener("message", (ev) => {
+  if (!ev.data || ev.data.type !== "streamlit:render") return;
+  ARGS = Object.assign(ARGS, ev.data.args || {});
+  wrap.style.height = ARGS.height + "px";
+  resize();
+  send("streamlit:setFrameHeight", { height: ARGS.height });
+  mic.classList.toggle("on", !!ARGS.voice);
+  hint.textContent = ARGS.voice ? T("Cliquez le micro et parlez · cliquez Nazar pour le saluer", "Click the mic and talk · click Nazar to say hi")
+                                : T("Cliquez Nazar pour le saluer · il suit votre curseur", "Click Nazar to say hi · it follows your cursor");
+  if (logoUrl !== ARGS.logo && ARGS.logo) setLogo(ARGS.logo);
+  if (ARGS.say_id !== lastSay) {
+    const fresh = lastSay !== -1 || ARGS.greet;
+    lastSay = ARGS.say_id;
+    if (ARGS.say && fresh) speak(ARGS.say, !!ARGS.voice); else if (first) wave();
+    if (mood === "thinking") setMood("idle");
+  }
+  first = false;
+});
+const T = (fr, en) => (ARGS.lang === "en" ? en : fr);
+const wrap = document.getElementById("wrap"), bubble = document.getElementById("bubble"), mic = document.getElementById("mic"),
+      hint = document.getElementById("hint"), stateEl = document.getElementById("state");
+
+// ------------------------------------------------------------------ scene
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setClearColor(0x000000, 0);               // empty background
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+wrap.prepend(renderer.domElement);
+const scene = new THREE.Scene();
+scene.environment = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture;
+const camera = new THREE.PerspectiveCamera(30, 1, 0.1, 100);
+camera.position.set(0, 0.2, 10.2);
+camera.lookAt(0, -0.85, 0);
+scene.add(new THREE.HemisphereLight(0xcfe3ff, 0x0a1440, 0.6));
+const key = new THREE.DirectionalLight(0xffffff, 1.6); key.position.set(3, 4, 6); scene.add(key);
+const rim = new THREE.DirectionalLight(0x3d8bff, 3.0); rim.position.set(-4, 2, -5); scene.add(rim);
+const rim2 = new THREE.DirectionalLight(0x48c8ff, 1.8); rim2.position.set(5, -1, -3); scene.add(rim2);
+
+function resize() {
+  const w = wrap.clientWidth || 600, h = wrap.clientHeight || 400;
+  renderer.setSize(w, h); camera.aspect = w / h; camera.updateProjectionMatrix();
+}
+window.addEventListener("resize", resize);
+
+// ------------------------------------------------------------------ materials
+const white = new THREE.MeshPhysicalMaterial({ color: 0xeef2fa, roughness: 0.28, clearcoat: 1, clearcoatRoughness: 0.12 });
+const navy = new THREE.MeshPhysicalMaterial({ color: 0x0c1534, roughness: 0.32, metalness: 0.45, clearcoat: 0.6 });
+const visorMat = new THREE.MeshPhysicalMaterial({ color: 0x03050c, roughness: 0.05, metalness: 0.2, clearcoat: 1 });
+const glow = new THREE.MeshStandardMaterial({ color: 0x4fc3ff, emissive: 0x39b4ff, emissiveIntensity: 2.6 });
+const glowSoft = new THREE.MeshStandardMaterial({ color: 0x2e7bff, emissive: 0x2f6dff, emissiveIntensity: 1.6, transparent: true, opacity: .9 });
+const M = (geo, mat, parent, pos = [0, 0, 0], scale = [1, 1, 1], rot = [0, 0, 0]) => {
+  const m = new THREE.Mesh(geo, mat); m.position.set(...pos); m.scale.set(...scale); m.rotation.set(...rot); parent.add(m); return m;
+};
+function halo(parent, pos, size, color = "rgba(70,180,255,") {   // additive glow sprite (cheap bloom, keeps the background empty)
+  const c = document.createElement("canvas"); c.width = c.height = 128; const g = c.getContext("2d");
+  const r = g.createRadialGradient(64, 64, 0, 64, 64, 64); r.addColorStop(0, color + ".55)"); r.addColorStop(1, color + "0)");
+  g.fillStyle = r; g.fillRect(0, 0, 128, 128);
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), blending: THREE.AdditiveBlending, depthWrite: false }));
+  s.position.set(...pos); s.scale.set(size, size, 1); parent.add(s); return s;
+}
+
+// ------------------------------------------------------------------ the robot
+const robot = new THREE.Group(); scene.add(robot);
+const body = new THREE.Group(); robot.add(body);
+// torso
+M(new THREE.SphereGeometry(1, 48, 32), white, body, [0, -1.75, 0], [1.28, 1.12, 0.86]);
+M(new THREE.CylinderGeometry(0.62, 0.75, 0.5, 32), navy, body, [0, -2.85, 0]);
+for (const sx of [-1, 1]) {   // side light strips
+  M(new THREE.TorusGeometry(1.0, 0.025, 8, 40, 0.9), glow, body, [sx * 0.05, -1.85, 0], [1.28, 1.12, 0.86], [0, sx > 0 ? 0.25 : Math.PI - 0.25, -0.55]);
+}
+// chest shield with the Hyson logo
+const shield = new THREE.Shape();
+shield.moveTo(-0.55, 0.42); shield.quadraticCurveTo(0, 0.56, 0.55, 0.42); shield.lineTo(0.5, -0.12);
+shield.quadraticCurveTo(0.35, -0.5, 0, -0.66); shield.quadraticCurveTo(-0.35, -0.5, -0.5, -0.12); shield.closePath();
+const plate = M(new THREE.ExtrudeGeometry(shield, { depth: 0.06, bevelEnabled: true, bevelSize: 0.03, bevelThickness: 0.03, bevelSegments: 3 }),
+                navy, body, [0, -1.48, 0.8], [1, 1, 1], [-0.12, 0, 0]);
+const edge = new THREE.Mesh(new THREE.ShapeGeometry(shield), new THREE.MeshBasicMaterial({ color: 0x3aa8ff, transparent: true, opacity: .35 }));
+edge.scale.set(1.06, 1.06, 1); edge.position.set(0, -1.48, 0.79); edge.rotation.x = -0.12; body.add(edge);
+const logoMat = new THREE.MeshBasicMaterial({ transparent: true, toneMapped: false, color: 0x9fd8ff });
+const logo = M(new THREE.PlaneGeometry(0.78, 0.78), logoMat, body, [0, -1.55, 0.92], [1, 1, 1], [-0.12, 0, 0]);
+logo.visible = false;
+let logoUrl = null;
+function setLogo(url) { logoUrl = url; new THREE.TextureLoader().load(url, (t) => { t.colorSpace = THREE.SRGBColorSpace; logoMat.map = t; logoMat.needsUpdate = true; logo.visible = true; }); }
+halo(body, [0, -1.55, 1.0], 1.3);
+// shoulders + arms
+const arms = {};
+for (const side of [-1, 1]) {
+  M(new THREE.SphereGeometry(0.46, 32, 24), white, body, [side * 1.33, -1.0, 0]);
+  M(new THREE.TorusGeometry(0.4, 0.03, 8, 40), glow, body, [side * 1.42, -1.0, 0], [1, 1, 1], [0, Math.PI / 2, 0]);
+  const shoulder = new THREE.Group(); shoulder.position.set(side * 1.45, -1.05, 0); body.add(shoulder);
+  M(new THREE.CapsuleGeometry(0.22, 0.6, 8, 16), navy, shoulder, [0, -0.5, 0]);
+  const elbow = new THREE.Group(); elbow.position.set(0, -0.95, 0); shoulder.add(elbow);
+  M(new THREE.SphereGeometry(0.22, 24, 16), navy, elbow);
+  M(new THREE.CapsuleGeometry(0.25, 0.55, 8, 16), white, elbow, [0, -0.45, 0]);
+  const hand = new THREE.Group(); hand.position.set(0, -0.95, 0); elbow.add(hand);
+  M(new THREE.SphereGeometry(0.26, 24, 16), white, hand, [0, -0.08, 0], [1, 0.8, 0.55]);
+  for (let f = 0; f < 4; f++) M(new THREE.CapsuleGeometry(0.055, 0.2, 4, 8), white, hand, [-0.15 + f * 0.1, -0.33, 0.02]);
+  M(new THREE.CapsuleGeometry(0.06, 0.16, 4, 8), white, hand, [side * -0.27, -0.12, 0.05], [1, 1, 1], [0, 0, side * 0.9]);
+  arms[side] = { shoulder, elbow, hand };
+}
+// right arm (viewer's left) reaches out, like the poster
+const R = arms[-1];
+R.shoulder.rotation.set(-1.15, 0, -0.35); R.elbow.rotation.set(-0.55, 0, 0.1); R.hand.rotation.set(-0.3, 0, 0);
+arms[1].shoulder.rotation.set(0.1, 0, 0.18); arms[1].elbow.rotation.set(-0.25, 0, 0);
+// neck + head
+M(new THREE.CylinderGeometry(0.3, 0.36, 0.42, 24), navy, body, [0, -0.5, 0]);
+for (const y of [-0.42, -0.58]) M(new THREE.TorusGeometry(0.33, 0.02, 8, 32), glowSoft, body, [0, y, 0], [1, 1, 1], [Math.PI / 2, 0, 0]);
+const head = new THREE.Group(); head.position.set(0, 0.55, 0); body.add(head);
+M(new THREE.SphereGeometry(1, 64, 48), white, head, [0, 0, 0], [1.18, 1.0, 1.02]);
+M(new THREE.TorusGeometry(0.98, 0.04, 10, 64, Math.PI * 0.6), navy, head, [0, 0.05, 0], [1.19, 1.02, 1], [0, Math.PI / 2, 0]);  // crest
+const visor = M(new THREE.SphereGeometry(1, 64, 48), visorMat, head, [0, -0.06, 0.38], [1.0, 0.8, 0.68]);
+// eyes: happy arcs + round "listening" rings, grouped so they can look around
+const eyes = new THREE.Group(); eyes.position.set(0, 0.08, 1.04); head.add(eyes);
+const eye = {};
+for (const side of [-1, 1]) {
+  const g = new THREE.Group(); g.position.set(side * 0.36, 0, 0); eyes.add(g);
+  const arc = M(new THREE.TorusGeometry(0.17, 0.045, 12, 40, Math.PI), glow, g);
+  const ring = M(new THREE.TorusGeometry(0.13, 0.045, 12, 40), glow, g); ring.visible = false;
+  halo(g, [0, 0.05, -0.02], 0.75);
+  eye[side] = { g, arc, ring };
+}
+// mouth: glowing outline + equalizer bars
+const mouth = new THREE.Group(); mouth.position.set(0, -0.42, 0.98); mouth.rotation.x = -0.25; head.add(mouth);
+M(new THREE.TorusGeometry(0.27, 0.03, 10, 48), glow, mouth, [0, 0, 0], [1.45, 0.62, 1]);
+const bars = [];
+for (let i = 0; i < 9; i++) bars.push(M(new THREE.BoxGeometry(0.035, 0.2, 0.02), glow, mouth, [-0.24 + i * 0.06, 0, 0.01]));
+halo(mouth, [0, 0, -0.02], 0.9);
+// headphones, antennas, mic boom
+const tips = [];
+for (const side of [-1, 1]) {
+  M(new THREE.CylinderGeometry(0.34, 0.34, 0.26, 32), white, head, [side * 1.14, 0.0, 0], [1, 1, 1], [0, 0, Math.PI / 2]);
+  M(new THREE.CylinderGeometry(0.24, 0.24, 0.1, 32), navy, head, [side * 1.29, 0.0, 0], [1, 1, 1], [0, 0, Math.PI / 2]);
+  M(new THREE.TorusGeometry(0.28, 0.025, 8, 40), glow, head, [side * 1.28, 0.0, 0], [1, 1, 1], [0, Math.PI / 2, 0]);
+  const ant = new THREE.Group(); ant.position.set(side * 1.12, 0.3, -0.05); ant.rotation.z = -side * 0.22; head.add(ant);
+  M(new THREE.CylinderGeometry(0.02, 0.045, 1.05, 12), navy, ant, [0, 0.52, 0]);
+  tips.push(M(new THREE.SphereGeometry(0.06, 16, 12), glow, ant, [0, 1.07, 0]));
+}
+const boom = new THREE.CatmullRomCurve3([new THREE.Vector3(1.25, -0.15, 0.1), new THREE.Vector3(1.12, -0.62, 0.55), new THREE.Vector3(0.62, -0.78, 0.92)]);
+M(new THREE.TubeGeometry(boom, 24, 0.03, 8), navy, head);
+M(new THREE.SphereGeometry(0.07, 16, 12), navy, head, [0.6, -0.79, 0.93]);
+// platform: glowing rings like the poster
+const base = new THREE.Group(); base.position.y = -3.25; scene.add(base);
+const rings = [];
+for (const [r, o] of [[2.1, .9], [2.6, .5], [3.2, .25]]) {
+  const m = new THREE.MeshBasicMaterial({ color: 0x4cb8ff, transparent: true, opacity: o, toneMapped: false });
+  rings.push(M(new THREE.TorusGeometry(r, 0.018, 8, 96), m, base, [0, 0, 0], [1, 1, 1], [Math.PI / 2, 0, 0]));
+}
+M(new THREE.CircleGeometry(2.1, 64), new THREE.MeshBasicMaterial({ color: 0x2d6bff, transparent: true, opacity: .12 }), base, [0, 0, 0], [1, 1, 1], [-Math.PI / 2, 0, 0]);
+
+// ------------------------------------------------------------------ behaviour
+let mood = "idle", talkUntil = 0, energy = 0, waveUntil = 0, jumpAt = -9, blinkAt = performance.now() + 2500, blinkStart = -999;
+const target = new THREE.Vector2(), look = new THREE.Vector2();
+function setMood(m) {
+  mood = m;
+  stateEl.textContent = { idle: "🧿 Nazar", listening: T("🎙 J'écoute…", "🎙 Listening…"), thinking: T("💭 Je réfléchis…", "💭 Thinking…"),
+                          talking: T("🗣 Nazar parle", "🗣 Nazar is talking") }[m];
+  for (const s of [-1, 1]) { eye[s].arc.visible = m !== "listening"; eye[s].ring.visible = m === "listening"; }
+}
+function wave() { waveUntil = performance.now() + 2200; }
+function showBubble(text) {
+  const short = text.length > 170 ? text.slice(0, 167) + "…" : text;
+  const esc = short.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  bubble.innerHTML = esc.replace(/(Nazar|Hyson)/g, "<b>$1</b>");     // escape first: replies may echo typed or LLM text
+  bubble.classList.add("on");
+  clearTimeout(showBubble.t); showBubble.t = setTimeout(() => bubble.classList.remove("on"), 4000 + short.length * 45);
+}
+const clean = (s) => String(s).replace(/```[\s\S]*?```/g, " ").replace(/[`*_#>|]/g, "").replace(/\[(.*?)\]\(.*?\)/g, "$1")
+  .replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE0F}]/gu, "").replace(/\s+/g, " ").trim();
+function pickVoice() {
+  const want = ARGS.lang === "en" ? "en" : "fr";
+  const vs = speechSynthesis.getVoices().filter((v) => v.lang.toLowerCase().startsWith(want));
+  return vs.find((v) => /natural|neural|online|google/i.test(v.name)) || vs[0] || null;
+}
+function speak(text, aloud) {
+  const t = clean(text); if (!t) return;
+  showBubble(t);
+  setMood("talking");
+  if (aloud && "speechSynthesis" in window) {
+    speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(t.slice(0, 700));
+    u.lang = ARGS.lang === "en" ? "en-US" : "fr-FR"; u.voice = pickVoice(); u.rate = 1.03; u.pitch = 1.12;
+    u.onboundary = () => { energy = 1; };
+    u.onend = () => { talkUntil = 0; setMood("idle"); };
+    talkUntil = performance.now() + 60000;
+    speechSynthesis.speak(u);
+  } else {
+    talkUntil = performance.now() + Math.min(9000, 900 + t.length * 38);
+  }
+}
+// cursor tracking: whole page when allowed (same-origin iframe), otherwise inside the frame
+function track(x, y, w, h) { target.set(THREE.MathUtils.clamp((x / w) * 2 - 1, -1, 1), THREE.MathUtils.clamp(-((y / h) * 2 - 1), -1, 1)); }
+try {
+  const pd = window.parent.document, fe = window.frameElement;
+  pd.addEventListener("mousemove", (e) => {
+    const r = fe.getBoundingClientRect();
+    track(e.clientX - r.left, e.clientY - r.top - r.height * 0.15, r.width, r.height);
+  });
+} catch (e) { /* cross-origin: fall back to local tracking */ }
+window.addEventListener("mousemove", (e) => track(e.clientX, e.clientY - wrap.clientHeight * 0.15, wrap.clientWidth, wrap.clientHeight));
+// click Nazar: hop, wave and say hi (local, 0 token)
+const ray = new THREE.Raycaster();
+renderer.domElement.addEventListener("click", (e) => {
+  const r = renderer.domElement.getBoundingClientRect();
+  ray.setFromCamera(new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1), camera);
+  if (!ray.intersectObject(robot, true).length) return;
+  jumpAt = performance.now(); wave();
+  const lines = ARGS.lang === "en"
+    ? ["Hey! I'm Nazar, the eye of Hyson. Ask me anything about the alerts.", "Careful, I'm watching every transaction 👀", "Ready when you are: say \"my tasks\"."]
+    : ["Salut ! Je suis Nazar, l'œil de Hyson. Demandez-moi n'importe quoi sur les alertes.", "Attention, je surveille chaque transaction 👀", "Je suis prêt : dites « mes tâches »."];
+  speak(lines[Math.floor(Math.random() * lines.length)], !!ARGS.voice);
+});
+// voice input (Web Speech API, free, in the browser)
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+let rec = null;
+mic.addEventListener("click", () => {
+  if (!SR) { showBubble(T("Reconnaissance vocale non supportée : utilisez Chrome ou Edge.", "Speech recognition not supported: use Chrome or Edge.")); return; }
+  if (rec) { rec.stop(); return; }
+  speechSynthesis.cancel();
+  rec = new SR(); rec.lang = ARGS.lang === "en" ? "en-US" : "fr-FR"; rec.interimResults = true; rec.maxAlternatives = 1;
+  let final = "";
+  rec.onstart = () => { mic.classList.add("live"); setMood("listening"); };
+  rec.onresult = (e) => {
+    let txt = ""; for (const r of e.results) { txt += r[0].transcript; if (r.isFinal) final = txt; }
+    showBubble("🎙 " + txt);
+  };
+  rec.onerror = (e) => showBubble(T("Micro : ", "Mic: ") + e.error);
+  rec.onend = () => {
+    mic.classList.remove("live"); rec = null;
+    if (final.trim()) { setMood("thinking"); heardId = Date.now(); send("streamlit:setComponentValue", { value: { text: final.trim(), id: heardId }, dataType: "json" }); }
+    else setMood("idle");
+  };
+  rec.start();
+});
+
+// ------------------------------------------------------------------ animation loop
+const clock = new THREE.Clock();
+function loop() {
+  requestAnimationFrame(loop);
+  const t = clock.getElapsedTime(), now = performance.now();
+  look.lerp(target, 0.08);
+  // idle float + hop
+  const hop = Math.max(0, 1 - (now - jumpAt) / 600);
+  robot.position.y = Math.sin(t * 1.6) * 0.06 + Math.sin(hop * Math.PI) * 0.35;
+  robot.rotation.y = look.x * 0.18;
+  head.rotation.y = look.x * 0.42 + Math.sin(t * 0.7) * 0.03;
+  head.rotation.x = -look.y * 0.22 + (mood === "thinking" ? -0.15 : 0);
+  head.rotation.z = Math.sin(t * 0.9) * 0.025 + (mood === "listening" ? 0.12 : 0);
+  // eyes follow the cursor + blink
+  eyes.position.x = look.x * 0.13; eyes.position.y = 0.08 + look.y * 0.07 + (mood === "thinking" ? 0.08 : 0);
+  if (now > blinkAt) { blinkStart = now; blinkAt = now + 2500 + Math.random() * 3500; }
+  const b = Math.max(0, 1 - Math.abs(now - blinkStart - 90) / 90);
+  for (const s of [-1, 1]) eye[s].g.scale.y = 1 - Math.min(0.92, b);
+  // mouth bars
+  const talking = mood === "talking" && now < talkUntil;
+  if (mood === "talking" && now >= talkUntil) setMood("idle");
+  energy = Math.max(0, energy - 0.04);
+  bars.forEach((bar, i) => {
+    const mid = 1 - Math.abs(i - 4) / 5;
+    let h = 0.12;
+    if (talking) h = 0.2 + mid * (0.55 + 0.45 * Math.abs(Math.sin(t * 13 + i * 1.7))) * (0.7 + energy * 0.5);
+    else if (mood === "listening") h = 0.15 + 0.12 * Math.abs(Math.sin(t * 6 + i));
+    else if (mood === "thinking") h = 0.12 + 0.18 * Math.max(0, Math.sin(t * 4 - i * 0.6));
+    else h = 0.1 + 0.05 * mid * (1 + Math.sin(t * 2 + i));
+    bar.scale.y += (h / 0.2 - bar.scale.y) * 0.35;
+  });
+  // arms: reaching hand breathes, waving on greeting
+  const w = now < waveUntil ? Math.sin(t * 9) : 0;
+  R.shoulder.rotation.x = -1.15 + Math.sin(t * 1.3) * 0.04 - (now < waveUntil ? 0.9 : 0);
+  R.shoulder.rotation.z = -0.35 - (now < waveUntil ? 0.5 : 0);
+  R.elbow.rotation.z = 0.1 + w * 0.55;
+  arms[1].shoulder.rotation.z = 0.18 + Math.sin(t * 1.1) * 0.03;
+  // glow pulses
+  const pulse = 2.2 + Math.sin(t * 3) * 0.6 + (mood === "listening" ? 1.5 : 0);
+  glow.emissiveIntensity = pulse;
+  tips.forEach((m, i) => m.scale.setScalar(1 + 0.25 * Math.sin(t * 5 + i * 2) + (mood === "listening" ? 0.5 : 0)));
+  rings.forEach((m, i) => { m.rotation.z = t * (0.2 + i * 0.1) * (i % 2 ? -1 : 1); m.material.opacity = [.9, .5, .25][i] * (0.75 + 0.25 * Math.sin(t * 2 + i)); });
+  renderer.render(scene, camera);
+}
+setMood("idle"); resize(); loop();
+speechSynthesis && speechSynthesis.getVoices();
+send("streamlit:componentReady", { apiVersion: 1 });
+send("streamlit:setFrameHeight", { height: ARGS.height });
+</script>
+</body>
+</html>

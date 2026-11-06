@@ -65,3 +65,23 @@ def test_chat_facts_are_aggregates_only():
 def test_briefing_counts_work_items():
     b = nazar.briefing("fr")
     assert "Briefing" in b["text"] and len(b["rows"]) == 3 and b["count"] >= 0
+
+
+def test_gpt_brain_never_sees_bank_answers(monkeypatch):
+    """The plain GPT-5 mini mode gets no bank facts and no earlier Nazar answers (they hold IDs and amounts)."""
+    import types
+    import copilot
+    sent = []
+    fake = types.SimpleNamespace(chat=types.SimpleNamespace(completions=types.SimpleNamespace(create=lambda **kw: (
+        sent.append(kw["messages"]) or types.SimpleNamespace(choices=[types.SimpleNamespace(message=types.SimpleNamespace(content="ok"))],
+                                                            usage=types.SimpleNamespace(total_tokens=1))))))
+    monkeypatch.setattr(copilot, "configured", lambda: True)
+    monkeypatch.setattr(copilot, "_client", lambda: fake)
+    monkeypatch.setenv("AZURE_OPENAI_DEPLOYMENT", "test")
+    history = [{"cmd": "top 3", "out": {"text": "TX01555470 · 814 TND · C000488", "brain": "nazar"}},
+               {"cmd": "hello", "out": {"text": "Hi there", "brain": "gpt"}}]
+    nazar.chat("explain phishing", "en", "TX01555470", history, brain="gpt")
+    flat = " ".join(m["content"] for m in sent[-1])
+    assert "TX01555470" not in flat and "C000488" not in flat and "FAITS" not in flat and "Hi there" in flat
+    nazar.chat("et la file ?", "fr", "TX01555470", history, brain="nazar")
+    assert "FAITS" in " ".join(m["content"] for m in sent[-1])          # Nazar's own brain keeps the aggregates

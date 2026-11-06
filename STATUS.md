@@ -1,5 +1,5 @@
 # Project status — Hyson Detector · AI Banking Copilot for Fraud Detection
-Updated: **2026-11-06 10:30** · ✅ done · 🟡 in progress · ❌ to do · Target level: **Gold ("Or")** (brief §6)
+Updated: **2026-11-06 10:55** · ✅ done · 🟡 in progress · ❌ to do · Target level: **Gold ("Or")** (brief §6)
 
 **Live demo:** https://hyson-detector.streamlit.app · **Repo (jury):** https://github.com/hack-australiaeast-01/hyson-detector ·
 **Architecture:** [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) (18 diagrams) · **Audit & bank IT:** [docs/AUDIT_AND_BANK_INTEGRATION.md](docs/AUDIT_AND_BANK_INTEGRATION.md) · **Jury Q&A:** [JURY_HANDBOOK.md](JURY_HANDBOOK.md)
@@ -14,7 +14,7 @@ Sections 1–6 = **current state** (kept up to date). Section 7 = **work log** (
 | Data pipeline on Fabric | ✅ | Lakehouse `lh_fraud`, notebooks 01 · 02 · 03e · 04, pipeline `pl_hyson_retrain`, MLflow model `hyson-fraud-lightgbm` |
 | Validation vs current rules | ✅ | Top 1 %: 718 frauds vs 117, 1,061 false alerts vs 3,221 · backtest 69.4 % ± 2.1 recall over 4 periods |
 | Technical walkthrough | ✅ | `docs/ARCHITECTURE.md`, `docs/MODEL_CARD.md`, `docs/AUDIT_AND_BANK_INTEGRATION.md`, `README.md`, `JURY_HANDBOOK.md` |
-| Automated tests | ✅ | 93 pytest tests (`tests/`, offline, ~60 s: 30 page renders FR/EN, data/model, guardrails, **audit trail**, **Nazar agent**, **explanations**) run by GitHub Actions on every push |
+| Automated tests | ✅ | 94 pytest tests (`tests/`, offline, ~60 s: 30 page renders FR/EN, data/model, guardrails, **audit trail**, **Nazar agent**, **explanations**) run by GitHub Actions on every push |
 | Usage of GitHub Copilot | ✅ | `docs/AI_TOOLS_USAGE.md`: 12 real uses with commit + screenshot (`docs/copilot_evidence/`), 30/30 commits co-authored by Copilot, ≈ 7 person-days in ≈ 11 h (estimate), 30-second pitch script |
 | GitHub repo | ✅ | Code, Fabric notebooks (exported with outputs), `requirements.txt` (root + `app/`), README, tests + CI, no secret in files or history |
 | Score file (optional, brief §14) | ✅ | `submission/submission.csv` (187,628 rows, 1,876 alerts) |
@@ -86,7 +86,7 @@ Sections 1–6 = **current state** (kept up to date). Section 7 = **work log** (
 | 27 | 10 tools (`tools.py`) | ✅ | get_alert_queue · get_transaction (+ measured fraud at this score, alerts in the period) · get_customer_profile · compare_to_habits (+ decline reason, 24 h card sequence) · get_customer_history · get_digital_events · find_related_cases · get_kpis (comparison in plain words) · find_customers · record_decision |
 | 28 | Copilot engine (`copilot.py`) | ✅ | Intent routing (incl. priority, person / customer ID / typed TX ID), prefetch → 1 LLM round, streaming, deterministic `recommandation_systeme`, demo calendar ("hier" = 2026-09-29), guardrails: off-topic refusal, unknown ID answered with 0 token, Azure content-filter refusal, no field names; cache, log, offline mode, hourly cap |
 | 29 | Azure OpenAI (Azure AI Foundry) | ✅ | Project `proj-fraud-australiaeast`, resource `aoai-fraud-australiaeast-vnxcy`, deployment **gpt-5-mini**, API 2024-12-01-preview, `reasoning_effort=low`, `max_completion_tokens` 2,400, timeout 60 s, 2 retries; ≈ 3,300 tokens (≈ 1,400–2,000 prompt-cached) and ≈ 7 s per new question |
-| 30 | Evaluation & cache | ✅ | `eval_copilot.py`: 18/18 (live re-run 10:15), 99.4 % grounded (`docs/COPILOT_EVAL.md`); `tests/` 93 tests + GitHub Actions; `warmup.py fr en`: 40 answers + 6 trials pre-computed |
+| 30 | Evaluation & cache | ✅ | `eval_copilot.py`: 18/18 (live re-run 10:15), 99.4 % grounded (`docs/COPILOT_EVAL.md`); `tests/` 94 tests + GitHub Actions; `warmup.py fr en`: 40 answers + 6 trials pre-computed |
 | 31 | Traceability | ✅ | `copilot_log.jsonl`, `agent_log.jsonl` (Nazar), `decisions.csv` (hash-chained, → OneLake), `onboarding_log.csv` · `docs/AUDIT_AND_BANK_INTEGRATION.md` |
 | 32 | GitHub + Streamlit Cloud | ✅ | Repo owned by the team account; push to `main` redeploys; snapshot fits the 690 MB limit (peak ≈ 520 MB) — after a crash use **Reboot** |
 | 33 | Architecture & docs | ✅ | 18 diagrams (images + Mermaid source in `docs/diagrams/`), README, JURY_HANDBOOK, `fabric/README.md` |
@@ -136,6 +136,8 @@ Sections 1–6 = **current state** (kept up to date). Section 7 = **work log** (
 - gpt-5-mini has no temperature setting (brief §9.8 asks 0–0.2): stability comes from the deterministic recommendation rule + low reasoning effort.
 - Online, "related cases" only see the 1,814 alert customers (answer says "extrait local"); live Fabric sees the whole bank.
 - Batch scoring, not at authorisation time.
+- The 3D Nazar robot loads three.js from a CDN (jsdelivr, pinned 0.160.0): with no internet at the venue the robot does not appear; Nazar's text side still works.
+- Voice uses the browser's speech services (Chrome / Edge cloud recognition and online voices); production would use Azure AI Speech in the bank's tenant.
 - The fraud score is classical ML; deep learning is used only through the LLM (no DL scoring model yet).
 - Data onboarding stops at the approved data contract: OneLake → Bronze → re-scoring is documented, not run live.
 - The retraining pipeline exists but has never run (frozen demo); the Environment is pinned in a file, not published.
@@ -511,3 +513,8 @@ Still open (team): Azure key in Streamlit Secrets, slides, rehearsal + backup vi
 - Transaction page: duplicate factor removed (rule + model saying the same thing), whole numbers without ".0", decision button on the first screen.
 - Cache rebuilt cleanly (`CACHE_VERSION` v6, `warmup.py fr en`: 64 answers + 6 trials + 18 deep searches, 223k tokens); `tests/test_explanations.py` (4 tests) → 93/93.
 - Still open: a *fresh* live answer can occasionally end with an offer despite the rule (seen once on a free question); cached demo answers are clean.
+
+### 7.19 3D Nazar robot, voice and GPT-5 mini brain (2026-11-06 10:20 → 10:55)
+- **Built in another session:** a 3D robot drawn in code with three.js (`app/components/nazar_avatar/index.html`, bidirectional Streamlit component without npm, `app/nazar_avatar.py`): glossy shell, visor with blue eyes, sound-meter mouth, headphones, Hyson logo on the chest. Follows the cursor, blinks, speaks in a bubble on every reply, waves on open and on click (0 token). Mode Chat / Voice (browser speech: mic in Chrome / Edge, replies read aloud). Brain Nazar / GPT-5 mini. The avatar is optional: any failure shows a caption and Nazar keeps working.
+- **Review before push (2 fixes):** (1) the speech bubble wrote reply text with `innerHTML` after stripping only `>` — a reply holding `<img src=x onerror=…` followed by "Nazar" ran script **in the app page** (the component iframe is same-origin; proven in a browser on the original file) → text escaped first, re-tested: shown as text. (2) GPT-5 mini mode, described as having no bank data, still received the last Nazar answers (IDs, amounts) as history → it now only sees its own turns (test with a fake client). Prompt: the user is an analyst, not a customer.
+- **Checks:** robot renders in the Nazar window (live Fabric), "salut" → bubble and reply; GPT-5 mini live: explains skimming; "bloque TX01555470" → no Confirm button, says it has no access and points to the Nazar brain; "combien de fraudes ?" → no invented figure; 0 page errors. Full suite 94/94 offline. Not tested: speaking into a real microphone.
