@@ -36,10 +36,10 @@ flowchart LR
 <!-- img: 07g_copilot_evaluation -->
 ```mermaid
 flowchart LR
-    GS["14 golden questions<br/>brief §9.7 + unknown ID + off-topic + prompt injection"] --> ASK["copilot.ask() exactly as in the app"]
+    GS["18 golden questions<br/>brief §9.7 word for word + unknown ID + off-topic + prompt injection"] --> ASK["copilot.ask() exactly as in the app"]
     ASK --> RE["Re-run the tools it used → facts it saw"]
     RE --> CK["0-token checks<br/>decision = system rule · key facts · numbers grounded ≥ 90 %<br/>5 sections · English only · refusals · no prompt / key leak"]
-    CK --> REP[("docs/COPILOT_EVAL.md · copilot_eval.json<br/>14/14 pass · 99.3 % numbers grounded")]
+    CK --> REP[("docs/COPILOT_EVAL.md · copilot_eval.json<br/>18/18 pass · 99.5 % numbers grounded")]
     REP --> APPV["Shown on Performance → Robustesse et gouvernance"]
 ```
 

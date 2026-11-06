@@ -12,7 +12,7 @@ flowchart TD
     ID -- "none" --> CTX2["Open transaction is the context"]
     CTX & CTX2 --> K{"Cache hit?"}
     K -- yes --> CA["Pre-computed gpt-5-mini answer"]
-    K -- no --> I["detect_intent<br/>analyse · habits · before · related · summary<br/>kpi · queue · person · person_id · general"]
+    K -- no --> I["detect_intent<br/>analyse · habits · before · related · summary · priority<br/>kpi · queue · person · person_id · general"]
     I --> P["Prefetch: Python calls the tools the intent needs<br/>'hier' = 2026-09-29 in the demo calendar"]
     P --> T["9 read-only tools on Fabric Gold (+ record_decision on request)<br/>get_transaction · compare_to_habits · get_customer_profile<br/>get_customer_history · get_digital_events · find_related_cases<br/>get_alert_queue · get_kpis · find_customers"]
     T --> RC["recommend(): BLOQUER / ESCALADER / VALIDER<br/>+ precision measured in validation"]

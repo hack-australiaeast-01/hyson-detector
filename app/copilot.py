@@ -75,6 +75,9 @@ Formats (titres dans la langue de réponse ; niveaux de risque FAIBLE / MOYEN / 
   3. **Contexte** (profil, activité récente, événements digitaux) 4. **Éléments rassurants** 5. **Recommandation** (BLOQUER / ESCALADER / VALIDER + confiance).
   Si le risque est FAIBLE, commence la section 2 par ce qui rassure et présente l'écart principal comme point d'attention.
 - Résumé d'investigation : un paragraphe de dossier (faits, chronologie horodatée, points communs avec d'autres cas, conclusion avec une seule recommandation), 160 mots maximum.
+- Priorisation (« pourquoi prioriser cette alerte ») : 4 puces chiffrées maximum — rang dans la file et nombre d'alertes de la période,
+  part de vraies fraudes mesurée à ce score en validation, signaux les plus forts (faits métier d'abord), montant / exposition —
+  puis une ligne avec la recommandation système. 120 mots maximum, pas de sections Verdict/Contexte.
 - File d'alertes : liste numérotée « ID · date · montant · canal · pays · niveau · facteurs », sans recommandation.
 - KPI / comparaison au moteur de règles : 3 à 5 puces chiffrées, sans recommandation."""
 
@@ -102,6 +105,7 @@ GLOBAL_QUESTIONS = [("Combien d'alertes inutiles évites-tu par rapport au moteu
 _INTENTS = [   # first match wins; FR + EN keywords
     ("kpi", r"moteur|kpi|inutile|fausses alertes|alertes évitées|performance du modèle|rules? engine|false alerts?|useless alerts|model performance"),
     ("queue", r"file d.alerte|plus risqu|les \d+ transactions|top ?\d+|most risky|riskiest|alert queue"),
+    ("priority", r"prioris|priorit|prioritiz|priorit(y|ise)|urgent|en premier|first in the queue"),
     ("summary", r"résum|resum|dossier|summary|investigation report|write.*report"),
     ("related", r"autres clients|même commer|meme commer|même dab|meme dab|appareil commun|points? commun|other customers|same merchant|same atm|related|shared"),
     ("before", r"avant|application|connexion|appli|before|login|app\b|digital"),
@@ -178,7 +182,7 @@ def _prefetch(intent, context_tx, step, question=""):
     if "erreur" in t:
         return out
     cust = t["transaction"]["customer_id"]
-    if intent in ("analyse", "habits", "before", "summary"):
+    if intent in ("analyse", "habits", "before", "summary", "priority"):
         call("compare_to_habits", transaction_id=context_tx)
     if intent == "habits":
         call("get_customer_profile", customer_id=cust, before_transaction_id=context_tx)

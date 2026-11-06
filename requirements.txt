@@ -1,0 +1,2 @@
+# Dependencies of the Streamlit app (also used by Streamlit Community Cloud and CI)
+-r app/requirements.txt

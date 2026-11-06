@@ -676,6 +676,26 @@ def page_robustness():
                  L("Intervalle de confiance 95 %", "95% confidence interval"): f"[{fmt(x.metric, x.ci_low)} ; {fmt(x.metric, x.ci_high)}]"}
                 for x in ci.itertuples()]
         st.dataframe(pd.DataFrame(rows), hide_index=True, width="stretch")
+    fair = fx.fairness()
+    if fair is not None and len(fair):
+        st.markdown(f"**{L('Équité · le modèle traite-t-il tous les clients de la même façon ?', 'Fairness · does the model treat all customers alike?')}**")
+        fa, fb = st.columns(2)
+        for col, key, title in [(fa, "segment", L("Par segment", "By segment")), (fb, "age_band", L("Par âge", "By age"))]:
+            v = fair[fair.period == "valid"].groupby(key)[["ops", "alerts", "tp", "frauds"]].sum()
+            t = fair[fair.period == "test"].groupby(key)[["ops", "alerts"]].sum()
+            tab = pd.DataFrame({
+                L("Taux d'alerte (flux du jour)", "Alert rate (live flow)"): (t.alerts / t.ops).round(4),
+                L("Taux de fraude (validation)", "Fraud rate (validation)"): (v.frauds / v.ops).round(4),
+                L("Précision", "Precision"): (v.tp / v.alerts.clip(lower=1)).round(3),
+                L("Rappel", "Recall"): (v.tp / v.frauds.clip(lower=1)).round(3)}).rename_axis(title).reset_index()
+            col.dataframe(tab, hide_index=True, width="stretch",
+                          column_config={c: st.column_config.NumberColumn(format="percent") for c in tab.columns[1:]})
+        st.caption(L("Le genre n'est jamais utilisé. Âge et segment sont des variables de profil : leur effet est surveillé. "
+                     "Taux d'alerte homogènes (≈ 0,9–1,1 %) ; les retraités et les 60 ans et plus ont moins de fraude, une précision "
+                     "et un rappel plus bas : à suivre en production (seuil ou revue dédiée), et à expliquer au client en cas d'alerte.",
+                     "Gender is never used. Age and segment are profile features: their effect is monitored. Alert rates are similar "
+                     "(≈ 0.9–1.1%); retirees and over-60s have less fraud, lower precision and recall: to monitor in production "
+                     "(threshold or dedicated review), and to explain to the customer when alerted."))
     if ev:
         res = ev["results"]
         nums = sum(r["numbers_checked"] for r in res)

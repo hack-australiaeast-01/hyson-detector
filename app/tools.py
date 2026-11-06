@@ -107,13 +107,17 @@ def get_transaction(transaction_id):
     rules = facts("rules", 5)
     for_fraud = facts("model_for", 3)
     triggered = [x for x in rules if x.get("contribution", 0) > 0]
+    score = {"niveau_risque": r.risk_level, "score_modele": round(float(r.score_model), 4),
+             "percentile_risque_periode": _v(r.score_pct), "rang_dans_periode": int(r.rank_in_period),
+             "alerte_moteur_regles_actuel": bool(r.legacy_alert), "points_regles_metier": int(r.score_rules)}
+    if r.risk_level != "FAIBLE":
+        score["nb_alertes_periode"] = int(((q.period == r.period) & (q.risk_level != "FAIBLE")).sum())
+        score["fraudes_mesurees_a_ce_score"] = round(float(measured_fraud_rate([r.score_model])[0]), 3)
     return {
         "transaction": _row(r, ["transaction_id", "timestamp", "customer_id", "card_id", "transaction_type", "channel",
                                 "entry_mode", "merchant_category", "amount_tnd", "city", "country", "status"]),
         "dans_file_alertes": True,
-        "score": {"niveau_risque": r.risk_level, "score_modele": round(float(r.score_model), 4),
-                  "percentile_risque_periode": _v(r.score_pct), "rang_dans_periode": int(r.rank_in_period),
-                  "alerte_moteur_regles_actuel": bool(r.legacy_alert), "points_regles_metier": int(r.score_rules)},
+        "score": score,
         "facteurs_modele_pour_fraude": for_fraud,
         "facteurs_modele_rassurants": facts("model_against", 2),
         "regles_metier_declenchees": triggered,

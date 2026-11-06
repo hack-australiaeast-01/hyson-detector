@@ -2,7 +2,7 @@
 
 # Hyson Detector — AI Banking Copilot for Fraud Detection (Microsoft Fabric + Azure OpenAI)
 
-**Live demo:** https://hyson-detector.streamlit.app
+**Live demo:** https://hyson-detector.streamlit.app · [![tests](https://github.com/hack-australiaeast-01/hyson-detector/actions/workflows/tests.yml/badge.svg)](https://github.com/hack-australiaeast-01/hyson-detector/actions/workflows/tests.yml) · [Model card](docs/MODEL_CARD.md) · [Architecture](docs/ARCHITECTURE.md)
 
 A copilot for a fraud analyst: it **detects** suspicious transactions (model score), **explains** them (facts compared with the customer's own history), **answers questions** in natural language (Azure OpenAI with function calling over the Gold tables), and helps the analyst **decide** (BLOQUER / ESCALADER / VALIDER, with a decision log). The model scores, the LLM only explains, and the analyst decides.
 
@@ -19,7 +19,7 @@ SQL source ──copy job──► Fabric Lakehouse lh_fraud (bronze)
                               │  live T-SQL via lh_fraud SQL analytics endpoint (brief §11 option A, Entra token)
                               │  fallback: parquet snapshot in app/data (option B), refreshed on every live load
                               ▼
-   app/ Streamlit ── tools.py (9 tools, compact JSON) ── copilot.py ── Azure OpenAI (function calling)
+   app/ Streamlit ── tools.py (10 tools, compact JSON) ── copilot.py ── Azure OpenAI (function calling)
                      decisions.csv (feedback)            copilot_log.jsonl (questions, tools, tokens)
 ```
 
@@ -48,7 +48,8 @@ PR-AUC 0.646 (rules 0.014). The model beats the rules engine on 5 of the 6 fraud
 | **95 % confidence intervals** (bootstrap of whole days, 1,000 resamples, validation Jun–Jul) | Recall 70.9 % [68.3–73.0] · precision 40.4 % [34.9–45.0] · PR-AUC 0.646 [0.610–0.675] · recall gain vs rules +59.3 pts [56.2–62.0] · false alerts avoided 2,160 [1,971–2,335] |
 | **Model registry** | MLflow experiment `hyson-fraud-robustness`, ML model **`hyson-fraud-lightgbm`** v1 with feature list and model card. It reproduces the production scores exactly (rank correlation 1.0, same top 1 %, max difference 0) |
 | **Orchestration** | Fabric data pipeline **`pl_hyson_retrain`** (01 → 02 → 03e ∥ 04), not scheduled on purpose (re-scoring changes the demo IDs) · library versions pinned in [`fabric/environment.yml`](fabric/environment.yml) — see [`fabric/`](fabric/README.md) |
-| **Copilot evaluation** | [`app/eval_copilot.py`](app/eval_copilot.py): 14 golden questions (brief §9.7 + unknown ID, off-topic, prompt injection), 0-token checks → **14/14 pass, 99.3 % of the numbers cited are found in the tool outputs** ([report](docs/COPILOT_EVAL.md)) |
+| **Fairness** | Alert rate 0.9–1.1 % in every segment and age band; retirees / 60+ have lower precision (30–35 %) and recall (61–66 %) → monitored ([model card](docs/MODEL_CARD.md)) |
+| **Copilot evaluation** | [`app/eval_copilot.py`](app/eval_copilot.py): 18 golden questions (brief §9.7 word for word + unknown ID, off-topic, prompt injection), 0-token checks → **18/18 pass, 99.5 % of the numbers cited are found in the tool outputs** ([report](docs/COPILOT_EVAL.md)) |
 
 Shown in the app on **Performance du modèle → Robustesse et gouvernance**.
 
@@ -79,13 +80,15 @@ Live link: **https://hyson-detector.streamlit.app**
 
 ## Pages
 
-The app is branded **Hyson Detector** (light, bank-platform theme; FR/EN). The sidebar groups pages as *Bienvenue · Analyste · Enquête IA · Pilotage*, plus one-click demo cases.
+The app is branded **Hyson Detector** (light, bank-platform theme; FR/EN). The sidebar groups the 15 pages as *Bienvenue · Analyste · Enquête IA · Pilotage · Données*, plus one-click demo cases.
 
 0. **Démarrer ici** (guide): headline KPIs and an 8-step guided tour for a first-time user (welcome dialog on first visit, a hint on each page).
 1. **File d'alertes** (alert queue): filters on period, date, channel, risk level and fraud type; risk colours; alerts per day.
 2. **Fiche transaction + copilote** (transaction view): score, risk factors (observed vs usual value), reassuring factors, decision with confidence and comment, and the chat with suggested questions (brief §9.7).
 3. **Vue client 360** (customer view): profile, habits, timeline of transactions and digital events, and a map when coordinates were exported.
-4. **Performance**: model vs current engine, recall per fraud type, top drivers, champion vs challengers.
+4. **Performance**: model vs current engine, recall per fraud type, top drivers, champion vs challengers, and **Robustesse et gouvernance** (4-period backtest, confidence intervals, fairness by segment and age, copilot evaluation).
+4b. **Enquête approfondie** (`deepsearch.py`): watch list of medium alerts whose customer already had an alert (≈ 53 % fraud vs 16 %), evidence board E1…En (habits, digital events, linked customers, points of compromise, 25 most similar labelled alerts), one AI call to connect the dots.
+4c. **Tableau de bord Power BI**: the Fabric report (Direct Lake), embedded securely (viewer signs in with an Entra ID account).
 5. **Journal**: analyst decisions (the feedback loop) and copilot traceability (questions, tools, tokens, cache).
 6. **Le Procès** (`courtroom.py`): an AI prosecutor and an AI defence argue the same Fabric facts in parallel, an AI judge rules; the analyst accepts or overrides the verdict (logged as a decision).
 7. **Reconstitution**: replays the hours before the alert step by step (transactions + digital events, risky signals in red, map, AI narration).
@@ -97,6 +100,15 @@ The app is branded **Hyson Detector** (light, bank-platform theme; FR/EN). The s
 13. **Find a person**: on Vue client 360 and in the copilot, describe a customer ("retraité de Sfax de plus de 70 ans avec des alertes") → read-only search on approved filters (`person_search.py`, tool `find_customers`); IDs typed in a question override the open transaction.
 
 The transaction page also has a stopwatch (alert opened → decision saved, stored as `duration_s`) and a printable HTML case file.
+
+## Tests
+
+```powershell
+pip install -r requirements.txt pytest
+python -m pytest -q        # 44 tests, ~30 s, offline (snapshot), no Fabric / Azure OpenAI call
+```
+
+`tests/` checks: no test labels anywhere, 1 % alert budget, documented KPIs (117 / 3,221 vs 718 / 1,061), decision-rule bands, calibration of the measured fraud rate, habits computed on the past only, related cases count only frauds reported before, person search on approved filters, submission format, no secret in tracked files, copilot guardrails (unknown ID, decision, intents, demo calendar) and every page rendering in FR and EN. GitHub Actions runs them on every push. The copilot's answers themselves are evaluated by `app/eval_copilot.py` (18 golden questions, [report](docs/COPILOT_EVAL.md)).
 
 ## Rules followed
 

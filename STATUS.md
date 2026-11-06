@@ -1,5 +1,5 @@
 # Project status — Hyson Detector · AI Banking Copilot for Fraud Detection
-Updated: **2026-11-06 03:00** · ✅ done · 🟡 in progress · ❌ to do · Target level: **Gold ("Or")** (brief §6)
+Updated: **2026-11-06 03:45** · ✅ done · 🟡 in progress · ❌ to do · Target level: **Gold ("Or")** (brief §6)
 
 **Live demo:** https://hyson-detector.streamlit.app · **Repo (jury):** https://github.com/hack-australiaeast-01/hyson-detector ·
 **Architecture:** [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) (18 diagrams) · **Jury Q&A:** [JURY_HANDBOOK.md](JURY_HANDBOOK.md)
@@ -10,12 +10,13 @@ Sections 1–6 = **current state** (kept up to date). Section 7 = **work log** (
 | Deliverable | Status | Where / evidence |
 |---|---|---|
 | Working application | ✅ | 15 pages FR/EN · local = **live Fabric** · public = https://hyson-detector.streamlit.app (Gold snapshot) |
-| Copilot (mandatory) | ✅ · 🟡 online key | `app/copilot.py` + 10 tools · **14/14 golden questions, 99.3 % of cited numbers grounded** · public app still "Hors-ligne (règles)" until the key is in Streamlit Secrets (§5.1) |
+| Copilot (mandatory) | ✅ · 🟡 online key | `app/copilot.py` + 10 tools · **18/18 golden questions (incl. the brief's §9.7 wording), 99.5 % of cited numbers grounded** · public app still "Hors-ligne (règles)" until the key is in Streamlit Secrets (§5.1) |
 | Data pipeline on Fabric | ✅ | Lakehouse `lh_fraud`, notebooks 01 · 02 · 03e · 04, pipeline `pl_hyson_retrain`, MLflow model `hyson-fraud-lightgbm` |
 | Validation vs current rules | ✅ | Top 1 %: 718 frauds vs 117, 1,061 false alerts vs 3,221 · backtest 69.4 % ± 2.1 recall over 4 periods |
-| Technical walkthrough | ✅ | `docs/ARCHITECTURE.md`, `README.md`, `JURY_HANDBOOK.md` |
+| Technical walkthrough | ✅ | `docs/ARCHITECTURE.md`, `docs/MODEL_CARD.md`, `README.md`, `JURY_HANDBOOK.md` |
+| Automated tests | ✅ | 44 pytest tests (`tests/`, offline, ~30 s) run by GitHub Actions on every push |
 | Usage of GitHub Copilot | 🟡 | `docs/AI_TOOLS_USAGE.md` declared; table of real uses + screenshots still to fill |
-| GitHub repo | ✅ | Code, Fabric notebooks (exported with outputs), `requirements.txt`, README, no secret in files or history |
+| GitHub repo | ✅ | Code, Fabric notebooks (exported with outputs), `requirements.txt` (root + `app/`), README, tests + CI, no secret in files or history |
 | Score file (optional, brief §14) | ✅ | `submission/submission.csv` (187,628 rows, 1,876 alerts) |
 | Pitch (slides, rehearsal, backup video) | ❌ | §5 |
 
@@ -77,14 +78,14 @@ Sections 1–6 = **current state** (kept up to date). Section 7 = **work log** (
 | 20 | Constellation | ✅ | 29 points of compromise, 294 exposed alerts; shown as an investigation lead (not predictive in validation) |
 | 21 | Impact & processus | ✅ | TND caught / flagged, workload (editable), process flow, recommendation mix, decision time, AI cost per alert, PSI drift |
 | 22 | Marché & benchmarks | ✅ | 6 cited public benchmarks, Tunisia-scale scenario, rules-engine audit, time to detect |
-| 23 | Performance du modèle | ✅ | Model vs rules, recall by type, drivers, leaderboard + **Robustesse et gouvernance** (backtest, CIs, MLflow, copilot evaluation) |
+| 23 | Performance du modèle | ✅ | Model vs rules, recall by type, drivers, leaderboard + **Robustesse et gouvernance** (backtest, CIs, **fairness by segment / age**, MLflow, copilot evaluation) |
 | 24 | Tableau de bord Power BI | ✅ | Secure embed (viewer signs in), page picker |
 | 25 | Journal & traçabilité | ✅ | Decisions (feedback loop) + copilot log (question, tools, tokens) |
 | 26 | Nouvelle source de données | ✅ | Profile → map/translate (rules, optional 1 AI call on names + stats) → accuracy + PSI → **human approval** → versioned data contract |
-| 27 | 10 tools (`tools.py`) | ✅ | get_alert_queue · get_transaction · get_customer_profile · compare_to_habits (+ decline reason, 24 h card sequence) · get_customer_history · get_digital_events · find_related_cases · get_kpis (comparison in plain words) · find_customers · record_decision |
-| 28 | Copilot engine (`copilot.py`) | ✅ | Intent routing (incl. person / customer ID / typed TX ID), prefetch → 1 LLM round, streaming, deterministic `recommandation_systeme`, demo calendar ("hier" = 2026-09-29), guardrails: off-topic refusal, unknown ID answered with 0 token, Azure content-filter refusal, no field names; cache, log, offline mode, hourly cap |
+| 27 | 10 tools (`tools.py`) | ✅ | get_alert_queue · get_transaction (+ measured fraud at this score, alerts in the period) · get_customer_profile · compare_to_habits (+ decline reason, 24 h card sequence) · get_customer_history · get_digital_events · find_related_cases · get_kpis (comparison in plain words) · find_customers · record_decision |
+| 28 | Copilot engine (`copilot.py`) | ✅ | Intent routing (incl. priority, person / customer ID / typed TX ID), prefetch → 1 LLM round, streaming, deterministic `recommandation_systeme`, demo calendar ("hier" = 2026-09-29), guardrails: off-topic refusal, unknown ID answered with 0 token, Azure content-filter refusal, no field names; cache, log, offline mode, hourly cap |
 | 29 | Azure OpenAI (Azure AI Foundry) | ✅ | Project `proj-fraud-australiaeast`, resource `aoai-fraud-australiaeast-vnxcy`, deployment **gpt-5-mini**, API 2024-12-01-preview, `reasoning_effort=low`, `max_completion_tokens` 2,400, timeout 60 s, 2 retries; ≈ 3,300 tokens (≈ 1,400–2,000 prompt-cached) and ≈ 7 s per new question |
-| 30 | Evaluation & cache | ✅ | `eval_copilot.py`: 14/14, 99.3 % grounded (`docs/COPILOT_EVAL.md`); `warmup.py fr en`: 40 answers + 6 trials pre-computed |
+| 30 | Evaluation & cache | ✅ | `eval_copilot.py`: 18/18, 99.5 % grounded (`docs/COPILOT_EVAL.md`); `tests/` 44 tests + GitHub Actions; `warmup.py fr en`: 40 answers + 6 trials pre-computed |
 | 31 | Traceability | ✅ | `copilot_log.jsonl`, `decisions.csv` (→ OneLake), `onboarding_log.csv` |
 | 32 | GitHub + Streamlit Cloud | ✅ | Repo owned by the team account; push to `main` redeploys; snapshot fits the 690 MB limit (peak ≈ 520 MB) — after a crash use **Reboot** |
 | 33 | Architecture & docs | ✅ | 18 diagrams (images + Mermaid source in `docs/diagrams/`), README, JURY_HANDBOOK, `fabric/README.md` |
@@ -122,6 +123,7 @@ Sections 1–6 = **current state** (kept up to date). Section 7 = **work log** (
 - Pitch laptop: `az login` → `cd app` → `streamlit run app.py` (sidebar shows Fabric live) → run the demo path once.
 - Do not click "Rafraîchir depuis Fabric" during the pitch (≈ 15 s reload). Do not run notebooks 01/02 or the pipeline.
 - Keep one Aug–Sep alert ready besides the 3 June demo cases (e.g. TX01890379, declined for limit exceeded).
+- For "même commerçant ou DAB ?" use **TX01589761** (ATM skimming: same ATM M02076, 4 other customers, 3 cards already reported) — most alerts have no shared point.
 
 ## 6. Known limits (say them before the jury does)
 - ≈ 62 % of alerts have no business-rule factor → their explanation rests on model factors; the "concordant signals" of the recommendation count strong model factors (precision of each band is measured and shown).
@@ -133,6 +135,9 @@ Sections 1–6 = **current state** (kept up to date). Section 7 = **work log** (
 - The fraud score is classical ML; deep learning is used only through the LLM (no DL scoring model yet).
 - Data onboarding stops at the approved data contract: OneLake → Bronze → re-scoring is documented, not run live.
 - The retraining pipeline exists but has never run (frozen demo); the Environment is pinned in a file, not published.
+- Fairness: alert rates are even (0.9–1.1 %), but retirees / 60+ get lower precision (30–35 %) and recall (61–66 %) — shown, to monitor.
+- The Power BI page needs an Entra ID account of the tenant: a jury member without access sees a sign-in screen (the app pages carry the same KPIs).
+- Explanations of alerts without a business rule stay model-driven (e.g. TX01890379 still lists model factors before its decline reason).
 
 ## 7. Work log (dated history — figures as of that time; current state = §1–§6)
 
@@ -417,3 +422,19 @@ Also: `.env.example` documents every setting the app reads (`COPILOT_HOURLY_CAP`
 - `docs/ARCHITECTURE.md` rewritten: **18 diagrams** — end-to-end, Fabric platform (every table), ML pipeline (NB 01/02), MLOps lifecycle + NB 04, Azure AI Foundry / Azure OpenAI layer, where ML and DL are used (+ DL roadmap), the 8 AI pipelines one by one, app pages, demo path, deployment & security; each with a method table.
 - GitHub stops rendering Mermaid after ~7 diagrams per page → `ARCHITECTURE.md` shows images (`docs/img/`, also for slides); editable Mermaid source split into `docs/diagrams/` (5 pages ≤ 4 diagrams, all render); `python docs/diagrams/render.py` regenerates the images. Checked on GitHub: 18/18 images, 18/18 diagrams.
 - STATUS restructured: current state (§0–§6) separated from the dated work log (§7); obsolete Fabric export cell removed (replaced by the full snapshot, §7.7); open items re-checked against Fabric, GitHub and the public app.
+
+### 7.11 Gap check (2026-11-06 03:00 → 03:45)
+Checked: links in all Markdown files (0 broken) · fresh clone of the public repo, every page FR/EN without `.env` or Fabric (0 exception) · submission format (187,628 unique rows, header, scores in [0, 1], 1,876 alerts = queue) · the brief's §9.7 questions word for word · fairness by segment / age · repo hygiene (§13, §16).
+
+| Gap found | Fix |
+|---|---|
+| "Résume pourquoi cette alerte doit être priorisée" answered with a generic 5-section analysis | New intent **priority**: 4 figures (rank / alerts in the period, measured fraud at this score, strongest signals, exposure) + recommendation, ≤ 120 words; `get_transaction` returns `fraudes_mesurees_a_ce_score` and `nb_alertes_periode` |
+| "Même commerçant ou DAB ?" weak on most alerts (no shared point) | Demo case **TX01589761** (ATM M02076: 4 other customers, 3 already-reported frauds) in the checklist and the golden set |
+| Golden evaluation did not use the brief's exact wording for 4 questions | +4 cases (habits, priority, "juste avant ce virement", same ATM) → **18/18**, 99.5 % grounded |
+| No fairness analysis (banks ask) | `features.fairness()` (Fabric SQL, snapshot `feat_fairness.parquet`) → table on Performance → Robustesse et gouvernance; `docs/MODEL_CARD.md` |
+| No model card in the repo | `docs/MODEL_CARD.md` (purpose, data, features, exclusions, performance + CIs, backtest, fairness, limits, monitoring) |
+| No automated tests / CI (brief §13 cites tests) | `tests/` (44 tests, offline) + `.github/workflows/tests.yml` + `pytest.ini`; found that "plus de 70 ans" is parsed as 71+ (documented in the test) |
+| No `requirements.txt` at the root | `requirements.txt` → `-r app/requirements.txt` |
+| Docs said 9 tools, README missed 2 pages, eval figures 14/14 | README (15 pages, Tests section, badge, model card), JURY_HANDBOOK (10 tools, fairness + tests Q&A), AI_TOOLS_USAGE, diagrams 07a/07g re-rendered |
+
+Still open (team): Azure key in Streamlit Secrets, slides, rehearsal + backup video, GitHub Copilot usage table, archive `saitaflex/hyson-detector`, Fabric clean-up, personal e-mail decision (§5). Optional: LICENSE file (data belongs to the organisers).

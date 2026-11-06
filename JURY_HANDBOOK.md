@@ -184,7 +184,7 @@ External public figures are allowed if cited (§16 rule 1). Each one is shown in
 - **95 % intervals** (bootstrap of whole days, 1,000 resamples, Jun–Jul): recall 70.9 % [68.3–73.0], precision 40.4 % [34.9–45.0], PR-AUC 0.646 [0.610–0.675], recall gain vs rules +59.3 pts [56.2–62.0], false alerts avoided 2,160 [1,971–2,335].
 - **MLflow**: experiment `hyson-fraud-robustness`, registered ML model `hyson-fraud-lightgbm` v1 (feature list + model card); it reproduces the production scores exactly (rank correlation 1.0, same top 1 %).
 - **Orchestration**: data pipeline `pl_hyson_retrain` (01 → 02 → 03e ∥ 04), deliberately not scheduled; library versions pinned in `fabric/environment.yml`.
-- **Copilot evaluation**: `app/eval_copilot.py`, 14 golden questions (§9.7 + unknown ID, off-topic, prompt injection), 14/14 pass, 99.3 % of the numbers cited found in the tool outputs (`docs/COPILOT_EVAL.md`).
+- **Copilot evaluation**: `app/eval_copilot.py`, 18 golden questions (§9.7 word for word + unknown ID, off-topic, prompt injection), 18/18 pass, 99.5 % of the numbers cited found in the tool outputs (`docs/COPILOT_EVAL.md`).
 
 ---
 
@@ -193,7 +193,7 @@ External public figures are allowed if cited (§16 rule 1). Each one is shown in
 ### 5.1 Principle (§9.1)
 **The model scores, the copilot explains, and the analyst decides.** The LLM never computes a score and never receives raw rows, only compact JSON facts returned by the tools.
 
-### 5.2 The 9 tools (§9.2, `app/tools.py`)
+### 5.2 The 10 tools (§9.2, `app/tools.py`)
 
 | Tool | What it returns |
 |---|---|
@@ -204,7 +204,8 @@ External public figures are allowed if cited (§16 rule 1). Each one is shown in
 | `get_customer_history` | Recent transactions and digital events |
 | `get_digital_events` | Logins, failed logins, devices, beneficiaries, password, phone number around a transaction (at least 24 h before) |
 | `find_related_cases` | Other customers / cards on the same merchant, device or beneficiary across **the whole bank**, counting only frauds **already reported** at the transaction date |
-| `get_kpis` | Model vs engine, alerts avoided, recall by fraud type |
+| `get_kpis` | Model vs engine, alerts avoided (comparison pre-written in plain words), recall by fraud type |
+| `find_customers` | Person search on approved filters (city, segment, occupation, age, KYC, digital, with alerts): counts + short profiles, never raw rows |
 | `record_decision` | Saves the analyst's decision (only on explicit request) |
 
 ### 5.3 How a question is processed (`app/copilot.py`)
@@ -323,7 +324,7 @@ Azure SQL (source) ──Copy job──► Fabric Lakehouse lh_fraud (bronze, De
 Gold: gold_scores · gold_alert_queue · gold_alert_explanations · gold_model_* ── Power BI (Direct Lake, manager view)
         │  SQL analytics endpoint (T-SQL, Entra token)         ▲ OneLake Files/app_feedback/decisions.csv
         ▼                                                       │ (feedback loop → future retraining)
-Streamlit app ── tools.py (9 tools, JSON) ── copilot.py ── Azure OpenAI gpt-5-mini (function calling)
+Streamlit app ── tools.py (10 tools, JSON) ── copilot.py ── Azure OpenAI gpt-5-mini (function calling)
                                               └─ cache, log, streaming, offline mode
 ```
 
@@ -414,7 +415,9 @@ Streamlit app ── tools.py (9 tools, JSON) ── copilot.py ── Azure Ope
 | Why LightGBM? | Best trade-off on tabular data, native categoricals, exact SHAP, ties the blend within a point |
 | "Maybe June–July was a lucky period" / "you picked the model on the period you report" | Rolling backtest on 4 periods, re-trained on the past only each time: top-1 % recall 69.4 % ± 2.1 (worst 66.7 %); 95 % interval on Jun–Jul 70.9 % [68.3–73.0]. The 4 candidate models were within ~1 pt, and the Aug–Sep labels stay with the jury |
 | Is the model industrialised or just a notebook? | Registered in MLflow (`hyson-fraud-lightgbm`, identical to production scores), Fabric pipeline `pl_hyson_retrain` for retraining, pinned environment, drift (PSI) on the Impact page, decisions fed back to OneLake |
-| How do you know the copilot doesn't invent numbers? | `eval_copilot.py`: 14 golden questions, 99.3 % of the numbers cited are found in the tool outputs; unknown IDs answered "introuvable" with 0 tokens; prompt injections stopped by the Azure OpenAI filter + a clear refusal |
+| Is the model fair? | Gender is never used. Alert rate 0.9–1.1 % in every segment / age band; retirees and 60+ have less fraud and lower precision (30–35 %) and recall (61–66 %): shown on the Performance page and in `docs/MODEL_CARD.md`, to monitor in production |
+| Is the code tested? | 44 automated tests (`tests/`, pytest, ~30 s, offline) run by GitHub Actions on every push: no test labels, KPIs, decision rule, calibration, past-only habits, guardrails, every page FR/EN |
+| How do you know the copilot doesn't invent numbers? | `eval_copilot.py`: 18 golden questions (incl. the brief's §9.7 wording), 99.5 % of the numbers cited are found in the tool outputs; unknown IDs answered "introuvable" with 0 tokens; prompt injections stopped by the Azure OpenAI filter + a clear refusal |
 | Why does the LLM not decide? | Not reproducible and a hallucination risk: the decision follows a documented rule backed by measured precision, and the analyst decides |
 | How do you avoid hallucinations? | Facts come only from tools, the rule is fixed, IDs are never invented, missing information is stated, temperature is low / reasoning effort is low |
 | How much does one question cost? | ~3,300 tokens (≈ 1,400 served by the Azure prompt cache), 1 LLM round, 7–15 s; demo answers cached; every call logged; public demo capped at 60 live calls / hour |

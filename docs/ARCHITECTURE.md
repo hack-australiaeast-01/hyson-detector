@@ -92,7 +92,8 @@ Principle everywhere: **the model scores, the AI explains, the analyst decides.*
 | Model registry | ML model `hyson-fraud-lightgbm` v1 = production scores | ✅ |
 | Orchestration | Data pipeline `pl_hyson_retrain` (01 → 02 → 03e ∥ 04, retry 1) | ✅ created, not scheduled (re-scoring changes demo IDs) |
 | Reproducibility | Seeds, same sampling, `fabric/environment.yml` (runtime versions) | ✅ |
-| Monitoring | PSI drift of the score distribution (Impact page), alert volume per day, copilot log | ✅ |
+| Monitoring | PSI drift of the score distribution (Impact page), alert volume per day, fairness by segment / age (Performance page), copilot log | ✅ |
+| Testing | 44 pytest tests (`tests/`) on every push (GitHub Actions) + copilot golden evaluation (18 questions) | ✅ |
 | Feedback loop | `decisions.csv` → OneLake `Files/app_feedback` → labels for the next run | ✅ |
 | Next | Schedule the pipeline, champion/challenger in shadow mode, drift alert with Data Activator | Roadmap |
 
