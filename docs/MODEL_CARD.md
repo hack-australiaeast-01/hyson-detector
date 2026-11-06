@@ -35,7 +35,7 @@ experiment `hyson-fraud-robustness`); identical to the production scores in `gol
 | Segments | 0.88–1.12 % | 30 % (retirees) → 46 % (premium) | 61 % (retirees) → 76 % (professionals) |
 | Age bands | 0.95–1.09 % | 35 % (60+) → 42 % (30–44) | 65 % (18–29) → 75 % (30–44) |
 
-Retirees and over-60s have less fraud and lower precision/recall: monitor in production (dedicated threshold or review) and explain alerts to these customers carefully. Gender is not used and not reported.
+False alerts on legitimate operations (Performance page): the gap between the most and least disturbed group is 1.4× across segments and 1.2× across age bands for the model, vs 2.8× and 1.5× for the current rules engine. Retirees and over-60s have less fraud and lower precision/recall: monitor in production (dedicated threshold or review) and explain alerts to these customers carefully. Gender is not used and not reported.
 
 ## Limits and monitoring
 

@@ -71,7 +71,7 @@ TOUR = [  # (step id, FR title, EN title, FR text, EN text, page, demo case)
      "3 361 TND chez un commerçant de Tunis : le moteur actuel alerte, le modèle non. La Contre-enquête montre pourquoi c'est robuste.",
      "3,361 TND at a Tunis shop: the current rules alert, the model does not. The Counter-inquiry shows why this is robust.",
      "contre", "avoided_false_positive"),
-    ("galaxy", "Explorer la Constellation", "Explore the Constellation",
+    ("galaxy", "Explorer le réseau de compromission", "Explore the compromise network",
      "Les points de compromission (DAB, commerçants) par où sont passées les cartes fraudées, et les alertes du jour qui y sont liées.",
      "Points of compromise (ATMs, merchants) that defrauded cards went through, and today's alerts linked to them.", "galaxy", None),
     ("impact", "Voir l'impact pour la banque", "See the impact for the bank",
@@ -441,47 +441,105 @@ def page_replay(c):
     k[2].metric(L("Durée de la séquence", "Sequence span"), f"{span:.1f} h")
     k[3].metric(L("Montant habituel", "Usual amount"), _money(data["usual_avg"], 0) if data["usual_avg"] else "—")
     play = st.button(L("▶  Lancer la reconstitution", "▶  Play the replay"), type="primary")
+    road_ph = st.empty()
     left, right = st.columns([1.1, 1])
-    with right:
-        chart_ph = st.empty()
     with left:
         tl_ph = st.empty()
 
     def fmt(s):
         return {**s, "ts": s["ts"].strftime("%d/%m %H:%M")}
 
-    def chart(upto):
+    def phase(s):
+        if s["target"]:
+            return L("Alerte", "Alert")
+        return L("Accès au compte", "Account access") if s["kind"] == "event" else L("Opérations", "Operations")
+
+    def roadmap(upto):
+        """Fraud history as a road: one station per step, phases shaded, the road fills in as the replay advances."""
         import plotly.graph_objects as go
-        shown = steps[:upto]
+        n = len(steps)
+        xs = list(range(n)) + [n]                       # last station = detection milestone
         fig = go.Figure()
-        for lane, kind, sym in [(L("Application", "App"), "event", "diamond"), (L("Paiements", "Payments"), "tx", "circle")]:
-            pts = [s for s in shown if s["kind"] == kind]
-            if not pts:
-                continue
+        # phase bands (contiguous runs of the same phase)
+        runs, cur, s0 = [], None, 0
+        for i, s in enumerate(steps):
+            ph = phase(s)
+            if ph != cur:
+                if cur is not None:
+                    runs.append((cur, s0, i - 1))
+                cur, s0 = ph, i
+        runs.append((cur, s0, n - 1))
+        band = {L("Accès au compte", "Account access"): "rgba(14,159,138,.08)", L("Opérations", "Operations"): "rgba(30,91,216,.07)",
+                L("Alerte", "Alert"): "rgba(217,45,32,.10)"}
+        for ph, a, b in runs:
+            fig.add_shape(type="rect", x0=a - .45, x1=b + .45, y0=-1.15, y1=1.15, fillcolor=band.get(ph, "rgba(0,0,0,.04)"),
+                          line=dict(width=0), layer="below")
+            fig.add_annotation(x=(a + b) / 2, y=1.32, text=f"<b>{ph.upper()}</b>", showarrow=False,
+                               font=dict(size=10, color=ui.MUTED, family="Inter"))
+        # the road: grey track, blue progress, dashed centre line
+        fig.add_trace(go.Scatter(x=[-.6, n + .4], y=[0, 0], mode="lines", line=dict(color="#D5DCE8", width=16),
+                                 hoverinfo="skip", showlegend=False))
+        done_x = min(upto, n) - 1 + (0.4 if upto >= n else 0)
+        if upto > 0:
+            fig.add_trace(go.Scatter(x=[-.6, done_x], y=[0, 0], mode="lines", line=dict(color=ui.BLUE, width=16),
+                                     hoverinfo="skip", showlegend=False))
+        fig.add_trace(go.Scatter(x=[-.6, n + .4], y=[0, 0], mode="lines", line=dict(color="#FFFFFF", width=2, dash="dash"),
+                                 hoverinfo="skip", showlegend=False))
+        # stations
+        for i, s in enumerate(steps):
+            reached = i < upto
+            colr = (ui.RED if s["risky"] else (ui.TEAL if s["kind"] == "event" else ui.NAVY)) if reached else "#FFFFFF"
             fig.add_trace(go.Scatter(
-                x=[s["ts"] for s in pts], y=[lane] * len(pts), mode="markers+text",
-                marker=dict(size=[24 if s["target"] else 16 for s in pts], symbol=["star" if s["target"] else sym for s in pts],
-                            color=[ui.RED if s["risky"] else ui.SOFT for s in pts], line=dict(width=1.5, color="#fff")),
-                text=[s["icon"] for s in pts], textposition="top center",
-                hovertext=[f"{s['ts']:%d/%m %H:%M} · {s['title']}<br>{', '.join(s['flags'])}" for s in pts], hoverinfo="text",
-                showlegend=False))
-        fig.update_layout(height=260, margin=dict(l=10, r=10, t=20, b=10), paper_bgcolor="rgba(0,0,0,0)",
-                          plot_bgcolor=ui.CARD, font=dict(family="Inter", color=ui.TEXT),
-                          xaxis=dict(range=[steps[0]["ts"] - pd.Timedelta(minutes=30), data["end"] + pd.Timedelta(minutes=30)],
-                                     gridcolor=ui.LINE2), yaxis=dict(gridcolor=ui.LINE2))
-        chart_ph.plotly_chart(fig, width="stretch", config={"displayModeBar": False}, key=f"replay_chart_{upto}_{time.time()}")
+                x=[i], y=[0], mode="markers+text", text=[str(i + 1) if not s["target"] else "!"],
+                textfont=dict(color="#FFFFFF" if reached else ui.SOFT, size=11, family="Inter"),
+                marker=dict(size=34 if s["target"] else 26, symbol="square" if s["target"] else "circle", color=colr,
+                            line=dict(width=3, color=ui.RED if (s["target"] and reached) else ("#FFFFFF" if reached else "#C9D2E0"))),
+                hovertext=f"{s['ts']:%d/%m %H:%M} · {s['title']}" + (f"<br>{', '.join(s['flags'])}" if s["flags"] else ""),
+                hoverinfo="text", showlegend=False))
+            if reached:
+                up = i % 2 == 0
+                delta = ""
+                if i:
+                    mins = (s["ts"] - steps[i - 1]["ts"]).total_seconds() / 60
+                    delta = f" · +{mins:.0f} min" if mins < 120 else f" · +{mins / 60:.1f} h"
+                title = s["title"] if len(s["title"]) <= 34 else s["title"][:33] + "…"
+                flag = f"<br><span style='color:{ui.RED}'>⚠ {s['flags'][0][:26]}{'…' if len(s['flags'][0]) > 26 else ''}</span>" if s["flags"] and s["risky"] else ""
+                fig.add_annotation(x=i, y=0.42 if up else -0.42, ax=0, ay=-48 if up else 48, showarrow=True, arrowwidth=1.2,
+                                   arrowcolor=ui.RED if s["risky"] else "#AAB4C3",
+                                   text=f"<b>{s['ts']:%H:%M}</b>{delta}<br>{title}{flag}", align="center",
+                                   font=dict(size=10.5, color=ui.TEXT, family="Inter"), bgcolor="#FFFFFF",
+                                   bordercolor=ui.RED if s["risky"] else ui.LINE, borderwidth=1.2, borderpad=5)
+        # detection milestone
+        done = upto >= n
+        fig.add_trace(go.Scatter(x=[n], y=[0], mode="markers", marker=dict(size=30, symbol="hexagon",
+                                 color=ui.GREEN if done else "#FFFFFF", line=dict(width=3, color=ui.GREEN if done else "#C9D2E0")),
+                                 hoverinfo="skip", showlegend=False))
+        if done:
+            fig.add_annotation(x=n, y=0.42, ax=0, ay=-52, showarrow=True, arrowcolor=ui.GREEN, align="center",
+                               text=L("<b>Détection Hyson : jour 0</b><br>signalement habituel : ~11 jours",
+                                      "<b>Hyson detection: day 0</b><br>usual report: ~11 days"),
+                               font=dict(size=10.5, color=ui.GREEN, family="Inter"), bgcolor="#FFFFFF", bordercolor=ui.GREEN,
+                               borderwidth=1.2, borderpad=5)
+        fig.update_layout(height=360, margin=dict(l=10, r=10, t=30, b=10), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor=ui.CARD,
+                          xaxis=dict(visible=False, range=[-.9, n + .9]), yaxis=dict(visible=False, range=[-1.6, 1.5]),
+                          hoverlabel=dict(bgcolor="#FFFFFF", bordercolor=ui.LINE, font=dict(color=ui.TEXT, family="Inter")))
+        with road_ph.container(border=True):
+            st.markdown(f"**{L('Feuille de route de la fraude', 'Fraud history roadmap')}** · "
+                        f"{L('étape', 'step')} {min(upto, n)}/{n}")
+            st.plotly_chart(fig, width="stretch", config={"displayModeBar": False}, key=f"roadmap_{upto}_{time.time()}")
 
     if play:
         for i in range(1, len(steps) + 1):
             with tl_ph.container():
                 ui.timeline([fmt(s) for s in steps[:i]])
-            chart(i)
-            time.sleep(0.55 if steps[i - 1]["risky"] else 0.3)
+            roadmap(i)
+            time.sleep(0.7 if steps[i - 1]["risky"] else 0.4)
+        roadmap(len(steps) + 1)
         c.mark("replay")
     else:
         with tl_ph.container():
             ui.timeline([fmt(s) for s in steps])
-        chart(len(steps))
+        roadmap(len(steps) + 1)
     with right:
         ui.section(L("Récit du copilote", "Copilot narrative"))
         q = copilot.SUGGESTIONS[2][1 if c.lang == "en" else 0]
@@ -581,7 +639,8 @@ def page_contre(c):
 # ================================================================= 5. Constellation
 def page_galaxy(c):
     L = c.L
-    ui.hero(L("Enquête IA · fraude organisée", "AI investigation · organised fraud"), "Constellation",
+    ui.hero(L("Enquête IA · fraude organisée", "AI investigation · organised fraud"),
+            L("Réseau de compromission", "Compromise network"),
             L("Les points de compromission : DAB et commerçants par où les cartes fraudées sont passées dans les 30 jours avant la fraude, "
               "bien plus souvent que la moyenne. Les alertes du jour qui y sont passées gravitent autour.",
               "Points of compromise: ATMs and merchants that defrauded cards went through in the 30 days before the fraud, far more often "
@@ -610,57 +669,44 @@ def page_galaxy(c):
     for u, v in graph.edges():
         ex += [pos[u][0], pos[v][0], None]
         ey += [pos[u][1], pos[v][1], None]
-    fig.add_trace(go.Scatter(x=ex, y=ey, mode="lines", line=dict(color="rgba(143,176,255,.18)", width=1), hoverinfo="skip",
+    fig.add_trace(go.Scatter(x=ex, y=ey, mode="lines", line=dict(color="rgba(11,37,69,.16)", width=1), hoverinfo="skip",
                              showlegend=False))
-    dx, dy = [], []
     pts = [n for n, d in graph.nodes(data=True) if d["kind"] == "point"]
-    for p in pts:                                   # stardust: one faint dot per past victim of the point
-        n = graph.nodes[p]["victims"]
-        ang, rad = rng.uniform(0, 2 * np.pi, n), rng.uniform(.012, .045, n)
-        dx += list(pos[p][0] + rad * np.cos(ang))
-        dy += list(pos[p][1] + rad * np.sin(ang))
-    fig.add_trace(go.Scatter(x=dx, y=dy, mode="markers", marker=dict(size=3, color="rgba(255,214,120,.45)"), hoverinfo="skip",
-                             showlegend=False))
-    color = {"ELEVE": "#FF5C5C", "MOYEN": "#FFB020", "FAIBLE": "#4ADE80"}
+    color = {"ELEVE": ui.RED, "MOYEN": ui.AMBER, "FAIBLE": ui.GREEN}
     fig.add_trace(go.Scatter(
         x=[pos[a][0] for a in alerts], y=[pos[a][1] for a in alerts], mode="markers", customdata=alerts,
         marker=dict(size=[5 + 7 * graph.nodes[a]["score"] ** 8 for a in alerts], color=[color[graph.nodes[a]["risk"]] for a in alerts],
-                    line=dict(color="rgba(255,255,255,.55)", width=.6), opacity=.9),
+                    line=dict(color="#FFFFFF", width=1), opacity=.92),
         hovertext=[f"{a} · {graph.nodes[a]['risk']} · {graph.nodes[a]['amount']:.0f} TND · {graph.nodes[a]['channel']}" for a in alerts],
         hoverinfo="text", name=L("Alerte du jour", "Today's alert")))
     labelled = []
     for p in sorted(pts, key=lambda p: -graph.nodes[p]["lift"]):
         if len(labelled) < 9 and all(math.dist(pos[p], pos[q]) > 0.08 for q in labelled):
             labelled.append(p)
-    fig.add_trace(go.Scatter(                         # stars drawn last, so they shine above their orbiting alerts
+    def sym(p):                                     # ATM = square, online merchant = diamond, shop = circle
+        mt = str(graph.nodes[p].get("mtype") or "").upper()
+        return "square" if ("DAB" in mt or "ATM" in mt) else "diamond" if ("LIGNE" in mt or "WEB" in mt or "SITE" in mt) else "circle"
+    fig.add_trace(go.Scatter(                         # points of compromise drawn last, above the alerts linked to them
         x=[pos[p][0] for p in pts], y=[pos[p][1] for p in pts], mode="markers+text", customdata=pts,
-        marker=dict(symbol="star", size=[16 + 3.2 * graph.nodes[p]["lift"] ** 1.6 for p in pts], color="#FFD36E",
-                    line=dict(color="#FFF4CF", width=1.2)),
+        marker=dict(symbol=[sym(p) for p in pts], size=[14 + 3.0 * graph.nodes[p]["lift"] ** 1.5 for p in pts], color=ui.NAVY,
+                    line=dict(color=ui.GOLD, width=2)),
         text=[graph.nodes[p]["label"] if p in labelled else "" for p in pts], textposition="top center",
-        textfont=dict(color="#E8EEFF", size=10.5),
+        textfont=dict(color=ui.TEXT, size=10.5, family="Inter"),
         hovertext=[f"{graph.nodes[p]['label']} · {graph.nodes[p]['city'] or ''}<br>{graph.nodes[p]['victims']} "
                    + L("victimes", "victims") + f" / {graph.nodes[p]['visitors']} " + L("cartes", "cards")
                    + f" · ×{graph.nodes[p]['lift']:.1f}" for p in pts], hoverinfo="text", name=L("Point de compromission", "Point of compromise")))
-    fig.update_layout(height=600, margin=dict(l=0, r=0, t=0, b=0), paper_bgcolor="#070B1E", plot_bgcolor="#070B1E",
+    fig.update_layout(height=600, margin=dict(l=0, r=0, t=0, b=0), paper_bgcolor=ui.CARD, plot_bgcolor=ui.CARD,
                       xaxis=dict(visible=False), yaxis=dict(visible=False, scaleanchor="x"), dragmode="pan",
-                      legend=dict(orientation="h", y=0.02, x=0.01, font=dict(color="#E8EEFF"), bgcolor="rgba(0,0,0,0)"),
-                      hoverlabel=dict(bgcolor="#0A1128", font=dict(color="#fff", family="Inter")))
-    rng_bg = np.random.default_rng(1)                 # faint background starfield
-    xs_all = [v[0] for v in pos.values()]
-    ys_all = [v[1] for v in pos.values()]
-    fig.add_trace(go.Scatter(x=rng_bg.uniform(min(xs_all) - .1, max(xs_all) + .1, 260),
-                             y=rng_bg.uniform(min(ys_all) - .1, max(ys_all) + .1, 260), mode="markers",
-                             marker=dict(size=rng_bg.uniform(1, 2.6, 260), color="rgba(255,255,255,.35)"), hoverinfo="skip",
-                             showlegend=False))
-    fig.data = (fig.data[-1],) + fig.data[:-1]
+                      legend=dict(orientation="h", y=0.02, x=0.01, font=dict(color=ui.TEXT, family="Inter"), bgcolor="rgba(255,255,255,.85)"),
+                      hoverlabel=dict(bgcolor="#FFFFFF", bordercolor=ui.LINE, font=dict(color=ui.TEXT, family="Inter")))
     left, right = st.columns([1.75, 1])
     with left:
         ev = st.plotly_chart(fig, width="stretch", on_select="rerun", selection_mode="points", key=f"galaxy_{period}",
                              config={"displayModeBar": False, "scrollZoom": True})
-        st.caption(L("⭐ point de compromission (taille = risque ×) · poussière dorée = cartes déjà fraudées passées par ce point · "
-                     "🔴🟠 alertes du jour. Cliquez une étoile ou une alerte.",
-                     "⭐ point of compromise (size = risk ×) · golden dust = already-defrauded cards that went through this point · "
-                     "🔴🟠 today's alerts. Click a star or an alert."))
+        st.caption(L("■ DAB · ◆ site en ligne · ● commerce : points de compromission (taille = risque ×, bord doré) · "
+                     "🔴🟠 alertes reliées. Cliquez un point ou une alerte.",
+                     "■ ATM · ◆ online site · ● shop: points of compromise (size = risk ×, gold border) · "
+                     "🔴🟠 linked alerts. Click a point or an alert."))
     sel = None
     try:
         p = ev.selection.points if ev and ev.selection else []
@@ -679,7 +725,7 @@ def page_galaxy(c):
                 ui.section(L("Réseau sélectionné", "Selected network"))
                 for p_ in ring["points"]:
                     d = graph.nodes[p_]
-                    st.markdown(f"⭐ **{d['label']}** · {d['city'] or ''} — {d['victims']} {L('victimes', 'victims')} / "
+                    st.markdown(f"■ **{d['label']}** · {d['city'] or ''} — {d['victims']} {L('victimes', 'victims')} / "
                                 f"{d['visitors']} {L('cartes', 'cards')} (×{d['lift']:.1f})")
                 st.markdown(L(f"**{len(ring['alerts'])} alertes**, {ring['customers']} clients, {_money(ring['amount'])} en jeu, "
                               f"{ring['high']} à risque élevé.",

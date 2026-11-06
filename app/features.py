@@ -37,7 +37,7 @@ def _q(name, sql, params=()):
 
 def reset():
     for fn in (impact_raw, funnel_raw, drift_raw, compromise_points, exposures, alert_geo, robustness, model_ci,
-               fairness, copilot_eval):
+               copilot_eval):
         fn.cache_clear()
 
 
@@ -52,20 +52,6 @@ def robustness():
 def model_ci():
     """95 % day-block bootstrap intervals on the production validation scores (notebook 04)."""
     return _q("model_ci", "SELECT * FROM dbo.gold_model_ci")
-
-
-@lru_cache(maxsize=None)
-def fairness():
-    """Alert rate, precision and recall by customer segment and age band (validation), alert rate on the live flow.
-    Gender is not a feature and is not reported; age / segment are profile features, so their effect is monitored."""
-    return _q("fairness", """
-        SELECT c.segment, CASE WHEN c.age < 30 THEN '18-29' WHEN c.age < 45 THEN '30-44' WHEN c.age < 60 THEN '45-59' ELSE '60+' END AS age_band,
-               t.period, COUNT(*) AS ops, SUM(CAST(g.is_alert AS INT)) AS alerts,
-               SUM(CASE WHEN g.is_alert = 1 AND t.is_fraud = 1 THEN 1 ELSE 0 END) AS tp, SUM(CAST(t.is_fraud AS INT)) AS frauds
-        FROM dbo.gold_scores g JOIN dbo.silver_transactions t ON t.transaction_id = g.transaction_id
-        JOIN dbo.customers c ON c.customer_id = t.customer_id
-        GROUP BY c.segment, CASE WHEN c.age < 30 THEN '18-29' WHEN c.age < 45 THEN '30-44' WHEN c.age < 60 THEN '45-59' ELSE '60+' END,
-                 t.period""")
 
 
 @lru_cache(maxsize=None)

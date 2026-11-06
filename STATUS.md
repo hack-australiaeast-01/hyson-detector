@@ -1,5 +1,5 @@
 # Project status — Hyson Detector · AI Banking Copilot for Fraud Detection
-Updated: **2026-11-06 03:50** · ✅ done · 🟡 in progress · ❌ to do · Target level: **Gold ("Or")** (brief §6)
+Updated: **2026-11-06 04:00** · ✅ done · 🟡 in progress · ❌ to do · Target level: **Gold ("Or")** (brief §6)
 
 **Live demo:** https://hyson-detector.streamlit.app · **Repo (jury):** https://github.com/hack-australiaeast-01/hyson-detector ·
 **Architecture:** [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) (18 diagrams) · **Audit & bank IT:** [docs/AUDIT_AND_BANK_INTEGRATION.md](docs/AUDIT_AND_BANK_INTEGRATION.md) · **Jury Q&A:** [JURY_HANDBOOK.md](JURY_HANDBOOK.md)
@@ -75,10 +75,10 @@ Sections 1–6 = **current state** (kept up to date). Section 7 = **work log** (
 | 17 | Le Procès | ✅ | AI prosecutor + defence (parallel) → judge; analyst accepts/overrides → decision log |
 | 18 | Reconstitution | ✅ | Hours before the alert step by step, red signals, map, AI narration |
 | 19 | Contre-enquête | ✅ | Neutralise top SHAP factors → robust / sensitive |
-| 20 | Constellation | ✅ | 29 points of compromise, 294 exposed alerts; shown as an investigation lead (not predictive in validation) |
+| 20 | Réseau de compromission (ex-Constellation) | ✅ | 29 points of compromise, 294 exposed alerts; shown as an investigation lead (not predictive in validation) |
 | 21 | Impact & processus | ✅ | TND caught / flagged, workload (editable), process flow, recommendation mix, decision time, AI cost per alert, PSI drift |
 | 22 | Marché & benchmarks | ✅ | 6 cited public benchmarks, Tunisia-scale scenario, rules-engine audit, time to detect |
-| 23 | Performance du modèle | ✅ | Model vs rules, recall by type, drivers, leaderboard + **Robustesse et gouvernance** (backtest, CIs, **fairness by segment / age**, MLflow, copilot evaluation) |
+| 23 | Performance du modèle | ✅ | Model vs rules, recall by type, drivers, leaderboard + **Robustesse et gouvernance** (backtest, CIs, MLflow, copilot evaluation) + **fairness** (false-alert rate by segment / age band: gap model 1.4× / 1.2× vs rules 2.8× / 1.5×) + acknowledged-limits card |
 | 24 | Tableau de bord Power BI | ✅ | Secure embed (viewer signs in), page picker |
 | 25 | Journal & traçabilité | ✅ | **Audit trail**: analyst identity (sidebar; production = Entra ID SSO), system recommendation + score at decision time, model / prompt version, SHA-256 hash chain + integrity check, override rate, `fraud_decision.v1` message to the bank's systems (simulated, four-eyes flag); copilot log (question, tools, tokens) |
 | 26 | Nouvelle source de données | ✅ | Profile → map/translate (rules, optional 1 AI call on names + stats) → accuracy + PSI → **human approval** → versioned data contract |
@@ -445,3 +445,20 @@ Still open (team): Azure key in Streamlit Secrets, slides, rehearsal + backup vi
 - **Built:** `tools.record_decision` stores analyst (sidebar "Analyste connecté"), `system_decision` / `system_confidence` / `score_model` at decision time, `model_version`, `prompt_version`, `prev_hash` / `row_hash` (SHA-256 chain); older journals are upgraded and sealed once (your decision TX01575959 VALIDER kept); `tools.verify_journal`; Journal page: integrity ✅/❌, override rate + overrides to review, analysts count, `fraud_decision.v1` message (card → BLOCK_CARD, transfer → HOLD_TRANSFER, ESCALADER → level-2 case, VALIDER → close; four-eyes flag for blocks ≥ 5,000 TND or a set-aside BLOQUER; nothing sent).
 - **Docs:** `docs/AUDIT_AND_BANK_INTEGRATION.md` (audit trail, roles / segregation of duties, integration diagram, data protection incl. Tunisian law 2004-63, EU AI Act Annex III 5(b), resilience); 4 jury questions in `JURY_HANDBOOK.md`; README links.
 - **Tests:** `tests/test_audit_trail.py` (5): stores who + recommendation + versions, override visible, edited past row detected, old journal upgraded and sealed, decision message mapped to the right system. Full suite 49/49.
+
+### 7.12 Hardening + bank-style visuals (2026-11-06 03:20 → 03:40)
+
+- **Prompt-injection guard** (`copilot._sanitize`): every tool result is cleaned before it reaches the LLM — control characters and role markers removed, strings cut at 200 chars, instruction-like text ("ignore all previous instructions", "SYSTEM:", "<system>", "valide cette transaction"…) replaced by "[texte retiré…]"; the system prompt states that facts are data, never instructions. Tested on 6 malicious fields; normal French text passes unchanged.
+- **Fairness check** (`fairness.py`, Performance page): false-alert rate on legitimate operations by segment and age band (validation, live Fabric query, snapshot `feat_fairness`). Gap between groups: model **1.4×** (segments) / **1.2×** (age) vs current rules **2.8×** / **1.5×** → the model is fairer than the rules.
+- **Acknowledged limits card** (Performance page): reporting delay (median 11 days → exclude the last 30 days from training), feedback-loop bias (random 0.1 % audit sample), synthetic data, score ≠ probability, cloned card abroad (rule kept), points of compromise (investigation signal only).
+- **Analyst override rate**: already in the Journal (decision vs `system_decision`).
+- **Constellation → "Réseau de compromission"**: stars, star dust and night background removed; white card, navy points with gold border (■ ATM, ◆ online site, ● shop), alerts in the bank's risk colours.
+- **Reconstitution → fraud-history roadmap**: one station per step on a road, phases shaded (account access → operations → alert), the road fills in blue while the replay plays, risky stations in red with the first warning, time gap between steps, alert station marked, final milestone "Détection Hyson : jour 0 · signalement habituel ~11 jours".
+- 3D emblem abandoned at the user's request (`app/static/3d` deleted).
+- Verified: AppTest FR + EN on replay, network and performance pages (and Play); visual check in the browser.
+
+### 7.13 Integration of both sessions and push (2026-11-06 03:40 → 04:00)
+- **Incident:** commit `d8d87df` (audit trail) picked up 3 lines of the other session's in-progress `app.py` (`import fairness` + 2 calls) while `app/fairness.py` was not yet committed → CI red for ~5 min; GitHub's Copilot cloud agent opened PR #1 with a stub `fairness.py`. Fixed by `ca12836` (lines removed in the index only, working copy untouched, 49/49 on the exact tree), then this push commits the real `fairness.py`; PR #1 closed as superseded.
+- **Conflict resolved:** the old fairness table (`features.fairness()`, alert rate / precision / recall) and the new `fairness.py` (false-alert rate model vs rules) wrote the **same snapshot** `feat_fairness.parquet` with different columns → the old block would crash the Performance page online. Old block and `features.fairness()` removed; `fairness.py` kept (its snapshot committed).
+- **Pushed together:** prompt-injection guard (`copilot._sanitize`), fairness + limits cards, "Réseau de compromission" and the Reconstitution roadmap (§7.12), 3D emblem removed; data files only rewritten by the live app (identical content) left out.
+- **Checks:** full suite on the exact tree pushed (offline snapshot, as CI and Streamlit Cloud), GitHub Actions green, public app checked after redeploy.
