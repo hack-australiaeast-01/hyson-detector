@@ -110,12 +110,14 @@ def _render(ctx, i, msg):
         st.caption(r.get("meta", ""))
         return
     if r.get("intent") == "personal":
-        st.markdown(L("Ici, les données des clients ne sont restituées qu'en **agrégats** (comptes, moyennes, groupes d'au moins 5 clients) : "
-                      "minimisation des données personnelles (loi tunisienne 2004-63, RGPD). Pour un client précis, ouvrez la **Vue client 360** "
+        st.markdown(L("Ici, les données des clients ne sont restituées qu'en **agrégats** (comptes, moyennes, groupes d'au moins 5 clients). "
+                      "Les données de cette démo sont 100 % synthétiques, mais la plateforme applique déjà la règle qu'elle appliquera aux vrais "
+                      "clients d'une banque : minimisation des données personnelles. Pour un client précis, ouvrez la **Vue client 360** "
                       "(accès tracé). Exemple : *revenu moyen des clients retraités par gouvernorat*.",
-                      "Here, customer data is only returned as **aggregates** (counts, averages, groups of at least 5 customers): personal data "
-                      "minimisation (Tunisian law 2004-63, GDPR). For one customer, open **Customer 360** (logged access). Example: *average income "
-                      "of retired customers by governorate*."))
+                      "Here, customer data is only returned as **aggregates** (counts, averages, groups of at least 5 customers). This demo's "
+                      "data is 100% synthetic, but the platform already applies the rule it will apply to a bank's real customers: personal data "
+                      "minimisation. For one customer, open **Customer 360** (logged access). Example: *average income of retired customers by "
+                      "governorate*."))
         return
     if r.get("intent") == "unclear":
         st.markdown(_why_offline(L, r.get("ai_down")) + "\n\n" + L("En attendant, je comprends les questions du type **combien / montant total / montant moyen / fraudes / alertes**, "
