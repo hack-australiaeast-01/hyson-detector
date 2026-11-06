@@ -8,7 +8,7 @@ A copilot for a fraud analyst: it **detects** suspicious transactions (model sco
 
 ## Architecture
 
-Full architecture in **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** — 18 diagrams: end-to-end, Microsoft Fabric platform, ML pipeline, MLOps lifecycle, Azure AI Foundry / Azure OpenAI layer, where ML and DL are used, each AI pipeline (copilot, Le Procès, Enquête approfondie, Reconstitution, person search, data onboarding, copilot evaluation, Power BI as code), app pages, deployment & security. PNG versions for slides in [docs/img/](docs/img/).
+Full architecture in **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** — 18 diagrams: end-to-end, Microsoft Fabric platform, ML pipeline, MLOps lifecycle, Azure AI Foundry / Azure OpenAI layer, where ML and DL are used, each AI pipeline (copilot, Le Procès, Enquête approfondie, Reconstitution, person search, data onboarding, copilot evaluation, Power BI as code), app pages, deployment & security. Images (also for slides) in [docs/img/](docs/img/), editable Mermaid source in [docs/diagrams/](docs/diagrams/).
 
 ```
 SQL source ──copy job──► Fabric Lakehouse lh_fraud (bronze)
