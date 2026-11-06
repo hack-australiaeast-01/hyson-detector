@@ -289,25 +289,26 @@ Sidebar:
 | Subtle fraud | **TX01585580** | 7.685 TND online at 02:03 at a new merchant after 2 micro-purchases (card testing); the engine raised no alert | BLOQUER |
 | False positive avoided | **TX01575959** | 3,360.634 TND furniture purchase by chip in Tunis, 09:55; the engine raised an alert, the model scores it in the bottom 0.01 % | VALIDER |
 
-### 6.3 Demo script (§17, 5 min)
+### 6.3 Pitch script (§17, 5 min = 3 slides + live demo)
 
-| Time | Content |
-|---|---|
-| 0:00–0:45 | The problem, in figures: the engine catches 11.5 % of frauds, 96.5 % of its alerts are false |
-| 0:45–2:00 | TX01555470 → transaction card → "Pourquoi suspecte ?" → BLOQUER |
-| 2:00–3:00 | TX01575959 → "Pourquoi pas une fraude ?" → VALIDER; show customer 360 (map, 936 transactions in TN) |
-| 3:00–4:00 | Under the hood: Fabric pipeline → Performance page (table vs engine, recall by type) |
-| 4:00–4:30 | GitHub Copilot: what it generated, time saved |
-| 4:30–5:00 | Limits and next steps (§10 below) |
+| Time | Where | What to say / do |
+|---|---|---|
+| 0:00–0:40 | **Slide 1 · the problem** | Today's rules engine catches **11.5 %** of frauds and **96.5 %** of its alerts are false: analysts drown, customers get blocked for nothing. |
+| 0:40–1:40 | **Live · transaction** | File d'alertes → **TX01555470** → score, factors (observed vs usual), ask "Pourquoi suspecte ?" → **BLOQUER** (the model scores, the AI explains, the analyst decides). Then **TX01575959** → "Pourquoi pas une fraude ?" → **VALIDER**: a false alert avoided. |
+| 1:40–2:20 | **Live · AI assistant** | First page, type *« Combien de transactions à Béja ? »* → 39,156, with the SQL shown. Click the Nazar eye: *« mes tâches »*. |
+| 2:20–3:00 | **Live · one wow** (pick one) | *Rapports IA* → DAB quarterly example → Générer (≈ 4 s) → preview; **or** *Intégration bancaire* → Parcours complet on Nordic Pay (≈ 10 s) → capability matrix. |
+| 3:00–3:50 | **Slide 2 · results & how** | Half the alerts, **6× more frauds caught** (718 vs 117), **67 % fewer false alerts** (1,061 vs 3,221), holds on 4 periods (69.4 % ± 2.1). Fabric lakehouse → LightGBM + SHAP → Azure OpenAI copilot with tools; every figure traceable. |
+| 3:50–4:20 | **Slide 2 · GitHub Copilot** | 48 commits, all co-authored by Copilot; 166 automated tests; Copilot built and checked, we decided (`docs/AI_TOOLS_USAGE.md`). |
+| 4:20–5:00 | **Slide 3 · next & limits** | Any bank, any schema; the CEO's "be human" principle (personal context). Limits said first: batch scoring, synthetic data, retraining not yet scheduled. Next: real time (Eventstream), SSO + four-eyes. |
 
 **Before going on stage:**
 ```powershell
 az login
 cd C:\Users\oussa\Desktop\dsi\app
-python warmup.py
 streamlit run app.py
 ```
-- Check that the sidebar shows **🟢 Fabric live**.
+- Check the chips show **Fabric live** and **Azure OpenAI**; browser zoom 80 % on a 1366×768 projector.
+- Fallbacks: if `az login` / Fabric fails → the public app https://hyson-detector.streamlit.app (same demo cases, snapshot data); if there is no internet at all → the backup video.
 - Have the backup video ready.
 
 ---

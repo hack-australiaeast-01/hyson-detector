@@ -18,7 +18,7 @@ Sections 1–6 = **current state** (kept up to date). Section 7 = **work log** (
 | Usage of GitHub Copilot | ✅ | `docs/AI_TOOLS_USAGE.md`: 12 real uses with commit + screenshot (`docs/copilot_evidence/`), 30/30 commits co-authored by Copilot, ≈ 7 person-days in ≈ 11 h (estimate), 30-second pitch script |
 | GitHub repo | ✅ | Code, Fabric notebooks (exported with outputs), `requirements.txt` (root + `app/`), README, tests + CI, no secret in files or history |
 | Score file (optional, brief §14) | ✅ | `submission/submission.csv` (187,628 rows, 1,876 alerts) |
-| Pitch (slides, rehearsal, backup video) | ❌ | §5 |
+| Pitch (slides, rehearsal, backup video) | 🟡 | 3 slides ready, rehearsing (21:30); script = `JURY_HANDBOOK.md` §6.3 (3 slides + live demo, 5 min); backup video still to record |
 
 ## 1. Pipeline & model on Microsoft Fabric (frozen: do not re-run notebooks 01/02, or the demo IDs change)
 | # | Item | Status | Notes |
@@ -91,8 +91,8 @@ Sections 1–6 = **current state** (kept up to date). Section 7 = **work log** (
 | 32 | GitHub + Streamlit Cloud | ✅ | Repo owned by the team account; push to `main` redeploys; snapshot fits the 690 MB limit (public-mode peak ≈ 490 MB; generating a report adds ≈ 110 MB) — after a crash or a push use **Reboot**; AI key in Secrets (on since 21:05) |
 | 33 | Architecture & docs | ✅ | 18 diagrams (images + Mermaid source in `docs/diagrams/`), README, JURY_HANDBOOK, `fabric/README.md` |
 | 34 | GitHub Copilot usage evidence | ✅ | `docs/AI_TOOLS_USAGE.md` §1: 12 real uses (when, where, ask, result, team decision, time-saved estimate, commit + screenshot); pitch script; handbook §8 aligned |
-| 35 | Slides | ❌ | Problem, live demo, architecture (`docs/img/`), results, robustness, prototype → production, limits |
-| 36 | Pitch 5 min × 3 rehearsals + backup video | ❌ | Brief §10, §17 |
+| 35 | Slides | ✅ 3 slides | Problem, live demo, architecture (`docs/img/`), results, robustness, prototype → production, limits |
+| 36 | Pitch 5 min × 3 rehearsals + backup video | 🟡 rehearsing | Brief §10, §17 |
 | 37 | Intelligence & investigation (§7.23) | ✅ | Case file that reopens on new events, behavioural memory (16,302 cases), prosecution / defence + Azure AI Foundry judge `judge-patern`, steering drilldown |
 | 38 | Intégration bancaire (§7.25) | ✅ | Any bank, any schema: discovery, AI mapping, readiness, named approval, activation, bank model, per-bank memory, REST API `app/api.py`; 3 simulated banks reconciled exactly |
 | 39 | Rapports IA (§7.26) | ✅ | Plain-language request (FR/EN/AR) → SQL facts → verification → insights → audience-adapted report → named approval → PDF / DOCX / HTML / XLSX |
@@ -114,8 +114,8 @@ Sections 1–6 = **current state** (kept up to date). Section 7 = **work log** (
 ## 5. Next actions (checked 2026-11-06 21:05)
 **Blocking for the pitch — only the team can do these:**
 1. ✅ ~~Azure OpenAI key in Streamlit Cloud~~ — done: no "IA non connectée" banner, the assistant answers live on the public app (Béja → 39,156, checked 21:05); new pages visible, so the app was rebooted.
-2. 🔴 **Slides** (problem, live demo, architecture images, results + robustness, the CEO's "be human" example, universal integration, AI reports, prototype → production, limits).
-3. 🔴 **Rehearse 3× (5 min) + record a backup video** of the demo path (§7.4.4).
+2. ✅ **Slides** — 3 slides ready (21:30): problem · results & how (incl. GitHub Copilot) · next & limits; the demo is live in between.
+3. 🟡 **Rehearse 3× (5 min)** — in progress (21:30), timed script in `JURY_HANDBOOK.md` §6.3 · 🔴 **record a backup video** of the demo path.
 4. ✅ ~~Fill the GitHub Copilot usage table~~ — done 04:10 (12 rows, commits + 10 screenshots); adjust the time-saved estimates if the team sees them differently.
 5. ✅ ~~Archive `saitaflex/hyson-detector`~~ — archived 04:05, description and homepage point to `hack-australiaeast-01/hyson-detector`.
 6. 🟡 Fabric clean-up — notebooks 03/03b/03c/03d are gone; semantic model `Saitaflex-model` still present (checked 04:00, not re-checked since).
