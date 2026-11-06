@@ -1,4 +1,4 @@
-"""Personal context (bank CEO's case) and the privacy guard of « ask the data ». Offline, 0 token."""
+"""Personal context (a bank CEO's principle: be human with the customer) and the privacy guard of « ask the data ». Offline, 0 token."""
 import json
 from datetime import timedelta
 

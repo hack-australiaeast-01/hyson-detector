@@ -472,6 +472,40 @@ def sidebar_card(ctx):
               icon=":material/visibility:", width="stretch")
 
 
+def fab(ctx):
+    """Floating Nazar: an evil-eye button on every page (bottom right) with a small explanation; click → the Nazar window."""
+    import base64
+    L = ctx.L
+    try:
+        c = briefing(ctx.lang)["counts"]
+        watch = f'{c["block"]} {L("à bloquer", "to block")} · {c["prio"]} {L("à creuser", "to dig")}'
+    except Exception:
+        watch = ""
+    png = Path(__file__).parent / "static" / "brand" / "nazar.png"
+    b64 = base64.b64encode(png.read_bytes()).decode() if png.exists() else ""
+    tip = L("<b>Nazar</b> · votre agent de travail<br>« mes tâches », « suivante », « top 10 d'hier », « bloque celle-ci »",
+            "<b>Nazar</b> · your work agent<br>“my tasks”, “next”, “top 10 yesterday”, “block this one”")
+    st.markdown(f"""<style>
+.st-key-nazar_fab {{ position: fixed; right: 30px; bottom: 112px; z-index: 999; width: 76px !important; }}
+.st-key-nazar_fab button {{ width: 72px; height: 72px; min-height: 72px; border-radius: 50%; padding: 0; border: none !important;
+  background: url(data:image/png;base64,{b64}) center / 86% no-repeat, radial-gradient(circle at 35% 30%, #ffffff, #e9f0ff 70%) !important;
+  box-shadow: 0 10px 30px rgba(38, 25, 156, .28), 0 0 0 6px rgba(80, 140, 255, .10); color: transparent !important;
+  animation: nzfloat 4.2s ease-in-out infinite; transition: transform .25s ease, box-shadow .25s ease; }}
+.st-key-nazar_fab button:hover {{ transform: translateY(-3px) scale(1.06); box-shadow: 0 14px 38px rgba(38, 25, 156, .38), 0 0 0 9px rgba(80, 140, 255, .14); }}
+.st-key-nazar_fab button p {{ display: none; }}
+@keyframes nzfloat {{ 0%, 100% {{ transform: translateY(0); }} 50% {{ transform: translateY(-7px); }} }}
+.nz-tip {{ position: fixed; right: 114px; bottom: 124px; z-index: 998; max-width: 290px; padding: .55rem .8rem; border-radius: 14px;
+  background: rgba(255, 255, 255, .96); border: 1px solid #dfe6f5; box-shadow: 0 8px 26px rgba(15, 30, 54, .12); font-size: .78rem;
+  color: #3b4a63; line-height: 1.4; pointer-events: none; animation: nztip 7s ease forwards; }}
+.nz-tip b {{ color: #26199C; }} .nz-tip .w {{ color: #26199C; font-weight: 600; }}
+@keyframes nztip {{ 0% {{ opacity: 0; transform: translateX(8px); }} 8%, 80% {{ opacity: 1; transform: none; }} 100% {{ opacity: 0; }} }}
+.st-key-nazar_fab:hover ~ .nz-tip, body:has(.st-key-nazar_fab:hover) .nz-tip {{ animation: none; opacity: 1; }}
+</style><div class="nz-tip">{tip}{f'<br><span class="w">🧿 {watch}</span>' if watch else ''}</div>""", unsafe_allow_html=True)
+    with st.container(key="nazar_fab"):
+        st.button("Nazar", key="nazar_fab_btn", on_click=lambda: st.session_state.update(nazar_open=True),
+                  help=L("Ouvrir Nazar", "Open Nazar"))
+
+
 def _img(size):
     import base64
     p = Path(AVATAR)
@@ -487,11 +521,13 @@ QUICK = [("mes tâches", "my tasks"), ("suivante", "next"), ("top 10 d'hier", "t
 @st.dialog("🧿 Nazar · agent de travail / work agent", width="large")
 def panel(ctx):
     L, lang = ctx.L, ctx.lang
-    st.markdown(f'<div style="display:flex;gap:.9rem;align-items:center;margin:-.3rem 0 .6rem">{_img(54)}<div>'
+    st.markdown(f'<style>.nz-head img{{animation:nzfloat 4.2s ease-in-out infinite;filter:drop-shadow(0 8px 14px rgba(38,25,156,.25))}}'
+                f'@keyframes nzfloat{{0%,100%{{transform:translateY(0)}}50%{{transform:translateY(-6px)}}}}</style>'
+                f'<div class="nz-head" style="display:flex;gap:.9rem;align-items:center;margin:-.3rem 0 .6rem">{_img(58)}<div>'
                 f'<b>{L("L’œil qui veille sur la file d’alertes.", "The eye that watches the alert queue.")}</b><br>'
-                f'<span style="color:{ui.MUTED};font-size:.88rem">{L("Une instruction → une action (0 token), ou une vraie conversation. "
-                "Tout est tracé, et vous confirmez toute décision.", "One instruction → one action (0 tokens), or a real conversation. "
-                "Everything is logged, and you confirm every decision.")}'
+                f'<span style="color:{ui.MUTED};font-size:.88rem">{L("Tapez une consigne : « mes tâches », « suivante », « top 10 d’hier », "
+                "« bloque celle-ci » (vous confirmez toujours). Ou posez une question.", "Type an instruction: “my tasks”, “next”, "
+                "“top 10 yesterday”, “block this one” (you always confirm). Or ask a question.")}'
                 f'</span></div></div>', unsafe_allow_html=True)
     logbook = st.session_state.setdefault("nazar_log", [])
     cmd = st.session_state.pop("nz_pending", None)           # a suggestion chip clicked in an answer
@@ -541,19 +577,20 @@ def panel(ctx):
         else:
             logbook.append({"cmd": cmd, "out": out})
         st.session_state.nz_say_id = st.session_state.get("nz_say_id", 0) + 1
-    with avatar_slot:
-        try:
-            import nazar_avatar
-            last = logbook[-1]["out"].get("text", "") if logbook else ""
-            heard = nazar_avatar.avatar(say=last, say_id=st.session_state.get("nz_say_id", 0), lang=lang, voice=voice, height=360)
-            if heard and heard.get("id") != st.session_state.get("nz_heard"):
-                st.session_state.nz_heard = heard["id"]
-                st.session_state.nz_heard_text = heard.get("text")
-                st.rerun(scope="fragment")                          # a mic value always arrives in a fragment rerun
-        except Exception as exc:                               # the 3D avatar is a bonus: the agent works without it
-            if type(exc).__name__ in ("RerunException", "StopException"):
-                raise
-            st.caption(f"🧿 {L('Avatar indisponible', 'Avatar unavailable')} ({type(exc).__name__})")
+    if voice:                                                  # the 3D robot only carries the microphone (Voice mode)
+        with avatar_slot:
+            try:
+                import nazar_avatar
+                last = logbook[-1]["out"].get("text", "") if logbook else ""
+                heard = nazar_avatar.avatar(say=last, say_id=st.session_state.get("nz_say_id", 0), lang=lang, voice=True, height=340)
+                if heard and heard.get("id") != st.session_state.get("nz_heard"):
+                    st.session_state.nz_heard = heard["id"]
+                    st.session_state.nz_heard_text = heard.get("text")
+                    st.rerun(scope="fragment")                  # a mic value always arrives in a fragment rerun
+            except Exception as exc:                           # the avatar is a bonus: the agent works without it
+                if type(exc).__name__ in ("RerunException", "StopException"):
+                    raise
+                st.caption(f"🧿 {L('Micro indisponible', 'Microphone unavailable')} ({type(exc).__name__})")
     for i in range(len(logbook) - 1, max(len(logbook) - 6, 0) - 1, -1):
         e = logbook[i]
         with st.chat_message("user", avatar=":material/person:"):

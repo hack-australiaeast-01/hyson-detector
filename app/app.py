@@ -53,6 +53,9 @@ ui.inject()
 
 ICON_DIR = Path(__file__).parent / "static" / "icons"
 st.session_state.setdefault("lang", "fr")
+if st.session_state.lang not in ("fr", "en"):          # clicking the active language would unselect it: keep the last one
+    st.session_state.lang = st.session_state.get("_lang_last", "fr")
+st.session_state._lang_last = st.session_state.lang
 
 
 def L(fr, en):
@@ -173,13 +176,12 @@ def status_chips():
 
 with st.sidebar:
     ui.brand(L("Détecter · Expliquer · Décider", "Detect · Explain · Decide"))
-    st.segmented_control("Langue / Language", ["fr", "en"], key="lang", format_func=lambda x: {"fr": "Français", "en": "English"}[x],
-                         label_visibility="collapsed")
+    with st.container(key="lang_switch"):
+        st.segmented_control("Langue / Language", ["fr", "en"], key="lang", format_func=lambda x: x.upper(), label_visibility="collapsed")
     # who decides: written into every decision of the audit trail (production: Entra ID single sign-on instead of a typed name)
     st.text_input(L("Analyste connecté", "Signed-in analyst"), key="analyst", value=st.session_state.get("analyst", "analyste.demo"),
                   help=L("Nom enregistré avec chaque décision (piste d'audit). En production : identité Entra ID (SSO).",
                          "Name stored with every decision (audit trail). In production: Entra ID identity (SSO)."))
-    nazar.sidebar_card(SimpleNamespace(L=L, lang=st.session_state.get("lang", "fr")))
     for (fr, en), ids in NAV_GROUPS:
         ui.side_label(L(fr, en))
         for pid in ids:
@@ -899,6 +901,7 @@ if st.session_state.pop("open_welcome", False):              # the tour is optio
 elif st.session_state.pop("nazar_open", False):                 # one dialog at a time
     nazar.panel(ctx)
 studio.tour_hint(ctx, page)
+nazar.fab(ctx)
 {"assist": lambda: assistant.page_assistant(ctx), "guide": lambda: studio.page_guide(ctx), "queue": page_queue, "tx": page_transaction, "cust": page_customer, "context": lambda: ctxpage.page_context(ctx),
  "deep": lambda: studio.page_deep(ctx), "proces": lambda: studio.page_proces(ctx), "replay": lambda: studio.page_replay(ctx), "contre": lambda: studio.page_contre(ctx),
  "galaxy": lambda: studio.page_galaxy(ctx), "impact": lambda: studio.page_impact(ctx),

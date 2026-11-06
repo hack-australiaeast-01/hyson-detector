@@ -422,8 +422,10 @@ def ask(question, lang="fr", history=None, analyst=None):
             tokens = _add(tokens, tk)
         except Exception as exc:
             plan, mode = rule_translate(question), f"règles (Azure OpenAI indisponible : {type(exc).__name__})"
+            out["ai_down"] = f"error:{type(exc).__name__}"
     else:
         plan, mode = rule_translate(question), L(lang, "règles (hors-ligne)", "rules (offline)")
+        out["ai_down"] = copilot.ai_status()
     out.update(intent=plan.get("intent", "data"), understood=re.sub(r"\(?\b(dim|fact)_\w+(\.\w+)?\)?", "", copilot.polish(plan.get("understood", ""))).strip(), title=plan.get("title", ""),
                chart=plan.get("chart") or {}, mode=mode)
     if out["intent"] != "data" or not plan.get("sql"):

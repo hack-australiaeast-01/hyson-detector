@@ -529,7 +529,7 @@ Still open (team): Azure key in Streamlit Secrets, slides, rehearsal + backup vi
 - **Checks:** 115/115 tests offline; browser: landing, 3 questions live (KPI, line chart, TX → copilot), 0 exceptions.
 - **Limits:** answers take 8–30 s live (two reasoning calls); summaries can still be a bit wordy; the snapshot adds 30 MB to the repo; on the public app only the 12 suggestions use AI (no key), other questions use the rule translator.
 
-### 7.21 Self-review (technical + legal) and personal context — the bank CEO's case (2026-11-06 12:45 → 14:00)
+### 7.21 Self-review (technical + legal) and personal context — a bank CEO's principle: be human with the customer (2026-11-06 12:45 → 14:00)
 **Self-review of 7.20 before reboot:**
 | Finding | Risk | Fix |
 |---|---|---|
@@ -544,5 +544,14 @@ Still open (team): Azure key in Streamlit Secrets, slides, rehearsal + backup vi
 - The coherent band holds 1,559 of the 3,802 false alerts of the current rules abroad (calls avoidable) for 18 of 336 frauds; June–July: 48 of the model's 191 false alerts abroad read coherent.
 - Guardrails: one direction per signal (measured weights that contradicted common sense on this synthetic data — "has travelled before" adds risk, "frequent destination for his profile" adds risk — are ignored); an amount never reassures (the data said a high amount abroad is ÷9 risk: artefact); out-of-pattern amount ≥ ×3 (policy, 47 cases); phone on site ±1.2 and travel notice −2.5 are policy weights, labelled as such.
 - Domestic "unusual city": every physical payment in Tunisia happens in the home city in this data → engine ready, weights to be measured on the bank's real data.
-- CEO's cases on C000308 (81, retired, Sfax): yacht 48,000 TND in Italy 5 h after a payment in Tunisia → *Peu cohérent*; first stay in Saudi Arabia → *À confirmer* (polite check), after a declared travel notice → *Voyage cohérent* (notification only); sample feed from another bank: Milan 1 h after Saudi Arabia → impossible travel. The AI explanation, stress-tested with "La Mecque" / "Mecca" / "Médine", never mentions religion, pilgrimage or family.
+- The CEO's illustration ("Amm Mohamed", an example, not a real case), replayed on a synthetic customer of the dataset C000308 (81, retired, Sfax): yacht 48,000 TND in Italy 5 h after a payment in Tunisia → *Peu cohérent*; first stay in Saudi Arabia → *À confirmer* (polite check), after a declared travel notice → *Voyage cohérent* (notification only); sample feed from another bank: Milan 1 h after Saudi Arabia → impossible travel. The AI explanation, stress-tested with "La Mecque" / "Mecca" / "Médine", never mentions religion, pilgrimage or family.
 - Checks: 128/128 tests offline (13 new); browser on live Fabric and in public mode (peak 397 MB, 0 exceptions).
+
+### 7.22 AI always explained, floating Nazar, FR/EN switch (2026-11-06 13:55 → 14:30)
+- **"AI not working"**: the key in `app/.env` is valid (live call OK). The message came from places where the key is not loaded: the public app (no key in Streamlit Secrets) or the local app still running code from 00:44. Also found: the public cost guard `COPILOT_HOURLY_CAP = 60` counts every AI call, and the assistant uses 2 per question → it could fall back to rules mid-demo. Template raised to 400.
+- The assistant now says WHY the AI is off (no key on this server / hourly limit / Azure error) instead of an answer that looks broken; `copilot.ai_status()`.
+- A ready-to-paste Secrets file for Streamlit Cloud was generated outside the repo (session files), never committed. **Rotate the Azure OpenAI key after the hackathon** (it was shared in chat).
+- **Nazar** is now a floating evil-eye button (bottom right, every page) with a short explanation bubble (fades after 7 s, back on hover) and today's counts; the sidebar card is gone. The 3D robot only appears in Voice mode (it carries the microphone).
+- **Language**: a compact FR · EN pill with a smooth transition; clicking the active language no longer empties it.
+- Wording: "Amm Mohamed" is an illustration given by a bank CEO (principle: be human with the customer first), not a real case — docs and page labels corrected.
+- Checks: 128/128 tests; browser on live Fabric + Azure OpenAI: free question answered by the AI, Nazar opens from the floating eye, FR/EN switch, 0 exceptions.

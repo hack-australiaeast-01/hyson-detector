@@ -290,6 +290,15 @@ def _within_budget():
     return len(_live_calls) < cap
 
 
+def ai_status():
+    """Why the AI is (not) available: 'ok' | 'offline_forced' | 'no_key' | 'cap'."""
+    if os.getenv("COPILOT_OFFLINE", "0") == "1":
+        return "offline_forced"
+    if not all(os.getenv(k) for k in ["AZURE_OPENAI_ENDPOINT", "AZURE_OPENAI_API_KEY", "AZURE_OPENAI_DEPLOYMENT"]):
+        return "no_key"
+    return "ok" if _within_budget() else "cap"
+
+
 def configured():
     if os.getenv("COPILOT_OFFLINE", "0") == "1":      # force offline mode (tests, no paid calls)
         return False

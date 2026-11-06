@@ -1,4 +1,4 @@
-"""Page « Contexte personnel » — is this operation coherent with THIS customer's life? (bank CEO's case: Amm Mohamed abroad)."""
+"""Page « Contexte personnel » — is this operation coherent with THIS customer's life? (principle given by a bank CEO: be human with the customer first; his illustration: a retired customer abroad)."""
 from datetime import date, datetime, time as dtime, timedelta
 
 import pandas as pd
@@ -95,14 +95,14 @@ def page_context(ctx):
         _result(res, L, lang, "q")
     with tabs[1]:
         st.caption(L("Une opération qui arrive maintenant (d'une autre banque, d'un terminal…) : lue immédiatement contre l'historique du client, "
-                     "sans réentraînement. Exemples du cas de la direction :",
+                     "sans réentraînement. Exemples (scénarios illustratifs sur un client retraité synthétique) :",
                      "An operation arriving now (another bank, a terminal…): read immediately against the customer's history, no retraining. "
-                     "Examples from the management's case:"))
-        presets = {L("Amm Mohamed · yacht en Italie", "Amm Mohamed · yacht in Italy"):
+                     "Examples (illustrative scenarios on a synthetic retired customer):"))
+        presets = {L("Exemple · yacht en Italie", "Example · yacht in Italy"):
                        dict(country="IT", city="Naples", amount=48000.0, channel="TPE", mode="CHIP", cat="Nautisme", hours_after=5),
-                   L("Amm Mohamed · Arabie saoudite", "Amm Mohamed · Saudi Arabia"):
+                   L("Exemple · séjour en Arabie saoudite", "Example · stay in Saudi Arabia"):
                        dict(country="SA", city="La Mecque", amount=180.0, channel="TPE", mode="CHIP", cat="Supermarche", hours_after=200),
-                   L("Amm Mohamed · Paris", "Amm Mohamed · Paris"):
+                   L("Exemple · courses à Paris", "Example · shopping in Paris"):
                        dict(country="FR", city="Paris", amount=95.0, channel="TPE", mode="SANS_CONTACT", cat="Supermarche", hours_after=60)}
         pc = st.segmented_control(L("Exemple", "Example"), list(presets), key="ctx_preset", default=list(presets)[0])
         pr = presets.get(pc) or list(presets.values())[0]
@@ -176,7 +176,7 @@ def page_context(ctx):
 
 @st.cache_data(show_spinner=False)
 def _sample_feed():
-    """A small feed from another bank: Amm Mohamed's real-looking week + a cloned card used at the same time in Italy."""
+    """A small feed from another bank: an illustrative week of a synthetic retired customer + a cloned card used at the same time in Italy."""
     h = da.customer_tx(DEMO_CUSTOMER)
     t0 = pd.to_datetime(h.timestamp).max() if len(h) else pd.Timestamp("2026-09-29")
     rows = [("NEW0001", t0 + timedelta(days=1, hours=2), 640.0, "TN", "Sfax", "TPE", "CHIP", "Agence de voyage"),

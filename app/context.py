@@ -1,4 +1,4 @@
-"""Personal context: is this operation coherent with THIS customer's life? (bank CEO's question: Amm Mohamed abroad.)
+"""Personal context: is this operation coherent with THIS customer's life? (principle from a bank CEO: understand the person before suspecting the card.)
 
 For a physical operation away from the customer's usual places (abroad, or in a city he rarely visits), we read only facts the bank
 already holds — never a guess about religion, health, family or opinions (sensitive data, Tunisian law 2004-63 / GDPR art. 9):

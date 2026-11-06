@@ -118,10 +118,10 @@ def _render(ctx, i, msg):
                       "of retired customers by governorate*."))
         return
     if r.get("intent") == "unclear":
-        st.markdown(L("Sans connexion à l'IA, je comprends les questions du type **combien / montant total / montant moyen / fraudes / alertes**, "
+        st.markdown(_why_offline(L, r.get("ai_down")) + "\n\n" + L("En attendant, je comprends les questions du type **combien / montant total / montant moyen / fraudes / alertes**, "
                       "avec un lieu (*à Sfax*), une période (*en août 2026*, *hier*), un canal (*en ligne*, *DAB*) et un regroupement (*par mois*, "
                       "*par ville*, *par catégorie*). Reformulez, ou choisissez une suggestion.",
-                      "Without the AI connection I understand **how many / total amount / average amount / frauds / alerts**, with a place "
+                      "Meanwhile I understand **how many / total amount / average amount / frauds / alerts**, with a place "
                       "(*in Sfax*), a period (*in August 2026*, *yesterday*), a channel (*online*, *ATM*) and a grouping (*by month*, *by city*, "
                       "*by category*). Rephrase, or pick a suggestion."))
         return
@@ -177,6 +177,20 @@ def _answer(ctx, question, history):
     return r
 
 
+def _why_offline(L, reason):
+    if reason == "no_key":
+        return L("⚠️ **L'IA n'est pas connectée sur ce serveur** (clé Azure OpenAI absente des paramètres). L'administrateur l'ajoute dans "
+                 "les *Secrets* de l'application.", "⚠️ **The AI is not connected on this server** (no Azure OpenAI key in the settings). "
+                 "The administrator adds it in the app's *Secrets*.")
+    if reason == "cap":
+        return L("⏳ **Limite horaire d'appels IA atteinte** (protection des coûts de la démo publique) : réponses par règles pendant "
+                 "quelques minutes.", "⏳ **Hourly AI call limit reached** (public demo cost guard): rule-based answers for a few minutes.")
+    if reason and str(reason).startswith("error"):
+        return L("⚠️ **Azure OpenAI ne répond pas** pour l'instant (" + str(reason)[6:] + ") : réponse par règles.",
+                 "⚠️ **Azure OpenAI is not answering** right now (" + str(reason)[6:] + "): rule-based answer.")
+    return L("Mode hors-ligne.", "Offline mode.")
+
+
 def page_assistant(ctx):
     L, lang = ctx.L, ctx.lang
     st.markdown(CSS, unsafe_allow_html=True)
@@ -185,6 +199,10 @@ def page_assistant(ctx):
     typed = st.chat_input(L("Posez votre question…", "Ask your question…"))      # root level → pinned to the bottom
     _, mid, _ = st.columns([1, 3.2, 1])
     with mid, st.container(key="assist_col"):
+        status = copilot.ai_status()
+        if status in ("no_key", "cap"):
+            st.markdown(f'<div style="text-align:center;margin-top:1rem;font-size:.85rem;color:#C77700">{_why_offline(L, status).replace('**', '').replace('*', '')}</div>',
+                        unsafe_allow_html=True)
         if not chat and not pending and not typed:
             st.markdown(f'<div class="as-hello"><div class="orb"></div><h1>{L("Que voulez-vous savoir ?", "What do you want to know?")}</h1>'
                         f'<p>{L("Posez une question sur les transactions, les clients, les lieux ou les alertes — en français, en anglais ou en derja.", "Ask about transactions, customers, places or alerts — in French, English or Arabic.")}</p></div>',

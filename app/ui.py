@@ -73,6 +73,14 @@ h1, h2, h3 {{ letter-spacing: -.015em; color: {TEXT}; }}
 .brand span {{ font-size: .74rem; color: #B9C8E0; }}
 .side-label {{ font-size: .68rem; font-weight: 700; color: {SOFT}; text-transform: uppercase; letter-spacing: .1em;
     margin: 1rem 0 .3rem .25rem; }}
+.st-key-lang_switch {{ width: fit-content !important; margin: .2rem 0 .7rem; }}
+.st-key-lang_switch [data-testid="stButtonGroup"] > div {{ background: {LINE2}; border-radius: 999px; padding: 3px; gap: 0; display: inline-flex; }}
+.st-key-lang_switch button {{ border: none !important; border-radius: 999px !important; min-height: 0 !important; padding: .22rem .9rem !important;
+  background: transparent !important; color: {MUTED} !important; font-weight: 600; font-size: .78rem; letter-spacing: .04em;
+  box-shadow: none !important; transition: background .25s ease, color .25s ease, box-shadow .25s ease; }}
+.st-key-lang_switch button[kind$="Active"], .st-key-lang_switch button[aria-checked="true"], .st-key-lang_switch button[data-testid$="Active"] {{
+  background: #fff !important; color: {BLUE} !important; box-shadow: 0 2px 8px rgba(15, 30, 54, .12) !important; }}
+.st-key-lang_switch button:hover {{ color: {BLUE} !important; }}
 .nazar-card {{ display: flex; gap: .7rem; align-items: center; padding: .55rem .7rem; border-radius: 14px; margin: .5rem 0 .35rem;
     background: linear-gradient(135deg, #EEF0FF 0%, #F6F7FF 100%); border: 1px solid #D9DCFF; }}
 .nazar-card b {{ display: block; color: #26199C; font-size: .98rem; }}
