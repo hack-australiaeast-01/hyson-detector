@@ -273,36 +273,56 @@ class Source:
         return "Instantané Gold exporté de Fabric (parquet)"
 
 
+def _read_lean(path):
+    """Parquet -> DataFrame with a small footprint (hosted demo ~1 GB RAM): text columns become categories,
+    Arrow buffers are freed while converting and the allocator returns them to the OS."""
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+    t = pq.read_table(path)
+    df = t.to_pandas(self_destruct=True, split_blocks=True)
+    del t
+    for c in df.columns:      # files written before the categorical export: convert once
+        if (c not in ("transaction_id", "session_id") and not isinstance(df[c].dtype, pd.CategoricalDtype)
+                and (df[c].dtype == object or pd.api.types.is_string_dtype(df[c].dtype))):
+            df[c] = df[c].astype("category")
+    pa.default_memory_pool().release_unused()
+    return df
+
+
 @lru_cache(maxsize=None)
 def _local_history():
     """Snapshot of silver_transactions for every customer in the alert queue (full history since 2025, no labels).
 
-    Text columns are stored as categories to keep memory low; `reported_date` (train/valid frauds only, never test)
-    is kept solely for related() — the "already reported before the transaction" rule.
+    Stored sorted by timestamp with categorical text columns (≈ 80 MB in memory for 1 M rows); `reported_date`
+    (train/valid frauds only, never test) is kept solely for related() — the "already reported before" rule.
     """
     p = DATA / "customer_history.parquet"
     if not p.exists():
         return None
-    h = _clean(pd.read_parquet(p))
+    h = _clean(_read_lean(p))
     h = h.drop(columns=[c for c in ["is_fraud", "fraud_scenario", "fraud_reported_date"] if c in h.columns])
-    if "reported_date" in h.columns:
-        h["reported_date"] = pd.to_datetime(h["reported_date"], errors="coerce")
-    return h.sort_values("timestamp").reset_index(drop=True)
+    if "reported_date" in h.columns and not pd.api.types.is_datetime64_any_dtype(h["reported_date"]):
+        h["reported_date"] = pd.to_datetime(h["reported_date"].astype(object), errors="coerce")
+    if not h.timestamp.is_monotonic_increasing:
+        h = h.sort_values("timestamp").reset_index(drop=True)
+    return h
 
 
 def _plain(df, keep=None):
-    """Slice -> ordinary object columns (downstream code uses fillna / string ops on them)."""
+    """Slice -> ordinary object columns (downstream code uses fillna / string ops / JSON on them)."""
     df = df[[c for c in (keep or df.columns) if c in df.columns]].copy()
     for c in df.columns:
         if isinstance(df[c].dtype, pd.CategoricalDtype):
             df[c] = df[c].astype(object).where(df[c].notna(), None)
+        elif df[c].dtype == "float32":          # lat/long stored as float32 to save memory; JSON needs float64
+            df[c] = df[c].astype("float64")
     return df.reset_index(drop=True)
 
 
 @lru_cache(maxsize=None)
 def _local_events():
     p = DATA / "digital_events.parquet"
-    return _clean(pd.read_parquet(p)) if p.exists() else None
+    return _clean(_read_lean(p)) if p.exists() else None
 
 
 _source = None
@@ -372,7 +392,7 @@ def customers():
     return source().customers()
 
 
-@lru_cache(maxsize=512)
+@lru_cache(maxsize=96)        # each entry = one customer's full history (object columns)
 def customer_tx(customer_id):
     return source().customer_tx(customer_id)
 
@@ -382,7 +402,7 @@ def tx_by_id(transaction_id):
     return source().tx_by_id(transaction_id)
 
 
-@lru_cache(maxsize=512)
+@lru_cache(maxsize=128)
 def events(customer_id, start=None, end=None):
     return source().events(customer_id, start, end)
 
