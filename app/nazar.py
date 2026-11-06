@@ -359,7 +359,10 @@ def panel(ctx):
         log(cmd, act, out, lang, st.session_state.get("tx"), time.time() - t0)
         if any(k in out for k in ("open", "go", "lang")):          # navigation: act now, close the dialog
             _navigate(ctx, out)
-        logbook.append({"cmd": cmd, "out": out})
+        if logbook and logbook[-1]["cmd"] == cmd and not logbook[-1].get("done"):
+            logbook[-1] = {"cmd": cmd, "out": out}                   # same instruction again = refresh, not a duplicate
+        else:
+            logbook.append({"cmd": cmd, "out": out})
     for i in range(len(logbook) - 1, max(len(logbook) - 5, 0) - 1, -1):
         e = logbook[i]
         with st.chat_message("user", avatar=":material/person:"):
