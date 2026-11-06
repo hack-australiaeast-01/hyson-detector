@@ -46,3 +46,27 @@ def test_no_retry_when_the_language_is_right(monkeypatch):
     monkeypatch.setenv("AZURE_OPENAI_DEPLOYMENT", "gpt-5-mini")
     courtroom._call("defense", "fr", "- facts")
     assert len(fake.calls) == 1
+
+
+def test_trial_judge_runs_on_a_different_model_even_without_the_agent(monkeypatch):
+    import copilot
+    import courtroom
+    import investigation
+    fake = FakeClient(["**Verdict: BLOCK** (high confidence). Prosecution wins: the amount is far above the customer's habits."])
+    monkeypatch.setattr(copilot, "_client", lambda: fake)
+    monkeypatch.setenv("AZURE_OPENAI_DEPLOYMENT", "gpt-5-mini")
+
+    def no_agent(*a, **k):
+        raise RuntimeError("no Entra login")
+    monkeypatch.setattr(investigation, "foundry_agent", no_agent)
+    text, tok, label = courtroom._judge("en", "- facts", "\n\nPROSECUTION CHARGE: …")
+    assert courtroom.JUDGE_AGENT == "judge-patern" and courtroom.JUDGE_MODEL != "gpt-5-mini"
+    assert label == f"Azure OpenAI {courtroom.JUDGE_MODEL}"
+
+
+def test_case_judge_differs_from_the_lawyers_and_codes_are_normalised():
+    import investigation as iv
+    assert iv.JUDGE_AGENT == "judge-mini" and iv.JUDGE_FALLBACK_MODEL != iv.MODEL
+    j = iv.ground({"recommandation": "ESCALATE", "niveau_risque": "Medium", "confiance": "high", "evaluation": []}, [])
+    assert (j["recommandation"], j["niveau_risque"], j["confiance"]) == ("ESCALADER", "moyen", "élevée")
+    assert iv.ground({"recommandation": "MAYBE"}, [])["recommandation"] is None          # never recorded as a decision

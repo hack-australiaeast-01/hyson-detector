@@ -261,7 +261,7 @@ flowchart LR
         MEM["16,302 past cases<br/>text-embedding-3-small (256) + behaviour vector<br/>status as known at the time"]
     end
     subgraph AG["6–7 · Agents"]
-        P["Prosecution"] --> J["Judge<br/>Azure AI Foundry agent judge-patern"]
+        P["Prosecution"] --> J["Judge<br/>Azure AI Foundry agent judge-mini<br/>(gpt-5-mini ≠ lawyers' gpt-6.1-terra)"]
         D["Defence"] --> J
     end
     subgraph HU["8 · Human review"]
@@ -283,7 +283,7 @@ flowchart LR
 | Continuous monitoring, reactivation | `intel.triggers(tid, as_of)` — documented rules, weights | `as_of` time travel: never the future |
 | RAG retrieval | `memory.similar()` — hybrid cosine (meaning 0.5 + behaviour 0.5) over 16,302 cases | only earlier cases; fraud = confirmed only if reported before; AI conclusions never stored as knowledge |
 | Multi-agent investigation | `investigation.py` — Prosecution / Defence (gpt-6.1-terra) on board E1…En | must cite E-numbers; code checks every citation |
-| Judge | Azure AI Foundry agent `judge-patern` (managed harness, Entra ID), fallback the same model by key | grades evidence reliability; may deviate from the system only with post-alert evidence, shown side by side |
+| Judge | Azure AI Foundry agent `judge-mini` on **gpt-5-mini** (managed harness, Entra ID) while the lawyers argue on gpt-6.1-terra; fallback gpt-5-mini by key — the judge never shares the lawyers' model (Le Procès: the reverse, gpt-5-mini argues, `judge-patern` on gpt-6.1-terra judges) | grades evidence reliability; may deviate from the system only with post-alert evidence, shown side by side |
 | Human review, knowledge update | case page actions → `cases.jsonl` + decision journal | rationale required; "confirmed" only by the employee after contact or the bank's report |
 | Steering KPIs, drilldown | `steering.py` — fixed read-only SQL, click a bar to go down | aggregates; transactions without customer identity |
 | AI strategic analysis | facts K1…Kn in SQL → AI classifies, cites, separates fact / hypothesis | no data on employees / switch logs → stated as missing, confidence low |

@@ -75,13 +75,33 @@ def wrong_language(text, lang):
     return (fr > en and fr >= 3) if lang == "en" else (en > fr and en >= 3)
 
 
-def _call(role, lang, facts_text, extra=""):
+JUDGE_AGENT = os.getenv("PROCES_JUDGE_AGENT", "judge-patern")          # Foundry agent on gpt-6.1-terra
+JUDGE_MODEL = os.getenv("PROCES_JUDGE_DEPLOYMENT", "gpt-6.1-terra")   # fallback: same model, called directly
+# The lawyers plead with AZURE_OPENAI_DEPLOYMENT (gpt-5-mini); the judge always runs on a different model.
+
+
+def _judge(lang, facts_text, extra):
+    """Judge = Foundry agent judge-patern (gpt-6.1-terra); if unreachable (no Entra login, e.g. public app), the same model directly."""
+    import investigation
+    head = "FACTS" if lang == "en" else "FAITS"
+    prompt = f"{ROLES['juge'][lang]}\n\n{head}:\n{facts_text}{extra}\n\n{LANG_LINE[lang]}"
+    try:
+        text, total, label = investigation.foundry_agent(JUDGE_AGENT, prompt, timeout=120)
+        if text and not wrong_language(text, lang):
+            return copilot.polish(text, lang), {"prompt": 0, "completion": 0, "total": total, "cached_prompt": 0}, label
+    except Exception:
+        pass
+    text, tok = _call("juge", lang, facts_text, extra, model=JUDGE_MODEL)
+    return text, tok, f"Azure OpenAI {JUDGE_MODEL}"
+
+
+def _call(role, lang, facts_text, extra="", model=None):
     client = copilot._client()
     head = "FACTS" if lang == "en" else "FAITS"
     messages = [{"role": "system", "content": ROLES[role][lang]},
                 {"role": "user", "content": f"{head}:\n{facts_text}{extra}\n\n{LANG_LINE[lang]}"}]
-    kwargs = dict(model=os.environ["AZURE_OPENAI_DEPLOYMENT"])
-    if copilot._is_reasoning():
+    kwargs = dict(model=model or os.environ["AZURE_OPENAI_DEPLOYMENT"])
+    if model or copilot._is_reasoning():
         kwargs.update(max_completion_tokens=1600, reasoning_effort=os.getenv("COPILOT_REASONING", "low"))
     else:
         kwargs.update(temperature=0.2, max_tokens=350)
@@ -126,7 +146,7 @@ def trial(transaction_id, lang="fr", on_stage=None):
     """Run (or replay from cache) the trial. Returns {"procureur", "defense", "juge", "recommendation", "tokens", ...}."""
     lang = "en" if lang == "en" else "fr"
     stage = on_stage or (lambda role, text: None)
-    key = hashlib.sha256(f"proces-p3|{copilot.CACHE_VERSION}|{lang}|{transaction_id}".encode()).hexdigest()
+    key = hashlib.sha256(f"proces-p4|{copilot.CACHE_VERSION}|{lang}|{transaction_id}".encode()).hexdigest()
     cache = copilot._cache
     if key in cache and (copilot.configured() or os.getenv("COPILOT_OFFLINE", "0") != "1"):
         out = {**cache[key], "cached": True}
@@ -163,11 +183,13 @@ def trial(transaction_id, lang="fr", on_stage=None):
                     f"{', '.join(r.get('signaux_concordants', [])) or 'aucun'}")
         labels = ("RECOMMANDATION SYSTÈME", "RÉQUISITOIRE DU PROCUREUR", "PLAIDOIRIE DE LA DÉFENSE")
     extra = (f"\n\n{labels[0]} : {reco_txt}\n\n{labels[1]} :\n{out['procureur']}\n\n{labels[2]} :\n{out['defense']}")
-    out["juge"], tok = _call("juge", lang, facts_text, extra)
+    out["juge"], tok, judge_label = _judge(lang, facts_text, extra)
     for k in tokens:
         tokens[k] += tok.get(k, 0)
     stage("juge", out["juge"])
-    out.update(mode=f"Azure OpenAI ({os.environ['AZURE_OPENAI_DEPLOYMENT']})", tokens=tokens, recommendation=reco,
+    out.update(mode=f"Azure OpenAI ({os.environ['AZURE_OPENAI_DEPLOYMENT']} pleads · {judge_label} judges)", tokens=tokens,
+               models={"procureur": os.environ["AZURE_OPENAI_DEPLOYMENT"], "defense": os.environ["AZURE_OPENAI_DEPLOYMENT"], "juge": judge_label},
+               recommendation=reco,
                tools=used, latency_s=round(time.time() - start, 2), cached=False)
     cache[key] = out
     copilot._save_cache()

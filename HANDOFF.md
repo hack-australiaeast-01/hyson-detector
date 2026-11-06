@@ -13,11 +13,11 @@ The earlier [COPILOT_HANDOFF.md](COPILOT_HANDOFF.md) is the original day-1 task 
 | Item | State | Where |
 |---|---|---|
 | Code | ✅ pushed, `main` = `ffae177`, CI green | https://github.com/hack-australiaeast-01/hyson-detector |
-| Tests | ✅ 169 pytest, offline, ~3 min | `tests/`, GitHub Actions `.github/workflows/tests.yml` |
+| Tests | ✅ 171 pytest, offline, ~3 min | `tests/`, GitHub Actions `.github/workflows/tests.yml` |
 | Public app | 🟡 runs, **AI off** until the key is pasted in Streamlit Secrets (§4.1) | https://hyson-detector.streamlit.app |
 | Local app | ✅ live Microsoft Fabric + Azure OpenAI (needs `az login`) | `cd app; streamlit run app.py` |
 | Fabric | ✅ workspace `ws-hack-fraud-australiaeast`, lakehouse `lh_fraud` (schemas bronze → meta), Power BI, MLflow | §3 |
-| Azure AI | ✅ `aoai-fraud-australiaeast-vnxcy` (gpt-5-mini, gpt-6.1-terra, text-embedding-3-small) + Foundry agent `judge-patern` | §3 |
+| Azure AI | ✅ `aoai-fraud-australiaeast-vnxcy` (gpt-5-mini, gpt-6.1-terra, text-embedding-3-small) + Foundry agents `judge-mini` (gpt-5-mini) and `judge-patern` (gpt-6.1-terra) | §3 |
 | Slides, rehearsal, backup video | ❌ not started | §4 |
 
 **Headline result (validation Jun–Jul 2026, out-of-time):** at the top 1 % (1,779 alerts) the model catches **718 frauds vs 117**
@@ -68,7 +68,7 @@ integration**, new data source) · Démo (guided tour). Nazar is the floating ey
 ### Azure (subscription 242ac13a-…, resource group `rg-hack-fraud-australiaeast`)
 - Azure OpenAI `aoai-fraud-australiaeast-vnxcy`: deployments `gpt-5-mini` (copilot, assistant, reports), `gpt-6.1-terra`
   (investigation agents), `text-embedding-3-small` (memory, 256 dims).
-- Azure AI Foundry project `proj-fraud-australiaeast`, agent **`judge-patern`** (Entra token, scope `https://ai.azure.com/.default`).
+- Azure AI Foundry project `proj-fraud-australiaeast`, agents **`judge-mini`** (gpt-5-mini, judges the investigation case page, where gpt-6.1-terra argues) and **`judge-patern`** (gpt-6.1-terra, judges Le Procès, where gpt-5-mini argues): the judge never runs on the lawyers' model; without an Entra login (public app) each page calls the judge's model directly. Entra token, scope `https://ai.azure.com/.default`.
 - `az` sometimes asks for MFA: run the exact `az login … --claims-challenge …` command it prints.
 
 ### Configuration (names only — values are in `app/.env`, never in Git)
@@ -137,7 +137,7 @@ cd app; streamlit run app.py
 
 # tests (offline: snapshot data, no Fabric, no tokens)
 pip install -r app/requirements-api.txt pytest
-python -m pytest -q                      # 169 passed
+python -m pytest -q                      # 171 passed
 
 # copilot answers (after any prompt / tool change): bump CACHE_VERSION, then
 cd app; python warmup.py fr en; python eval_copilot.py     # must stay 18/18, commit app/data/copilot_cache.json

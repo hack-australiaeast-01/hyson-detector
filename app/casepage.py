@@ -135,14 +135,17 @@ def page_case(ctx):
             st.markdown(res["defense"])
     j = res.get("judge")
     if j:
+        en = lang == "en"
+        show = (lambda v: {"BLOQUER": "BLOCK", "ESCALADER": "ESCALATE", "VALIDER": "VALIDATE", "élevé": "high", "élevée": "high", "moyen": "medium",
+                           "moyenne": "medium", "faible": "low"}.get(v, v)) if en else (lambda v: v)
         rec = (res.get("system") or {}).get("decision")
         col = ui.DECISION.get(j.get("recommandation"), ui.BLUE)
         st.markdown(
             f"<div style='background:#fff;border:1px solid {ui.LINE};border-left:6px solid {col};border-radius:16px;padding:1rem 1.2rem;margin:.6rem 0'>"
             f"<div style='font-size:.78rem;color:{ui.MUTED};text-transform:uppercase;letter-spacing:.06em'>{L('Juge', 'Judge')} · {ui.esc(res.get('judge_model', ''))}</div>"
-            f"<div style='font-size:1.4rem;font-weight:800;color:{col}'>{ui.esc(j.get('recommandation', ''))} · {L('risque', 'risk')} {ui.esc(j.get('niveau_risque', ''))} · "
-            f"{L('confiance', 'confidence')} {ui.esc(j.get('confiance', ''))}</div>"
-            f"<div style='color:{ui.MUTED}'>{L('Recommandation système', 'System recommendation')} : <b>{ui.esc(rec)}</b>"
+            f"<div style='font-size:1.4rem;font-weight:800;color:{col}'>{ui.esc(show(j.get('recommandation') or ''))} · {L('risque', 'risk')} {ui.esc(show(j.get('niveau_risque', '')))} · "
+            f"{L('confiance', 'confidence')} {ui.esc(show(j.get('confiance', '')))}</div>"
+            f"<div style='color:{ui.MUTED}'>{L('Recommandation système', 'System recommendation')} : <b>{ui.esc(show(rec))}</b>"
             + (f" · <span style='color:{ui.AMBER}'>{L('écart', 'deviation')} : {ui.esc(j.get('ecart_avec_systeme'))}</span>" if j.get("ecart_avec_systeme") else "")
             + f"</div><div style='margin-top:.5rem'>{ui.esc(j.get('synthese', ''))}</div></div>", unsafe_allow_html=True)
         rows = [{L("partie", "side"): e.get("partie"), L("argument", "argument"): e.get("argument"),

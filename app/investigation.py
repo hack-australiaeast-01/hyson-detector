@@ -26,9 +26,10 @@ import memory
 
 FOUNDRY_PROJECT = os.getenv("FOUNDRY_PROJECT_ENDPOINT",
                             "https://aoai-fraud-australiaeast-vnxcy.services.ai.azure.com/api/projects/proj-fraud-australiaeast")
-JUDGE_AGENT = os.getenv("FOUNDRY_JUDGE_AGENT", "judge-patern")
-MODEL = os.getenv("INTEL_DEPLOYMENT", "gpt-6.1-terra")
-VERSION = "inv-2"
+JUDGE_AGENT = os.getenv("FOUNDRY_JUDGE_AGENT", "judge-mini")        # gpt-5-mini: a different model from the lawyers below
+MODEL = os.getenv("INTEL_DEPLOYMENT", "gpt-6.1-terra")                # prosecution and defence
+JUDGE_FALLBACK_MODEL = os.getenv("JUDGE_FALLBACK_DEPLOYMENT", "gpt-5-mini")   # if the agent is unreachable (no Entra login)
+VERSION = "inv-3"
 
 ADVOCATE = {
     "prosecution": ("Tu es l'ACCUSATION dans une enquête de fraude bancaire. Cherche pourquoi ce comportement pourrait être une fraude : "
@@ -124,11 +125,11 @@ def _lang_line(lang):
             if lang == "en" else "Réponds en français.")
 
 
-def _chat(system, user, max_tokens=1500, lang=None):
+def _chat(system, user, max_tokens=1500, lang=None, model=None):
     """One completion; if `lang` is given and the answer came back in the other language, one corrective rewrite."""
     import courtroom
     msgs = [{"role": "system", "content": system}, {"role": "user", "content": user + (f"\n\n{_lang_line(lang)}" if lang else "")}]
-    kw = dict(model=MODEL, messages=msgs)
+    kw = dict(model=model or MODEL, messages=msgs)
     kw.update(max_completion_tokens=max_tokens)
     try:
         r = copilot._client().chat.completions.create(**kw)
@@ -146,23 +147,28 @@ def _chat(system, user, max_tokens=1500, lang=None):
     return text, tokens, kw["model"]
 
 
-def _foundry_judge(prompt):
-    """Call the Azure AI Foundry agent (managed harness): conversation + responses on the agent endpoint, Entra ID auth."""
+def foundry_agent(agent, prompt, timeout=180):
+    """Call an Azure AI Foundry agent (managed harness): conversation + responses on the agent endpoint, Entra ID auth.
+    Returns (text, total_tokens, label with the agent and its model)."""
     import requests
     from azure.identity import AzureCliCredential, DefaultAzureCredential
     try:
         tok = AzureCliCredential().get_token("https://ai.azure.com/.default").token
     except Exception:
         tok = DefaultAzureCredential(exclude_interactive_browser_credential=True).get_token("https://ai.azure.com/.default").token
-    base = f"{FOUNDRY_PROJECT}/agents/{JUDGE_AGENT}/endpoint/protocols/openai"
-    H = {"Authorization": f"Bearer {tok}", "Content-Type": "application/json"}
+    base = f"{FOUNDRY_PROJECT}/agents/{agent}/endpoint/protocols/openai"
+    H = {"Authorization": "Bearer " + tok, "Content-Type": "application/json"}
     conv = requests.post(f"{base}/conversations?api-version=v1", headers=H, json={}, timeout=30)
     conv.raise_for_status()
-    r = requests.post(f"{base}/responses?api-version=v1", headers=H, json={"input": prompt, "conversation": conv.json()["id"]}, timeout=180)
+    r = requests.post(f"{base}/responses?api-version=v1", headers=H, json={"input": prompt, "conversation": conv.json()["id"]}, timeout=timeout)
     r.raise_for_status()
     j = r.json()
     text = " ".join(c.get("text", "") for o in j.get("output", []) if o.get("type") == "message" for c in o.get("content", []))
-    return text.strip(), int((j.get("usage") or {}).get("total_tokens", 0)), f"Foundry agent {JUDGE_AGENT}"
+    return text.strip(), int((j.get("usage") or {}).get("total_tokens", 0)), f"Foundry agent {agent} ({j.get('model') or '?'})"
+
+
+def _foundry_judge(prompt):
+    return foundry_agent(JUDGE_AGENT, prompt)
 
 
 def _parse_json(text):
@@ -173,8 +179,24 @@ def _parse_json(text):
         return None
 
 
+DECISION_CODES = {"BLOCK": "BLOQUER", "BLOQUER": "BLOQUER", "ESCALATE": "ESCALADER", "ESCALADER": "ESCALADER",
+                  "VALIDATE": "VALIDER", "APPROVE": "VALIDER", "VALIDER": "VALIDER"}
+LEVEL_CODES = {"high": "élevé", "medium": "moyen", "low": "faible", "élevé": "élevé", "eleve": "élevé", "moyen": "moyen", "faible": "faible"}
+CONF_CODES = {"high": "élevée", "medium": "moyenne", "low": "faible", "élevée": "élevée", "elevee": "élevée", "moyenne": "moyenne", "faible": "faible"}
+
+
 def ground(judge, ev):
-    """Every cited E-number must exist on the board; arguments citing nothing valid are marked ungrounded."""
+    """Every cited E-number must exist on the board; arguments citing nothing valid are marked ungrounded.
+    Decision / level codes are normalised (a judge answering in English may write BLOCK / ESCALATE / VALIDATE)."""
+    rec = str(judge.get("recommandation") or "").strip().upper()
+    if rec in DECISION_CODES:
+        judge["recommandation"] = DECISION_CODES[rec]
+    elif rec:
+        judge["recommandation"] = None                      # unknown code: never recorded as a decision
+    for key, codes in (("niveau_risque", LEVEL_CODES), ("confiance", CONF_CODES)):
+        v = str(judge.get(key) or "").strip().lower()
+        if v in codes:
+            judge[key] = codes[v]
     ids = {e["id"] for e in ev}
     bad = []
     for a in judge.get("evaluation", []) or []:
@@ -205,6 +227,8 @@ def investigate(tid, as_of=None, lang="fr", context_note="", analyst=None, on_st
     cache = _cache()
     if key in cache:
         out = {**cache[key], "cached": True, "board": ev, "triggers": trig}
+        if isinstance(out.get("judge"), dict):
+            out["judge"] = ground(dict(out["judge"]), ev + ([{"id": f"E{len(ev) + 1}"}] if context_note else []))
         stage("done", out)
         return out
     out = {"board": ev, "system": rec, "triggers": trig, "tokens": 0, "models": []}
@@ -231,7 +255,8 @@ def investigate(tid, as_of=None, lang="fr", context_note="", analyst=None, on_st
         except Exception as exc:
             out["agent_error"] = f"{type(exc).__name__}: {str(exc)[:160]}"
     if not judge_raw or not _parse_json(judge_raw):
-        judge_raw, tk, judge_model = _chat("Tu es un juge d'enquête de fraude. Réponds uniquement en JSON.", prompt, 2500)
+        judge_raw, tk, judge_model = _chat("Tu es un juge d'enquête de fraude. Réponds uniquement en JSON.", prompt, 2500,
+                                           model=JUDGE_FALLBACK_MODEL)        # never the lawyers' model
         out["tokens"] += tk
     j = _parse_json(judge_raw) or {"synthese": judge_raw, "evaluation": []}
     out["judge"] = ground(j, ev + ([{"id": f"E{len(ev) + 1}"}] if context_note else []))
