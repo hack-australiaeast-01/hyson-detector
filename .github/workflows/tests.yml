@@ -15,9 +15,11 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
-          cache-dependency-path: app/requirements.txt
+          cache-dependency-path: |
+            app/requirements.txt
+            app/requirements-api.txt
       - name: Install
-        run: pip install -r app/requirements.txt pytest
+        run: pip install -r app/requirements-api.txt pytest
       - name: Tests (offline snapshot, no Fabric / Azure OpenAI call)
         env:
           DATA_SOURCE: local

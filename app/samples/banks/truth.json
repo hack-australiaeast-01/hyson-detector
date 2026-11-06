@@ -1,0 +1,18 @@
+{
+ "atlas": {
+  "transactions": 13207,
+  "frauds": 111,
+  "amount_tnd": 2467541.162
+ },
+ "nordic": {
+  "transactions": 15408,
+  "frauds": 127,
+  "amount_tnd": 2708252.79,
+  "amount_eur": 796546.06,
+  "eur_rate": 3.4
+ },
+ "sahel": {
+  "transactions": 8853,
+  "amount_tnd": 1749037.101
+ }
+}

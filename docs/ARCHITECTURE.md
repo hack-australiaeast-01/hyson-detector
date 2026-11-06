@@ -18,6 +18,7 @@ Principle everywhere: **the model scores, the AI explains, the analyst decides.*
 | 8 | [Application pages and demo path](#8-application-pages-and-demo-path) | The 15 pages and how they link |
 | 10 | [Continuous fraud intelligence](#10-continuous-fraud-intelligence-unified-architecture) | Events, case file, memory (RAG), agents + Foundry judge, human review, steering drilldown |
 | 9 | [Deployment, security and CI/CD](#9-deployment-security-and-cicd) | Local live mode vs hosted demo, identities, secrets, GitHub → Streamlit Cloud |
+| 11 | [Universal banking integration](#11-universal-banking-integration-any-bank-any-schema) | Any bank, any schema: discovery, AI mapping, readiness, approval, activation, bank-specific model, per-bank memory, signed webhook, REST API |
 
 ---
 
@@ -288,3 +289,58 @@ flowchart LR
 
 **Measured honestly:** the memory alone barely predicts fraud on validation alerts (ROC-AUC 0.57 vs 0.85 for the model; blending
 them does not help: 0.84) — so it is used as precedent and context for agents and employees, never added to the score.
+
+## 11. Universal banking integration (any bank, any schema)
+
+The Hyson pages run on the Hyson tenant (Fabric lakehouse `lh_fraud`). To serve **other banks without rewriting anything**, a
+bank-agnostic layer maps each bank's own schema to a canonical model, measures what the data can support, and activates only the
+modules it can feed — after a named human approval. Same engine behind the console page *Intégration bancaire* and the REST API.
+
+```mermaid
+flowchart LR
+    SRC["Bank exports<br/>SQLite · CSV · JSON-lines · Parquet<br/>or signed webhook events"] --> RAW["Raw zone (per tenant)<br/>bank's own schema"]
+    RAW --> DISC["Discovery<br/>kinds · keys · foreign keys<br/>(statistics only)"]
+    DISC --> MAP["AI-assisted mapping<br/>roles + fields + code translation<br/>confidence · flags · exclusions"]
+    MAP -->|"human confirms flags<br/>new version each change"| CAN["Canonical data<br/>pseudonymised ids (HMAC per tenant)"]
+    CAN --> RDY["Readiness report<br/>completeness · validity · duplicates<br/>integrity · timestamps · labels"]
+    RDY --> VAL["Validation<br/>every KPI executed<br/>reconciled with bank's control totals"]
+    VAL --> CAP["Capability matrix<br/>modules + KPIs the data supports"]
+    CAP -->|"named approval → activation<br/>sensitive columns erased from raw"| PROD["Active workspace<br/>dashboard · alert queue · memory · webhook"]
+    CAN --> MDL["Bank-specific model (candidate)<br/>time split · vs bank's own score"] -->|"named approval"| PROD
+    CAN --> RAG["Institutional memory (RAG)<br/>cases · typologies · procedures<br/>per tenant, never training data"] --> PROD
+    PROD --> AUD["Hash-chained audit trail (per tenant)"]
+```
+
+| Brief component | Where | Guardrail |
+|---|---|---|
+| Canonical model + capability catalogue | `app/canonical.py` (7 entities, 15 modules, 13 KPIs with their SQL) | a module is active only if every field it needs is mapped and ≥ 90 % translatable |
+| Multi-source connection | `discovery.load()` — SQLite, CSV (separator sniffed), JSON-lines / JSON, Parquet, uploads; `tenants.ingest()` keeps a parquet copy per batch | size limits, read-only SQLite |
+| Schema discovery | `discovery.summary()` — value kinds (epoch ms/s, dd/mm/yyyy, decimal comma, ISO-2/3, currency, e-mail, PAN-like), candidate keys, foreign keys by value inclusion (≥ 90 %) | only statistics leave the module |
+| AI-assisted mapping | `mapper.propose()` — table roles + fields: name similarity (FR / EN / camelCase synonyms) 60 % + value fit 40 %; code dictionaries (GAB, E-COMMERCE, ACCEPTEE, ISO 8583 `00`/`05`, EMV/NFC, LOGIN/ADD_PAYEE…); optional one-call LLM review on names + stats (`mapper.ai_review`) | uncertain items become **flags to confirm** (minor units, 0/1 status, labels by presence, assumed currency, < 80 % confidence) |
+| Sensitive data | `canonical.EXCLUDED` (gender, CVV, PIN, names, e-mail, phone, address, IBAN, national id) never mapped; ids pseudonymised by HMAC-SHA256 with a per-tenant salt; raw PAN detected (Luhn) and hashed | excluded columns erased from the raw zone at activation (minimisation) |
+| Translation | `mapper.apply()` — dates, epoch, decimal comma, minor units, FX to TND (editable rates), ISO-3 → ISO-2, labels from a separate report table, merchant attributes joined | untranslated values counted per field |
+| Data readiness | `readiness.report()` — score /100 + gate (green / amber / red), blockers, warnings, label adequacy (≥ 30 frauds over ≥ 3 months) | red gate blocks validation |
+| Dynamic configuration | `tenants.validate()` — runs every enabled KPI on the canonical data (DuckDB, no external access), keeps those that run; dashboard = active KPIs + modules | KPI SQL is a fixed catalogue, never generated |
+| Reconciliation | `tenants.validate(control)` — counts, frauds, amounts vs the bank's own control totals | validation fails if a total differs |
+| Approval and activation | `approve(name)` then `activate(name)`; lifecycle draft → mapped → validated → approved → active | any mapping change sends the tenant back to *mapped*; open flags block approval |
+| Bank-specific model | `tenant_model.py` — L2 logistic regression (numpy, JSON, no pickle) on past-only generic signals (amount vs own habits, burst, new country / merchant / device, night, failed logins and sensitive account changes before the operation); train on the first 70 % of time, test on the rest; compared with the bank's own score | stays a *candidate* until a named admin approves it; never retrained automatically |
+| No labels | `tenant_model.behaviour_score()` — departures from the customer's own habits | shown as "not a fraud probability"; fraud KPIs and supervised modules disabled with the reason |
+| Institutional RAG | `tenant_rag.py` — TF-IDF (offline) over the bank's case notes, typology statistics and uploaded procedures; grounded answer with citations if Azure OpenAI is configured | one index per tenant; never used to train |
+| Real time | `POST /v1/tenants/{id}/events` — records in the bank's own format, translated by the **active** mapping, appended, scored with reasons | HMAC-SHA256 over `timestamp.body`, 5-minute replay window, idempotent on transaction id, 1,000 records max |
+| Multi-tenant security | `tenants.py` + `api.py` — one folder per bank, API keys `hy_<tenant>_…` stored as SHA-256 with roles admin / analyst / ingest, platform key to create banks, per-key rate limit, payload limits | a key never reaches another tenant (403) |
+| Audit | `tenants.audit()` — every step (ingest, mapping versions, validation, approvals, model, events) in a SHA-256 hash chain, verified on screen and by `GET /audit` | tampering detected (test) |
+
+**Validated on three simulated banks** with deliberately different schemas, derived from the synthetic dataset
+(`app/build_bank_fixtures.py`, totals in `app/samples/banks/truth.json`), end to end and offline (`tests/test_integration.py`):
+
+| Bank | Source | Recognised automatically | Reconciliation | Modules | Model on later months |
+|---|---|---|---|---|---|
+| Banque Atlas | SQLite, French names, dd/mm/yyyy, fraud reports in a separate table, `nom_complet` + `cvv` | 4/4 table roles; labels by presence (confirmed) | 13,207 ops · 111 frauds · 2,467,541.162 TND exact | 13/15 (no auth logs → no replay / auth anomalies) | PR-AUC 0.18 (base 1.3 %), top 1 % precision 22 % |
+| Nordic Pay | 6 CSV, camelCase, epoch ms, EUR cents, ISO 8583, auth logs, cases, `email` + `gender` | 6/6 roles; cents and response codes flagged | 15,408 · 127 · 796,546.06 EUR exact | 15/15 | PR-AUC 0.155 vs **0.025** for the bank's own rules score; top 1 % 28 % vs 9 % |
+| Sahel Bank | one JSON-lines extract, ISO-3, "1 234,500", numeric status, no labels | 1/1; 0/1 status flagged | 8,853 · 1,749,037.101 TND exact | 5/15 (no labels → no fraud KPIs, no model) | behaviour score only (honestly labelled) |
+
+**Limits, stated:** the 15 Hyson pages themselves still read the Hyson tenant; a new bank gets the generated workspace (dashboard,
+queue, memory, real time) and the capability-gated module list — wiring each Hyson page to tenant data is the next step. Tenant
+storage is local files (production: one OneLake workspace / lakehouse per bank, secrets in Key Vault, keys in Entra ID). The
+unsupervised behaviour score is weak alone (ROC-AUC 0.67–0.70 when checked on Atlas / Nordic labels): it orders the review, it
+does not decide.

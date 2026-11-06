@@ -41,6 +41,7 @@ import steering
 import data_access as da
 import deepsearch
 import fairness
+import integpage
 import features as fx
 import market
 import nazar
@@ -66,7 +67,7 @@ def L(fr, en):
 
 
 # internal page ids (stable across languages) -> labels, grouped like a banking platform menu
-PAGES = ["assist", "guide", "queue", "tx", "case", "cust", "context", "steer", "deep", "proces", "replay", "contre", "galaxy", "impact", "market", "perf", "pbi", "journal", "onboard"]
+PAGES = ["assist", "guide", "queue", "tx", "case", "cust", "context", "steer", "deep", "proces", "replay", "contre", "galaxy", "impact", "market", "perf", "pbi", "journal", "integ", "onboard"]
 PAGE_LABEL = {"assist": ("Assistant IA", "AI assistant"), "guide": ("Visite guidée (démo)", "Guided tour (demo)"),
               "queue": ("File d'alertes", "Alert queue"), "tx": ("Fiche transaction & copilote", "Transaction & copilot"),
               "cust": ("Vue client 360", "Customer 360"), "context": ("Contexte personnel", "Personal context"), "case": ("Dossier d'enquête", "Investigation case"), "steer": ("Intelligence fraude", "Fraud intelligence"),
@@ -76,17 +77,17 @@ PAGE_LABEL = {"assist": ("Assistant IA", "AI assistant"), "guide": ("Visite guid
               "impact": ("Impact & processus", "Impact & process"),
               "market": ("Marché & benchmarks", "Market & benchmarks"), "perf": ("Performance du modèle", "Model performance"),
               "journal": ("Journal & traçabilité", "Audit log"), "pbi": ("Tableau de bord Power BI", "Power BI dashboard"),
-              "onboard": ("Nouvelle source de données", "New data source")}
+              "integ": ("Intégration bancaire", "Bank integration"), "onboard": ("Nouvelle source de données", "New data source")}
 PAGE_ICON = {"assist": ":material/auto_awesome:", "guide": ":material/flag:", "queue": ":material/notifications_active:", "tx": ":material/manage_search:",
              "cust": ":material/person:", "context": ":material/flight_takeoff:", "case": ":material/folder_open:", "steer": ":material/query_stats:", "deep": ":material/troubleshoot:", "proces": ":material/gavel:", "replay": ":material/movie:",
              "contre": ":material/alt_route:", "galaxy": ":material/hub:", "impact": ":material/insights:", "market": ":material/public:",
              "perf": ":material/monitoring:", "pbi": ":material/dashboard:", "journal": ":material/fact_check:",
-             "onboard": ":material/upload_file:"}
+             "integ": ":material/account_balance:", "onboard": ":material/upload_file:"}
 NAV_GROUPS = [(("Assistant", "Assistant"), ["assist"]),
               (("Analyste", "Analyst"), ["queue", "tx", "case", "cust", "context"]),
               (("Enquête IA", "AI investigation"), ["deep", "proces", "replay", "contre", "galaxy"]),
               (("Pilotage", "Steering"), ["steer", "impact", "market", "perf", "pbi", "journal"]),
-              (("Données", "Data"), ["onboard"]),
+              (("Données", "Data"), ["integ", "onboard"]),
               (("Démo (optionnel)", "Demo (optional)"), ["guide"])]
 DEMO_LABEL = {"obvious_fraud": ("Fraude évidente", "Obvious fraud"), "subtle_fraud": ("Fraude subtile", "Subtle fraud"),
               "avoided_false_positive": ("Faux positif évité", "Avoided false positive")}
@@ -912,7 +913,7 @@ nazar.fab(ctx)
  "galaxy": lambda: studio.page_galaxy(ctx), "impact": lambda: studio.page_impact(ctx),
  "market": lambda: market.page_market(ctx, src.mode), "perf": page_performance,
  "journal": page_journal, "pbi": page_powerbi,
- "onboard": lambda: onboarding.page_onboarding(ctx, src.mode)}[page]()
+ "integ": lambda: integpage.page_integration(ctx), "onboard": lambda: onboarding.page_onboarding(ctx, src.mode)}[page]()
 ui.footer(L("Hyson Detector · données 100 % synthétiques · Microsoft Fabric (Lakehouse lh_fraud) · Azure OpenAI · "
             "le modèle score, l'IA explique, l'analyste décide",
             "Hyson Detector · 100% synthetic data · Microsoft Fabric (Lakehouse lh_fraud) · Azure OpenAI · "

@@ -330,6 +330,20 @@ def _is_reasoning():
     return os.getenv("AZURE_OPENAI_DEPLOYMENT", "").lower().startswith(("gpt-5", "o1", "o3", "o4"))
 
 
+def complete_json(prompt, tag="[json]", max_tokens=2500):
+    """One JSON-mode completion (counted in the hourly cap and the usage log). Returns (text, total_tokens)."""
+    client = _client()
+    kw = dict(model=os.environ["AZURE_OPENAI_DEPLOYMENT"], messages=[{"role": "user", "content": prompt}],
+              response_format={"type": "json_object"})
+    resp = (client.chat.completions.create(max_completion_tokens=max_tokens, reasoning_effort="low", **kw) if _is_reasoning()
+            else client.chat.completions.create(max_tokens=min(max_tokens, 800), temperature=0, **kw))
+    used = getattr(resp, "usage", None)
+    total = getattr(used, "total_tokens", 0)
+    _log({"ts": datetime.now(), "question": tag, "intent": "integration", "mode": "Azure OpenAI", "cached": False, "tools": [],
+          "tokens": {"prompt": getattr(used, "prompt_tokens", 0), "completion": getattr(used, "completion_tokens", 0), "total": total}})
+    return resp.choices[0].message.content, total
+
+
 def _stream_round(client, messages, on_token):
     """One streamed completion. Returns (content, tool_calls, usage)."""
     kwargs = dict(model=os.environ["AZURE_OPENAI_DEPLOYMENT"], messages=messages, tools=tools.TOOL_SCHEMAS,

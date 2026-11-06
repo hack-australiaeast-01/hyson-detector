@@ -1,0 +1,81 @@
+clientRef,birthYear,tier,homeCity,kycRating,email,gender
+C000105,1990,Particulier,Nabeul,Faible,masked@c000105.example,n/a
+C000149,1987,Premium,Sfax,Faible,masked@c000149.example,n/a
+C000179,2005,Etudiant,Ben Arous,Faible,masked@c000179.example,n/a
+C000216,1970,Particulier,Bizerte,Faible,masked@c000216.example,n/a
+C000250,1984,Particulier,Tunis,Faible,masked@c000250.example,n/a
+C000317,1982,Particulier,Ben Arous,Faible,masked@c000317.example,n/a
+C000324,1990,Particulier,Tunis,Faible,masked@c000324.example,n/a
+C000346,1996,Professionnel,Manouba,Faible,masked@c000346.example,n/a
+C000363,1981,Particulier,Ariana,Faible,masked@c000363.example,n/a
+C000414,1978,Particulier,Mahdia,Faible,masked@c000414.example,n/a
+C000578,1967,Premium,Siliana,Moyen,masked@c000578.example,n/a
+C000678,1992,Particulier,Medenine,Faible,masked@c000678.example,n/a
+C000713,1996,Particulier,Kasserine,Faible,masked@c000713.example,n/a
+C000733,1994,Professionnel,Medenine,Faible,masked@c000733.example,n/a
+C000758,1965,Particulier,Tunis,Faible,masked@c000758.example,n/a
+C000833,1999,Etudiant,Nabeul,Faible,masked@c000833.example,n/a
+C000894,1974,Particulier,Bizerte,Faible,masked@c000894.example,n/a
+C000930,1984,Premium,Gafsa,Faible,masked@c000930.example,n/a
+C000932,1969,Particulier,Tunis,Moyen,masked@c000932.example,n/a
+C000955,1990,Particulier,Kairouan,Faible,masked@c000955.example,n/a
+C000994,1972,Particulier,Ariana,Faible,masked@c000994.example,n/a
+C001053,2006,Etudiant,Medenine,Faible,masked@c001053.example,n/a
+C001099,1996,Particulier,Sousse,Faible,masked@c001099.example,n/a
+C001114,1982,Particulier,Ben Arous,Faible,masked@c001114.example,n/a
+C001146,2001,Particulier,Kasserine,Faible,masked@c001146.example,n/a
+C001178,1966,Premium,Medenine,Moyen,masked@c001178.example,n/a
+C001283,1975,Particulier,Sfax,Faible,masked@c001283.example,n/a
+C001349,1968,Particulier,Tozeur,Moyen,masked@c001349.example,n/a
+C001362,1988,Particulier,Tunis,Moyen,masked@c001362.example,n/a
+C001405,1960,Retraite,Jendouba,Faible,masked@c001405.example,n/a
+C001411,2002,Particulier,Tunis,Faible,masked@c001411.example,n/a
+C001429,1990,Particulier,Beja,Faible,masked@c001429.example,n/a
+C001500,1973,Professionnel,Gafsa,Faible,masked@c001500.example,n/a
+C001508,1991,Particulier,Tunis,Moyen,masked@c001508.example,n/a
+C001517,1987,Particulier,Monastir,Faible,masked@c001517.example,n/a
+C001523,1998,Professionnel,Ariana,Faible,masked@c001523.example,n/a
+C001534,1956,Retraite,Tunis,Faible,masked@c001534.example,n/a
+C001542,2004,Etudiant,Ben Arous,Faible,masked@c001542.example,n/a
+C001579,1984,Professionnel,Gafsa,Faible,masked@c001579.example,n/a
+C001617,1983,Particulier,Kasserine,Faible,masked@c001617.example,n/a
+C001677,1998,Particulier,Zaghouan,Faible,masked@c001677.example,n/a
+C001733,1964,Premium,Ben Arous,Faible,masked@c001733.example,n/a
+C001750,2001,Particulier,Kef,Faible,masked@c001750.example,n/a
+C001823,1974,Particulier,Kebili,Faible,masked@c001823.example,n/a
+C001829,1949,Retraite,Sfax,Faible,masked@c001829.example,n/a
+C001895,2005,Etudiant,Manouba,Faible,masked@c001895.example,n/a
+C001913,2004,Etudiant,Jendouba,Faible,masked@c001913.example,n/a
+C002039,1988,Professionnel,Nabeul,Faible,masked@c002039.example,n/a
+C002043,1977,Professionnel,Mahdia,Faible,masked@c002043.example,n/a
+C002114,1972,Particulier,Tunis,Faible,masked@c002114.example,n/a
+C002123,1978,Premium,Tunis,Faible,masked@c002123.example,n/a
+C002199,1986,Particulier,Ben Arous,Faible,masked@c002199.example,n/a
+C002208,1981,Professionnel,Sfax,Faible,masked@c002208.example,n/a
+C002251,1994,Particulier,Kairouan,Faible,masked@c002251.example,n/a
+C002317,1983,Particulier,Sousse,Faible,masked@c002317.example,n/a
+C002342,1966,Particulier,Sfax,Faible,masked@c002342.example,n/a
+C002373,1999,Professionnel,Tunis,Moyen,masked@c002373.example,n/a
+C002421,1958,Retraite,Gafsa,Moyen,masked@c002421.example,n/a
+C002444,1966,Particulier,Nabeul,Faible,masked@c002444.example,n/a
+C002465,1983,Particulier,Zaghouan,Faible,masked@c002465.example,n/a
+C002474,2001,Particulier,Tozeur,Faible,masked@c002474.example,n/a
+C002598,1990,Particulier,Kairouan,Moyen,masked@c002598.example,n/a
+C002640,1969,Particulier,Ben Arous,Faible,masked@c002640.example,n/a
+C002693,1984,Premium,Tunis,Faible,masked@c002693.example,n/a
+C002728,1987,Particulier,Ben Arous,Faible,masked@c002728.example,n/a
+C002738,1971,Particulier,Sousse,Eleve,masked@c002738.example,n/a
+C002763,1987,Particulier,Sousse,Faible,masked@c002763.example,n/a
+C002770,1985,Particulier,Jendouba,Faible,masked@c002770.example,n/a
+C002790,1990,Particulier,Sfax,Faible,masked@c002790.example,n/a
+C002845,1952,Retraite,Manouba,Faible,masked@c002845.example,n/a
+C002912,2002,Particulier,Tunis,Faible,masked@c002912.example,n/a
+C002963,1975,Particulier,Sidi Bouzid,Faible,masked@c002963.example,n/a
+C003005,1965,Retraite,Kairouan,Faible,masked@c003005.example,n/a
+C003045,1972,Particulier,Sfax,Faible,masked@c003045.example,n/a
+C003107,1978,Particulier,Sfax,Faible,masked@c003107.example,n/a
+C003263,1970,Particulier,Tunis,Faible,masked@c003263.example,n/a
+C003276,1969,Professionnel,Siliana,Faible,masked@c003276.example,n/a
+C003356,2006,Etudiant,Sousse,Faible,masked@c003356.example,n/a
+C003365,2008,Etudiant,Tunis,Faible,masked@c003365.example,n/a
+C003375,1945,Retraite,Siliana,Faible,masked@c003375.example,n/a

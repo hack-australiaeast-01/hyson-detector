@@ -54,3 +54,7 @@ app/data/feat_ctx_model_valid.parquet
 app/data/cases.jsonl
 app/data/investigations.json
 fabric/backups/
+
+# universal integration: per-bank workspaces (runtime, contain the banks' data)
+app/data/tenants/
+
