@@ -1,0 +1,92 @@
+{
+ "properties": {
+  "description": "Hyson Detector retraining: Bronze->Silver/features (01) -> scoring + explanations (02) -> Power BI model/report (03e) and robustness/MLflow (04) in parallel. Not scheduled: re-running 01/02 re-scores and changes the demo IDs; run after the pitch / for retraining.",
+  "activities": [
+   {
+    "name": "01_silver_features",
+    "type": "TridentNotebook",
+    "dependsOn": [],
+    "policy": {
+     "timeout": "0.03:00:00",
+     "retry": 1,
+     "retryIntervalInSeconds": 120,
+     "secureOutput": false,
+     "secureInput": false
+    },
+    "typeProperties": {
+     "notebookId": "4b2e773b-c4da-49ad-a6fd-c96529a9cec9",
+     "workspaceId": "8d6c2b96-7b50-4b1a-87b1-e8f872903613"
+    }
+   },
+   {
+    "name": "02_score_explain",
+    "type": "TridentNotebook",
+    "dependsOn": [
+     {
+      "activity": "01_silver_features",
+      "dependencyConditions": [
+       "Succeeded"
+      ]
+     }
+    ],
+    "policy": {
+     "timeout": "0.03:00:00",
+     "retry": 1,
+     "retryIntervalInSeconds": 120,
+     "secureOutput": false,
+     "secureInput": false
+    },
+    "typeProperties": {
+     "notebookId": "2e53771d-4fda-43b7-ac0e-c6ec27c68c04",
+     "workspaceId": "8d6c2b96-7b50-4b1a-87b1-e8f872903613"
+    }
+   },
+   {
+    "name": "03e_powerbi_dashboard",
+    "type": "TridentNotebook",
+    "dependsOn": [
+     {
+      "activity": "02_score_explain",
+      "dependencyConditions": [
+       "Succeeded"
+      ]
+     }
+    ],
+    "policy": {
+     "timeout": "0.03:00:00",
+     "retry": 1,
+     "retryIntervalInSeconds": 120,
+     "secureOutput": false,
+     "secureInput": false
+    },
+    "typeProperties": {
+     "notebookId": "9cb0f161-552d-4f3a-a551-1b4139812b06",
+     "workspaceId": "8d6c2b96-7b50-4b1a-87b1-e8f872903613"
+    }
+   },
+   {
+    "name": "04_robustness",
+    "type": "TridentNotebook",
+    "dependsOn": [
+     {
+      "activity": "02_score_explain",
+      "dependencyConditions": [
+       "Succeeded"
+      ]
+     }
+    ],
+    "policy": {
+     "timeout": "0.03:00:00",
+     "retry": 1,
+     "retryIntervalInSeconds": 120,
+     "secureOutput": false,
+     "secureInput": false
+    },
+    "typeProperties": {
+     "notebookId": "fd4288a1-8585-42c8-b5da-31233c52e2b1",
+     "workspaceId": "8d6c2b96-7b50-4b1a-87b1-e8f872903613"
+    }
+   }
+  ]
+ }
+}

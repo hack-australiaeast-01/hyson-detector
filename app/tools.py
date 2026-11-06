@@ -420,21 +420,32 @@ def get_kpis():
     else:
         budget = int(m["valid_rows"] * 0.01)
         model_tp = round(m["model_top1pct_precision"] * budget)
+    leg_false, mod_false = legacy_alerts - legacy_tp, budget - model_tp
     return {"periode_validation": "juin → juillet 2026 (hors échantillon)",
             "moteur_regles_actuel": {"alertes": legacy_alerts, "fraudes_detectees": legacy_tp,
                                      "precision": legacy_tp / max(legacy_alerts, 1),
                                      "rappel": legacy_tp / m["valid_frauds"],
-                                     "fausses_alertes": legacy_alerts - legacy_tp},
+                                     "fausses_alertes": leg_false},
             "modele_meme_volume": {"alertes": int(m["legacy_alerts"]), "fraudes_detectees": int(m["frauds_caught_model_same_budget"]),
                                    "precision": m["model_same_budget_as_legacy_precision"],
                                    "rappel": m["model_same_budget_as_legacy_recall"]},
             "modele_top_1pct": {"alertes": budget, "fraudes_detectees": model_tp, "precision": model_tp / budget,
-                                "rappel": model_tp / m["valid_frauds"], "fausses_alertes": budget - model_tp},
+                                "rappel": model_tp / m["valid_frauds"], "fausses_alertes": mod_false},
+            # differences pre-computed in plain words so the LLM cites them (no arithmetic, no field names to copy)
+            "comparaison_top_1pct_vs_moteur": (
+                f"{_nb(leg_false - mod_false)} fausses alertes évitées ({_nb(leg_false)} → {_nb(mod_false)}, "
+                f"soit −{1 - mod_false / max(leg_false, 1):.1%}) ; {_nb(model_tp - legacy_tp)} fraudes détectées en plus "
+                f"({_nb(legacy_tp)} → {_nb(model_tp)}, ×{model_tp / max(legacy_tp, 1):.1f}) ; "
+                f"{_nb(legacy_alerts - budget)} alertes de moins ({_nb(legacy_alerts)} → {_nb(budget)})"),
             "pr_auc_modele": m["pr_auc_model"], "fraudes_validation": int(m["valid_frauds"]),
             "rappel_par_typologie": [_row(x, ["fraud_scenario", "frauds", "recall_model", "recall_legacy"]) for _, x in rt.iterrows()]}
 
 
 DECISION_COLS = ["decided_at", "transaction_id", "decision", "confidence", "comment", "analyst", "source", "duration_s"]
+
+
+def _nb(x):
+    return f"{int(x):,}".replace(",", " ")
 
 
 def record_decision(transaction_id, decision, confidence="moyenne", comment="", analyst="analyste", source="copilote",

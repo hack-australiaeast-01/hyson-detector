@@ -179,6 +179,13 @@ External public figures are allowed if cited (§16 rule 1). Each one is shown in
 - Submission file `Files/submission/submission_csv` (transaction_id, fraud_score, is_alert), one row per test transaction.
 - Alerts: valid 1,779 (533 ELEVE / 1,246 MOYEN), test 1,876 (562 ELEVE / 1,314 MOYEN).
 
+### 4.5 Robustness and governance (notebook `04_robustness`, Fabric)
+- **Rolling backtest** (same features, sampling and settings as production; re-trained 4 times on the past only; 2-month tests Dec–Jan, Feb–Mar, Apr–May, Jun–Jul): top-1 % recall **69.4 % ± 2.1 pts** (worst 66.7 %), precision 39.1 % ± 3.9, PR-AUC 0.622 ± 0.036, fraud value caught 72.5 %. Current rules on the same periods: 12.6 % recall / 3.7 % precision.
+- **95 % intervals** (bootstrap of whole days, 1,000 resamples, Jun–Jul): recall 70.9 % [68.3–73.0], precision 40.4 % [34.9–45.0], PR-AUC 0.646 [0.610–0.675], recall gain vs rules +59.3 pts [56.2–62.0], false alerts avoided 2,160 [1,971–2,335].
+- **MLflow**: experiment `hyson-fraud-robustness`, registered ML model `hyson-fraud-lightgbm` v1 (feature list + model card); it reproduces the production scores exactly (rank correlation 1.0, same top 1 %).
+- **Orchestration**: data pipeline `pl_hyson_retrain` (01 → 02 → 03e ∥ 04), deliberately not scheduled; library versions pinned in `fabric/environment.yml`.
+- **Copilot evaluation**: `app/eval_copilot.py`, 14 golden questions (§9.7 + unknown ID, off-topic, prompt injection), 14/14 pass, 99.3 % of the numbers cited found in the tool outputs (`docs/COPILOT_EVAL.md`).
+
 ---
 
 ## 5. Explanation and copilot (25 %)
@@ -405,6 +412,9 @@ Streamlit app ── tools.py (9 tools, JSON) ── copilot.py ── Azure Ope
 | Why 1 %? | The brief's ~1,000 alerts / 2 months = 1 % of its 101,730 test rows; same 1 % on our 187,628 rows = 1,876. At ~1,000 strict capacity: top 0.5 % (≈ 900 alerts, 58 % recall, 66 % precision) |
 | "Everyone in your table looks suspicious, all at 100 %" | The queue only shows the top 1 % (1,876 of 187,628 operations: 99 % never reach an analyst). An alert is "to check", not "fraud": the **Fraudes mesurées** column gives the share of real frauds measured in validation for that score (0.70 ≈ 12 %, 0.97 ≈ 88 %, ≥ 0.99 = 100 %); the score is a ranking, not a probability. Expected ≈ 649 real frauds among 1,876 alerts: 562 to block (87 % measured), 1,314 to check, mostly legitimate customers to clear fast |
 | Why LightGBM? | Best trade-off on tabular data, native categoricals, exact SHAP, ties the blend within a point |
+| "Maybe June–July was a lucky period" / "you picked the model on the period you report" | Rolling backtest on 4 periods, re-trained on the past only each time: top-1 % recall 69.4 % ± 2.1 (worst 66.7 %); 95 % interval on Jun–Jul 70.9 % [68.3–73.0]. The 4 candidate models were within ~1 pt, and the Aug–Sep labels stay with the jury |
+| Is the model industrialised or just a notebook? | Registered in MLflow (`hyson-fraud-lightgbm`, identical to production scores), Fabric pipeline `pl_hyson_retrain` for retraining, pinned environment, drift (PSI) on the Impact page, decisions fed back to OneLake |
+| How do you know the copilot doesn't invent numbers? | `eval_copilot.py`: 14 golden questions, 99.3 % of the numbers cited are found in the tool outputs; unknown IDs answered "introuvable" with 0 tokens; prompt injections stopped by the Azure OpenAI filter + a clear refusal |
 | Why does the LLM not decide? | Not reproducible and a hallucination risk: the decision follows a documented rule backed by measured precision, and the analyst decides |
 | How do you avoid hallucinations? | Facts come only from tools, the rule is fixed, IDs are never invented, missing information is stated, temperature is low / reasoning effort is low |
 | How much does one question cost? | ~3,300 tokens (≈ 1,400 served by the Azure prompt cache), 1 LLM round, 7–15 s; demo answers cached; every call logged; public demo capped at 60 live calls / hour |

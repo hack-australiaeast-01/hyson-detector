@@ -40,6 +40,18 @@ PR-AUC 0.646 (rules 0.014). The model beats the rules engine on 5 of the 6 fraud
 
 **Score file (§14).** [`submission/submission.csv`](submission/submission.csv): one row per test transaction (187,628), `transaction_id,fraud_score,is_alert`, 1,876 alerts.
 
+### Robustness and governance (notebook `04_robustness`, run in Fabric)
+
+| Proof | Result |
+|---|---|
+| **Rolling backtest**: same features, sampling and LightGBM settings as production, re-trained 4 times on the past only, each tested on the next 2 months (Dec–Jan, Feb–Mar, Apr–May, Jun–Jul) | Top-1 % recall **69.4 % ± 2.1 pts** (worst period 66.7 %), precision 39.1 % ± 3.9, PR-AUC 0.622 ± 0.036, fraud value caught 72.5 %. Current rules on the same periods: 12.6 % recall, 3.7 % precision |
+| **95 % confidence intervals** (bootstrap of whole days, 1,000 resamples, validation Jun–Jul) | Recall 70.9 % [68.3–73.0] · precision 40.4 % [34.9–45.0] · PR-AUC 0.646 [0.610–0.675] · recall gain vs rules +59.3 pts [56.2–62.0] · false alerts avoided 2,160 [1,971–2,335] |
+| **Model registry** | MLflow experiment `hyson-fraud-robustness`, ML model **`hyson-fraud-lightgbm`** v1 with feature list and model card. It reproduces the production scores exactly (rank correlation 1.0, same top 1 %, max difference 0) |
+| **Orchestration** | Fabric data pipeline **`pl_hyson_retrain`** (01 → 02 → 03e ∥ 04), not scheduled on purpose (re-scoring changes the demo IDs) · library versions pinned in [`fabric/environment.yml`](fabric/environment.yml) — see [`fabric/`](fabric/README.md) |
+| **Copilot evaluation** | [`app/eval_copilot.py`](app/eval_copilot.py): 14 golden questions (brief §9.7 + unknown ID, off-topic, prompt injection), 0-token checks → **14/14 pass, 99.3 % of the numbers cited are found in the tool outputs** ([report](docs/COPILOT_EVAL.md)) |
+
+Shown in the app on **Performance du modèle → Robustesse et gouvernance**.
+
 ## Run the app
 
 ```powershell

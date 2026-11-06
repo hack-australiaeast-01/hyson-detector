@@ -1,0 +1,17 @@
+# Fabric Environment for the Hyson Detector notebooks (01, 02, 03e, 04).
+# Versions = the Fabric runtime that produced gold_scores and the registered model "hyson-fraud-lightgbm"
+# (captured by notebooks/04_robustness.ipynb -> Files/robustness/runtime_versions.json, 2026-11-06).
+# Use: Fabric workspace -> New item -> Environment -> Public libraries -> upload this file -> Publish,
+# then attach it to the notebooks / pipeline "pl_hyson_retrain" so every run uses the same library versions.
+dependencies:
+  - pip:
+      - lightgbm==4.6.0
+      - scikit-learn==1.6.1
+      - mlflow==2.22.0
+      - pandas==2.3.3
+      - numpy==2.4.1
+      - scipy==1.18.0
+      - pyarrow==24.0.0
+      - semantic-link-sempy==0.14.1
+      - semantic-link-labs==0.18.1
+# Runtime Python 3.13.11 (Fabric Runtime). semantic-link-labs is used by 03e (Power BI as code).

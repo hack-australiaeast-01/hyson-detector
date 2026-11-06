@@ -36,8 +36,32 @@ def _q(name, sql, params=()):
 
 
 def reset():
-    for fn in (impact_raw, funnel_raw, drift_raw, compromise_points, exposures, alert_geo):
+    for fn in (impact_raw, funnel_raw, drift_raw, compromise_points, exposures, alert_geo, robustness, model_ci,
+               copilot_eval):
         fn.cache_clear()
+
+
+# ---------------------------------------------------------------- robustness & governance (notebook 04, MLflow)
+@lru_cache(maxsize=None)
+def robustness():
+    """Rolling-origin backtest written by notebooks/04_robustness (4 folds, 2 months each, train = past only)."""
+    return _q("robustness", "SELECT * FROM dbo.gold_model_robustness ORDER BY test_from")
+
+
+@lru_cache(maxsize=None)
+def model_ci():
+    """95 % day-block bootstrap intervals on the production validation scores (notebook 04)."""
+    return _q("model_ci", "SELECT * FROM dbo.gold_model_ci")
+
+
+@lru_cache(maxsize=None)
+def copilot_eval():
+    """Latest golden-question evaluation of the copilot (app/eval_copilot.py)."""
+    p = da.DATA / "copilot_eval.json"
+    if not p.exists():
+        return None
+    import json
+    return json.loads(p.read_text(encoding="utf-8"))
 
 
 # ---------------------------------------------------------------- impact & process (bank KPIs)

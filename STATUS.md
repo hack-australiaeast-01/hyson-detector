@@ -1,5 +1,5 @@
 # Project status — Hyson Detector · AI Banking Copilot for Fraud Detection
-Updated: 2026-11-06 01:00 · ✅ done · 🟡 in progress · ❌ to do · Target level: **Gold ("Or")** (brief §6) · Full work log: §8 · Latest: §13–14
+Updated: 2026-11-06 02:15 · ✅ done · 🟡 in progress · ❌ to do · Target level: **Gold ("Or")** (brief §6) · Full work log: §8 · Latest: §13–15
 
 **Live demo:** https://hyson-detector.streamlit.app · **Repo (jury):** https://github.com/hack-australiaeast-01/hyson-detector · last commit `014cd04`
 
@@ -13,6 +13,7 @@ Updated: 2026-11-06 01:00 · ✅ done · 🟡 in progress · ❌ to do · Target
 | 5 | NB 02: rules + HGB / LightGBM / LambdaRank / blend, champion chosen on valid | ✅ | Champion **LightGBM**: the same model scores and explains (SHAP) |
 | 6 | Gold tables + submission CSV (§14) | ✅ | gold_scores, gold_alert_queue, gold_alert_explanations, gold_model_metrics/leaderboard/importance/recall_by_type, Files/submission/submission_csv · copy in the repo: `submission/submission.csv` (187,628 rows, 1,876 alerts) |
 | 7 | App ↔ Fabric | ✅ | **Live** via SQL analytics endpoint (Entra token): Gold tables, full history with lat/long, 781k digital events, related cases across the whole bank; decisions written to OneLake `Files/app_feedback`; parquet fallback |
+| 7a | NB 04 robustness + MLflow + pipeline | ✅ | Rolling backtest 4 folds: top-1 % recall **69.4 % ± 2.1** (worst 66.7 %); 95 % CI Jun–Jul recall 70.9 % [68.3–73.0], precision 40.4 % [34.9–45.0]; ML model `hyson-fraud-lightgbm` v1 = production scores (corr 1.0); pipeline `pl_hyson_retrain` (not scheduled); `fabric/environment.yml` (§15) |
 
 ## 2. Results (validation Jun–Jul 2026, out-of-time, final)
 | | Alerts | Frauds caught | Recall | Precision |
@@ -368,3 +369,28 @@ Also checked clean: no leakage (past-only windows, labels excluded, test labels 
 - **Tested:** sample → 12/12 columns mapped, 100 % valid, PSI 0.10, verdict Prêt, approval writes contract + log (test artefacts deleted afterwards); a broken file (no channel, unknown codes) → Bloqué, approval disabled. AppTest FR + EN, no exception.
 
 **Restart the app** (Ctrl+C, `streamlit run app.py`): new modules are only loaded at start. Onboarding outputs (`data/staging/`, `data/onboarding_log.csv`) are git-ignored.
+
+## 15. Robustness, MLflow, pipeline and copilot evaluation (2026-11-06 01:35 → 02:15)
+
+Goal: prove the result is not a lucky period and that the solution is industrialisable, **without touching the frozen pipeline** (no re-run of 01/02, demo IDs unchanged).
+
+| Item | What | Result |
+|---|---|---|
+| Notebook **04_robustness** (Fabric job, 10 min, Completed) | Same features, sample (all frauds + 10 % legit, seed 42), category dictionaries and LightGBM settings as notebook 02; re-trained 4 times on the past only; tests of 2 months: Dec–Jan, Feb–Mar, Apr–May, Jun–Jul | Top-1 % recall 66.7 / 68.8 / 71.2 / 70.9 % → **69.4 % ± 2.1**; precision 39.1 % ± 3.9; PR-AUC 0.622 ± 0.036; fraud value caught 72.5 %; rules 12.6 % / 3.7 % on the same periods |
+| Confidence intervals | Day-block bootstrap (1,000 resamples of whole days) on the production validation scores | Recall 70.9 % [68.3–73.0] · precision 40.4 % [34.9–45.0] · PR-AUC 0.646 [0.610–0.675] · recall gain +59.3 pts [56.2–62.0] · false alerts avoided 2,160 [1,971–2,335] |
+| Agreement check | Fold-4 model vs `gold_scores` (valid) | Rank correlation **1.0**, same top 1 %, max difference **0** → the registered model *is* the production model |
+| MLflow | Experiment `hyson-fraud-robustness` (1 run per fold + `production-lightgbm`), registered ML model **`hyson-fraud-lightgbm`** v1 with `features.json` and `model_card.md` | Visible in the workspace (MLModel item) |
+| Tables | `gold_model_robustness`, `gold_model_robustness_types`, `gold_model_ci`; `Files/robustness/summary.json`, `runtime_versions.json` | App snapshots `feat_robustness.parquet`, `feat_model_ci.parquet` |
+| Data pipeline | **`pl_hyson_retrain`**: 01 → 02 → (03e ∥ 04), retry 1; definition in `fabric/pl_hyson_retrain.json` | Created, **0 runs, not scheduled** (re-scoring changes demo IDs) |
+| Environment | `fabric/environment.yml`: versions of the runtime that produced the scores (Python 3.13.11, LightGBM 4.6.0, scikit-learn 1.6.1, MLflow 2.22.0…) | To attach when an Environment item is created (not published tonight) |
+| Copilot evaluation | `app/eval_copilot.py`: 14 golden questions (3 demo cases FR, EN, "pas une fraude", "juste avant", résumé, a random Aug–Sep alert, yesterday's top 10, KPI, person search, unknown ID, off-topic, prompt injection); 0-token checks: decision = system recommendation, key facts, ≥ 90 % numbers found in tool outputs, 5 sections, English-only, refusals | **14/14 pass, 99.3 % of the cited numbers grounded** → `docs/COPILOT_EVAL.md`, `app/data/copilot_eval.json` |
+| App | "Performance du modèle" → new section **Robustesse et gouvernance** (4 KPIs, per-period table, CI table, copilot evaluation line, method) | AppTest FR + EN, no exception |
+
+**Copilot fixes found by the evaluation:**
+- Unknown ID typed in the question (`TX99999999`) produced a 5-section "analysis" ending with ESCALADER → now a **0-token guardrail answer** "introuvable … ni analyse ni décision".
+- Prompt-injection question was blocked by the Azure OpenAI content filter but shown as "Azure OpenAI indisponible" → now a **clear refusal** (mode "garde-fou (filtre Azure OpenAI)", logged, not cached).
+- KPI answer did arithmetic itself (2,160 = 3,221 − 1,061; 67.1 %) → `get_kpis` now returns `comparaison_top_1pct_vs_moteur` (false alerts avoided, reduction, extra frauds, fewer alerts, ×6.1) so every number is cited from a tool.
+
+Also: `.env.example` documents every setting the app reads (`COPILOT_HOURLY_CAP`, `COPILOT_OFFLINE`, `COPILOT_TIMEOUT`, `COPILOT_REASONING`, `DEEP_REASONING`, `ODBC_DRIVER`).
+
+**Pitch line (15 s):** "We froze the model and invested in proof: four periods, ±2 points; confidence intervals; the exact production model registered in MLflow; a retraining pipeline in Fabric; and a copilot evaluated on 14 reference questions where 99 % of the numbers it cites come from the data."

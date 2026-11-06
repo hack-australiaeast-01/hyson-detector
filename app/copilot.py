@@ -327,9 +327,12 @@ def ask(question, context_tx=None, history=None, lang="fr", on_token=None, on_st
     """
     lang = "en" if lang == "en" else "fr"
     question = question.strip()
+    typed_tx = None
     if m := TX_ID.search(question):        # an ID typed in the question wins over the transaction open on screen
-        context_tx = m.group(0).upper()
+        context_tx = typed_tx = m.group(0).upper()
     intent = detect_intent(question, context_tx)
+    if typed_tx and intent not in ("kpi", "queue") and tools._tx_row(typed_tx) is None:
+        return _not_found_answer(question, typed_tx, lang, intent, on_token)
     key = hashlib.sha256(f"{CACHE_VERSION}|{lang}|{context_tx}|{question.lower()}".encode()).hexdigest()
     # cached Azure answers are pre-computed LLM output: serve them even without a key (hosted demo), unless forced offline
     if key in _cache and (configured() or os.getenv("COPILOT_OFFLINE", "0") != "1" or not _cache[key]["mode"].startswith("Azure")):
@@ -347,13 +350,19 @@ def ask(question, context_tx=None, history=None, lang="fr", on_token=None, on_st
             out = _ask_llm(question, context_tx, history or [], lang, intent,
                            lambda t: (streamed.append(t), on_token and on_token(t)), on_step)
         except Exception as exc:
-            out = _ask_offline(question, context_tx)
-            note = (f"⚠️ Azure OpenAI indisponible ({type(exc).__name__}) — réponse hors-ligne." if lang == "fr"
-                    else f"⚠️ Azure OpenAI unavailable ({type(exc).__name__}) — offline answer (French templates).")
-            out["answer"] = f"{note}\n\n{out['answer']}"
-            out["error"] = str(exc)[:300]
-            if on_token:
-                on_token(("\n\n" if streamed else "") + out["answer"])
+            if _is_content_filter(exc):           # Azure prompt shield blocked a jailbreak / injection attempt
+                out = {"answer": (_REFUSAL_FR if lang == "fr" else _REFUSAL_EN), "tools": [], "rounds": 0,
+                       "tokens": {"prompt": 0, "completion": 0, "total": 0}, "mode": "garde-fou (filtre Azure OpenAI)",
+                       "error": "content_filter"}
+                on_token and on_token(out["answer"])
+            else:
+                out = _ask_offline(question, context_tx)
+                note = (f"⚠️ Azure OpenAI indisponible ({type(exc).__name__}) — réponse hors-ligne." if lang == "fr"
+                        else f"⚠️ Azure OpenAI unavailable ({type(exc).__name__}) — offline answer (French templates).")
+                out["answer"] = f"{note}\n\n{out['answer']}"
+                out["error"] = str(exc)[:300]
+                if on_token:
+                    on_token(("\n\n" if streamed else "") + out["answer"])
     elif intent in ("person", "person_id"):
         out = _ask_person_offline(question, intent, lang)
         for t in out["tools"]:
@@ -373,6 +382,35 @@ def ask(question, context_tx=None, history=None, lang="fr", on_token=None, on_st
     _log({"ts": datetime.now(), "question": question, "context_tx": context_tx, "lang": lang, "intent": intent,
           "mode": out["mode"], "cached": False, "tools": out["tools"], "tokens": out["tokens"], "rounds": out.get("rounds"),
           "latency_s": out["latency_s"], "answer": out["answer"], "error": out.get("error")})
+    return out
+
+
+_REFUSAL_FR = ("Je ne peux pas répondre à cette demande : elle a été bloquée par le filtre de sécurité d'Azure OpenAI "
+               "(tentative de contourner mes règles). Je ne traite que les alertes de fraude de cette application, "
+               "sans jamais révéler ma configuration ni mes secrets.")
+_REFUSAL_EN = ("I can't answer this request: it was blocked by Azure OpenAI's safety filter (an attempt to bypass my rules). "
+               "I only handle the fraud alerts of this application and never reveal my configuration or secrets.")
+
+
+def _is_content_filter(exc):
+    s = str(exc).lower()
+    return "content_filter" in s or "content management policy" in s or "jailbreak" in s
+
+
+def _not_found_answer(question, tid, lang, intent, on_token):
+    """Unknown transaction ID typed by the analyst: 0-token answer, no invented data, no recommendation."""
+    src = tools.da.source().describe()
+    answer = (f"Transaction **{tid}** introuvable ({src}). Je ne peux donc ni l'analyser ni proposer de décision. "
+              "Vérifiez l'identifiant (format TX + 8 chiffres) ou ouvrez l'alerte depuis la file d'alertes."
+              if lang == "fr" else
+              f"Transaction **{tid}** not found ({src}), so I can neither analyse it nor suggest a decision. "
+              "Check the ID (TX + 8 digits) or open the alert from the alert queue.")
+    on_token and on_token(answer)
+    out = {"answer": answer, "tools": [{"name": "get_transaction", "args": json.dumps({"transaction_id": tid})}],
+           "tokens": {"prompt": 0, "completion": 0, "total": 0}, "mode": "garde-fou (identifiant inconnu)", "rounds": 0,
+           "intent": intent, "latency_s": 0.0, "cached": False}
+    _log({"ts": datetime.now(), "question": question, "context_tx": tid, "lang": lang, "intent": intent, "mode": out["mode"],
+          "cached": False, "tools": out["tools"], "tokens": out["tokens"], "answer": answer})
     return out
 
 

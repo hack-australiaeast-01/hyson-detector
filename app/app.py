@@ -619,6 +619,75 @@ def page_performance():
                  "Le moteur actuel reste meilleur sur CARTE_CLONEE_ETRANGER : sa règle est conservée en complément.",
                  f"Model PR-AUC: {k['pr_auc_modele']} · {k['fraudes_validation']} frauds in validation · "
                  "The current engine stays better on cards cloned abroad: its rule is kept as a complement."))
+    page_robustness()
+
+
+def page_robustness():
+    """Proof that the result is not a lucky period: rolling backtest, confidence intervals, registry, copilot evaluation."""
+    rob, ci, ev = fx.robustness(), fx.model_ci(), fx.copilot_eval()
+    if rob is None and ci is None and ev is None:
+        return
+    ui.section(L("Robustesse et gouvernance du modèle", "Model robustness and governance"))
+    if rob is not None and len(rob):
+        r = rob.top1_recall
+        c = st.columns(4)
+        c[0].metric(L("Rappel top 1 % · 4 périodes", "Top-1% recall · 4 periods"), f"{r.mean():.1%}",
+                    f"± {r.std(ddof=1) * 100:.1f} pts", delta_color="off",
+                    help=L("Moyenne ± écart-type sur 4 tests de 2 mois, modèle ré-entraîné à chaque fois sur le passé uniquement.",
+                           "Mean ± std over 4 two-month tests, model re-trained each time on the past only."))
+        c[1].metric(L("Pire période", "Worst period"), f"{r.min():.1%}", L("rappel top 1 %", "top-1% recall"), delta_color="off")
+        c[2].metric(L("Fraude en valeur (TND) détectée", "Fraud value (TND) caught"), f"{rob.value_recall.mean():.1%}",
+                    L("moyenne des 4 périodes", "mean of 4 periods"), delta_color="off")
+        c[3].metric(L("Règles actuelles · même périodes", "Current rules · same periods"), f"{rob.legacy_recall.mean():.1%}",
+                    L(f"précision {rob.legacy_precision.mean():.1%}", f"precision {rob.legacy_precision.mean():.1%}"), delta_color="off")
+        fold = L("Période de test", "Test period")
+        labels = [f"{pd.Timestamp(a):%m/%Y} → {pd.Timestamp(b):%m/%Y}" + (" · validation" if i == len(rob) - 1 else "")
+                  for i, (a, b) in enumerate(zip(rob.test_from, rob.test_to))]
+        view = rob.assign(**{fold: labels})[
+            [fold, "train_rows", "test_rows", "test_frauds", "pr_auc", "top1_precision", "top1_recall", "value_recall",
+             "legacy_precision", "legacy_recall"]]
+        pct = lambda lab_: st.column_config.NumberColumn(lab_, format="percent")
+        st.dataframe(view, hide_index=True, width="stretch",
+                     column_config={"train_rows": st.column_config.NumberColumn(L("Lignes d'entraînement", "Training rows")),
+                                    "test_rows": st.column_config.NumberColumn(L("Opérations testées", "Operations tested")),
+                                    "test_frauds": st.column_config.NumberColumn(L("Fraudes", "Frauds")),
+                                    "pr_auc": st.column_config.NumberColumn("PR-AUC", format="%.3f"),
+                                    "top1_precision": pct(L("Précision top 1 %", "Precision top 1%")),
+                                    "top1_recall": pct(L("Rappel top 1 %", "Recall top 1%")),
+                                    "value_recall": pct(L("Fraude en TND détectée", "Fraud TND caught")),
+                                    "legacy_precision": pct(L("Précision règles", "Rules precision")),
+                                    "legacy_recall": pct(L("Rappel règles", "Rules recall"))})
+    if ci is not None and len(ci):
+        name = {"top1_precision": L("Précision top 1 %", "Precision top 1%"), "top1_recall": L("Rappel top 1 %", "Recall top 1%"),
+                "pr_auc": "PR-AUC", "legacy_precision": L("Précision règles actuelles", "Current rules precision"),
+                "legacy_recall": L("Rappel règles actuelles", "Current rules recall"),
+                "recall_gain_points": L("Gain de rappel vs règles", "Recall gain vs rules"),
+                "false_alerts_avoided": L("Fausses alertes évitées", "False alerts avoided")}
+
+        def fmt(m, v):
+            return f"{v:,.0f}".replace(",", " ") if m == "false_alerts_avoided" else (f"{v:.3f}" if m == "pr_auc" else f"{v:.1%}")
+        rows = [{L("Indicateur (validation juin–juillet)", "Metric (validation June–July)"): name.get(x.metric, x.metric),
+                 L("Valeur", "Value"): fmt(x.metric, x.estimate),
+                 L("Intervalle de confiance 95 %", "95% confidence interval"): f"[{fmt(x.metric, x.ci_low)} ; {fmt(x.metric, x.ci_high)}]"}
+                for x in ci.itertuples()]
+        st.dataframe(pd.DataFrame(rows), hide_index=True, width="stretch")
+    if ev:
+        res = ev["results"]
+        nums = sum(r["numbers_checked"] for r in res)
+        faith = sum(r["faithfulness"] * r["numbers_checked"] for r in res) / max(nums, 1)
+        st.caption(L(f"Copilote : {sum(r['passed'] for r in res)}/{len(res)} questions de référence réussies "
+                     f"(§9.7 + garde-fous), {faith:.1%} des chiffres cités retrouvés dans les données des outils "
+                     f"(évaluation du {ev['run'][:10]}, docs/COPILOT_EVAL.md).",
+                     f"Copilot: {sum(r['passed'] for r in res)}/{len(res)} golden questions passed (§9.7 + guardrails), "
+                     f"{faith:.1%} of the numbers cited found in the tools' data (evaluation of {ev['run'][:10]}, docs/COPILOT_EVAL.md)."))
+    st.caption(L("Méthode : backtest glissant (notebook Fabric 04_robustness : mêmes variables, échantillonnage et réglages que la "
+                 "production, ré-entraîné 4 fois sur le passé seulement) · intervalles par bootstrap de journées entières (1 000 tirages) · "
+                 "modèle enregistré dans MLflow (« hyson-fraud-lightgbm », identique aux scores de production : corrélation 1,0) · "
+                 "réentraînement orchestré par le pipeline Fabric « pl_hyson_retrain ».",
+                 "Method: rolling backtest (Fabric notebook 04_robustness: same features, sampling and settings as production, re-trained "
+                 "4 times on the past only) · intervals by whole-day bootstrap (1,000 resamples) · model registered in MLflow "
+                 "(\"hyson-fraud-lightgbm\", identical to production scores: correlation 1.0) · retraining orchestrated by the Fabric "
+                 "pipeline \"pl_hyson_retrain\"."))
 
 
 # ---------------------------------------------------------------- 5. journal
