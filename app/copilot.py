@@ -19,6 +19,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 import pandas as pd
 
+import person_search
 import tools
 
 APP_DIR = Path(__file__).parent
@@ -108,7 +109,15 @@ _INTENTS = [   # first match wins; FR + EN keywords
 ]
 
 
+TX_ID = re.compile(r"\bTX\d{6,}\b", re.I)
+CUST_ID = re.compile(r"\bC\d{6}\b", re.I)
+
+
 def detect_intent(question, context_tx):
+    if CUST_ID.search(question) and not TX_ID.search(question):
+        return "person_id"
+    if not TX_ID.search(question) and person_search.is_person_question(question)[0]:
+        return "person"
     q = question.lower()
     for name, pattern in _INTENTS:
         if re.search(pattern, q):
@@ -147,6 +156,17 @@ def _prefetch(intent, context_tx, step, question=""):
 
     if intent == "kpi":
         call("get_kpis")
+        return out
+    if intent == "person_id":
+        cid = CUST_ID.search(question).group(0).upper()
+        p = call("get_customer_profile", customer_id=cid)
+        if "erreur" not in p:
+            call("get_customer_history", customer_id=cid, days=30)
+        return out
+    if intent == "person":
+        res = call("find_customers", **person_search.parse(question), limit=5)
+        if res.get("nb_clients_correspondants") == 1:
+            call("get_customer_profile", customer_id=res["clients"][0]["customer_id"])
         return out
     if intent == "queue":
         day = _relative_day(question)
@@ -307,6 +327,8 @@ def ask(question, context_tx=None, history=None, lang="fr", on_token=None, on_st
     """
     lang = "en" if lang == "en" else "fr"
     question = question.strip()
+    if m := TX_ID.search(question):        # an ID typed in the question wins over the transaction open on screen
+        context_tx = m.group(0).upper()
     intent = detect_intent(question, context_tx)
     key = hashlib.sha256(f"{CACHE_VERSION}|{lang}|{context_tx}|{question.lower()}".encode()).hexdigest()
     # cached Azure answers are pre-computed LLM output: serve them even without a key (hosted demo), unless forced offline
@@ -332,6 +354,11 @@ def ask(question, context_tx=None, history=None, lang="fr", on_token=None, on_st
             out["error"] = str(exc)[:300]
             if on_token:
                 on_token(("\n\n" if streamed else "") + out["answer"])
+    elif intent in ("person", "person_id"):
+        out = _ask_person_offline(question, intent, lang)
+        for t in out["tools"]:
+            on_step and on_step(t["name"])
+        on_token and on_token(out["answer"])
     else:
         out = _ask_offline(question, context_tx)
         for t in out["tools"]:
@@ -371,6 +398,10 @@ def _ask_llm(question, context_tx, history, lang, intent, on_token, on_step):
 
     messages = [{"role": "system", "content": SYSTEM_PROMPT}]
     dynamic = [LANG_LINE[lang], f"Type de question détecté : {intent}.", _today_line()]
+    if intent in ("person", "person_id"):
+        dynamic.append("Question de recherche de client : présente les clients trouvés (identifiant, profil, alertes) en liste courte, "
+                       "propose d'ouvrir l'alerte la plus risquée ; ne donne PAS de recommandation BLOQUER/ESCALADER/VALIDER. "
+                       "Si aucun client ne correspond, dis-le et propose d'élargir un critère.")
     if context_tx:
         dynamic.append(f"Transaction ouverte par l'analyste : {context_tx} (à utiliser si la question ne cite pas d'identifiant).")
     if facts:
@@ -417,6 +448,33 @@ def _ask_llm(question, context_tx, history, lang, intent, on_token, on_step):
 # ---------------------------------------------------------------- offline (deterministic) answers
 def _fmt(x):
     return f"{x:,.3f}".replace(",", " ") if isinstance(x, (int, float)) else str(x)
+
+
+def _ask_person_offline(question, intent, lang):
+    """Deterministic person lookup (no LLM): filters from the question -> approved read-only search."""
+    used = []
+
+    def call(name, **kw):
+        used.append({"name": name, "args": json.dumps(kw, ensure_ascii=False)})
+        return tools.run_tool(name, kw)
+
+    if intent == "person_id":
+        cid = CUST_ID.search(question).group(0).upper()
+        p = call("get_customer_profile", customer_id=cid)
+        if "erreur" in p:
+            text = p["erreur"] if lang != "en" else f"Customer {cid} not found."
+        else:
+            pr, hb = p.get("profil", {}), p.get("habitudes", {})
+            text = (f"**{cid}** · {pr.get('age')} {'ans' if lang != 'en' else 'y/o'} · {pr.get('segment')} · {pr.get('occupation')} · "
+                    f"{pr.get('home_city')} · KYC {pr.get('kyc_risk_level')}\n\n"
+                    + (f"- {'Opérations' if lang != 'en' else 'Operations'} : {hb.get('nb_operations')} ({hb.get('periode_observee')})\n"
+                       f"- {'Montant moyen' if lang != 'en' else 'Average amount'} : {_fmt(hb.get('montant_moyen'))} TND\n" if hb else "")
+                    + f"- {'Alertes dans la file' if lang != 'en' else 'Alerts in the queue'} : {p.get('nb_alertes_dans_file', 0)}")
+    else:
+        res = call("find_customers", **person_search.parse(question), limit=5)
+        text = person_search.answer_offline(res, lang)
+    return {"answer": text, "tools": used, "tokens": {"prompt": 0, "completion": 0, "total": 0},
+            "mode": "hors-ligne (règles)" if lang != "en" else "offline (rules)"}
 
 
 def _ask_offline(question, context_tx):

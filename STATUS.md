@@ -1,5 +1,5 @@
 # Project status — Hyson Detector · AI Banking Copilot for Fraud Detection
-Updated: 2026-11-06 01:00 · ✅ done · 🟡 in progress · ❌ to do · Target level: **Gold ("Or")** (brief §6) · Full work log: §8 · Latest: §13
+Updated: 2026-11-06 01:00 · ✅ done · 🟡 in progress · ❌ to do · Target level: **Gold ("Or")** (brief §6) · Full work log: §8 · Latest: §13–14
 
 **Live demo:** https://hyson-detector.streamlit.app · **Repo (jury):** https://github.com/hack-australiaeast-01/hyson-detector · last commit `014cd04`
 
@@ -342,3 +342,23 @@ Also checked clean: no leakage (past-only windows, labels excluded, test labels 
 - gpt-5-mini has no temperature setting (brief §9.8 asks 0–0.2): stability comes from the deterministic recommendation rule + low reasoning effort.
 - Online, "related cases" only see the 1,814 alert customers (answer says "extrait local"); live Fabric sees the whole bank.
 - Batch scoring, not at authorisation time.
+
+## 14. Ask about a person + new data source onboarding (2026-11-06)
+
+### 14.1 "Ask the AI about someone in the tables" (`app/person_search.py`, `copilot.py`, `tools.py`)
+- **Gap found:** the copilot always answered about the transaction open on screen; an ID or a person typed in the question was ignored.
+- **Now:** (1) a `TX…` ID in the question overrides the open transaction; (2) a `C…` customer ID → profile + 30-day history; (3) a description ("le client retraité de Sfax de plus de 70 ans avec des alertes", "doctor customers from Tunis aged between 30 and 40") → approved filters (city, segment, occupation, age, KYC, digital, with alerts) → new read-only tool `find_customers` → short list with alert counts and the riskiest alert. 0 tokens offline; with Azure OpenAI the facts are prefetched and the LLM is told not to issue BLOCK/VALIDATE for a person search.
+- **UI:** "Rechercher un client par description" box on Vue client 360; "Ouvrir" jumps to the customer on their riskiest alert.
+- **Tested:** 7 questions FR/EN offline (no paid call); unknown ID → "introuvable"; AppTest search + open.
+- **Routing guard (review fix):** questions about the open case ("ce client…", "le client a-t-il…", "même commerçant", "other customers", "this transaction") are never treated as a person search — the demo button "D'autres clients sont-ils passés par le même commerçant…" was being routed to a list of *commerçant* customers. 15 routing cases checked (demo buttons, §9.7 questions, descriptions, IDs).
+- **Jury answer — why not free SQL:** security (no injection, only approved tables), reliability (the LLM only states what tools return, §9.1), cost (aggregates, not tables), traceability (every call logged). On a real bank database the same filters run as parameterised queries with personal data masked.
+
+### 14.2 New data source onboarding (`app/onboarding.py`, page "Nouvelle source de données", group Données)
+1. Load a CSV (or the synthetic `app/samples/partner_bank_sample.csv`: English columns, POS/ATM/ECOM codes, EUR + TND, ISO3 countries, dd/mm/yyyy).
+2. Profile (types, empty cells, distinct values; identifiers masked).
+3. Proposed mapping to our schema with a confidence per field (rules: name similarity 60 % + value fit 40 %, 0 tokens), editable; optional "Affiner avec l'IA" = 1 Azure OpenAI call on column names + statistics only (logged with tokens). Codes, countries, dates and currencies are translated (rates editable, indicative).
+4. Accuracy: required-field coverage, % valid translated values, untranslated values listed, row/total reconciliation, drift vs our data (PSI channel mix + amount bands, reference = live Fabric query, snapshot `feat_onboard_ref`), fraud rate if labels exist. Verdict Prêt / À revoir / Bloqué (≥ 95 % valid, PSI < 0.2, all required fields).
+5. **Human approval required** (name + checkbox; disabled when Bloqué) → versioned data contract (`data/staging/<source>_<version>/data_contract.json`) + translated parquet + `data/onboarding_log.csv` (approved / rejected, by whom). Next step (documented, not live): drop to OneLake → bronze → silver via the Fabric pipeline, then rescoring in notebook 02 before production.
+- **Tested:** sample → 12/12 columns mapped, 100 % valid, PSI 0.10, verdict Prêt, approval writes contract + log (test artefacts deleted afterwards); a broken file (no channel, unknown codes) → Bloqué, approval disabled. AppTest FR + EN, no exception.
+
+**Restart the app** (Ctrl+C, `streamlit run app.py`): new modules are only loaded at start. Onboarding outputs (`data/staging/`, `data/onboarding_log.csv`) are git-ignored.

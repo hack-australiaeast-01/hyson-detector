@@ -30,3 +30,8 @@ Hackathon_AI_Banking_Copilot_Brief_*
 # runtime decision logs written outside app/data
 /decisions.csv
 
+
+# onboarding runtime outputs (approved contracts, translated files, approval log)
+app/data/staging/
+app/data/onboarding_log.csv
+

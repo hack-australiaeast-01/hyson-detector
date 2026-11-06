@@ -35,6 +35,8 @@ import data_access as da
 import deepsearch
 import features as fx
 import market
+import onboarding
+import person_search
 import studio
 import tools
 import ui
@@ -52,7 +54,7 @@ def L(fr, en):
 
 
 # internal page ids (stable across languages) -> labels, grouped like a banking platform menu
-PAGES = ["guide", "queue", "tx", "cust", "deep", "proces", "replay", "contre", "galaxy", "impact", "market", "perf", "pbi", "journal"]
+PAGES = ["guide", "queue", "tx", "cust", "deep", "proces", "replay", "contre", "galaxy", "impact", "market", "perf", "pbi", "journal", "onboard"]
 PAGE_LABEL = {"guide": ("Démarrer ici", "Start here"),
               "queue": ("File d'alertes", "Alert queue"), "tx": ("Fiche transaction & copilote", "Transaction & copilot"),
               "cust": ("Vue client 360", "Customer 360"),
@@ -61,15 +63,18 @@ PAGE_LABEL = {"guide": ("Démarrer ici", "Start here"),
               "contre": ("Contre-enquête", "Counter-inquiry"), "galaxy": ("Constellation", "Constellation"),
               "impact": ("Impact & processus", "Impact & process"),
               "market": ("Marché & benchmarks", "Market & benchmarks"), "perf": ("Performance du modèle", "Model performance"),
-              "journal": ("Journal & traçabilité", "Audit log"), "pbi": ("Tableau de bord Power BI", "Power BI dashboard")}
+              "journal": ("Journal & traçabilité", "Audit log"), "pbi": ("Tableau de bord Power BI", "Power BI dashboard"),
+              "onboard": ("Nouvelle source de données", "New data source")}
 PAGE_ICON = {"guide": ":material/flag:", "queue": ":material/notifications_active:", "tx": ":material/manage_search:",
              "cust": ":material/person:", "deep": ":material/troubleshoot:", "proces": ":material/gavel:", "replay": ":material/movie:",
              "contre": ":material/alt_route:", "galaxy": ":material/hub:", "impact": ":material/insights:", "market": ":material/public:",
-             "perf": ":material/monitoring:", "pbi": ":material/dashboard:", "journal": ":material/fact_check:"}
+             "perf": ":material/monitoring:", "pbi": ":material/dashboard:", "journal": ":material/fact_check:",
+             "onboard": ":material/upload_file:"}
 NAV_GROUPS = [(("Bienvenue", "Welcome"), ["guide"]),
               (("Analyste", "Analyst"), ["queue", "tx", "cust"]),
               (("Enquête IA", "AI investigation"), ["deep", "proces", "replay", "contre", "galaxy"]),
-              (("Pilotage", "Steering"), ["impact", "market", "perf", "pbi", "journal"])]
+              (("Pilotage", "Steering"), ["impact", "market", "perf", "pbi", "journal"]),
+              (("Données", "Data"), ["onboard"])]
 DEMO_LABEL = {"obvious_fraud": ("Fraude évidente", "Obvious fraud"), "subtle_fraud": ("Fraude subtile", "Subtle fraud"),
               "avoided_false_positive": ("Faux positif évité", "Avoided false positive")}
 SUGGESTIONS = copilot.SUGGESTIONS          # same strings as warmup.py -> pre-computed answers are cache hits
@@ -459,9 +464,42 @@ def page_transaction():
 
 
 # ---------------------------------------------------------------- 3. customer 360
+def _pick_customer(row):
+    """Open a customer found by description: on their riskiest alert if they have one (habits = before it)."""
+    if row.get("alerte_la_plus_risquee") and row["alerte_la_plus_risquee"] in set(queue.transaction_id):
+        open_tx(row["alerte_la_plus_risquee"], "cust")
+    else:
+        st.session_state.cust_override = row["customer_id"]
+
+
+def customer_search():
+    with st.container(border=True):
+        sq = st.text_input(L("Rechercher un client par description", "Find a customer by description"), key="cust_search",
+                           placeholder=L("ex. client retraité de Sfax de plus de 70 ans avec des alertes",
+                                         "e.g. retired customer in Sfax over 70 with alerts"))
+        if not sq:
+            st.caption(L("Ville, segment, profession, âge, KYC, « avec alertes » · recherche en lecture seule sur filtres autorisés, 0 token.",
+                         "City, segment, occupation, age, KYC, \"with alerts\" · read-only search on approved filters, 0 tokens."))
+            return
+        f = person_search.parse(sq)
+        if not {k for k in f if k not in ("with_alerts", "digital")}:
+            st.warning(L("Aucun critère reconnu (ville, segment, profession, âge, KYC).", "No criterion recognised (city, segment, occupation, age, KYC)."))
+            return
+        res = person_search.find_customers(**f, limit=8)
+        st.caption(L("Critères compris : ", "Understood criteria: ") + ", ".join(f"{k} = {v}" for k, v in f.items()) +
+                   f" · {res.get('nb_clients_correspondants', 0)} " + L("client(s)", "customer(s)"))
+        for row in res.get("clients", []):
+            a, b = st.columns([6, 1])
+            al = (L(f"{row['nb_alertes']} alerte(s)", f"{row['nb_alertes']} alert(s)") if row["nb_alertes"] else L("aucune alerte", "no alert"))
+            a.markdown(f"**{row['customer_id']}** · {row['age']} {L('ans', 'y/o')} · {row['segment']} · {row['occupation']} · "
+                       f"{row['ville']} · KYC {row['kyc']} · {al}")
+            b.button(L("Ouvrir", "Open"), key=f"pick_{row['customer_id']}", on_click=_pick_customer, args=(row,), width="stretch")
+
+
 def page_customer():
     r = queue[queue.transaction_id == st.session_state.tx].iloc[0]
-    cust = st.text_input(L("Client", "Customer"), r.customer_id)
+    customer_search()
+    cust = st.text_input(L("Client", "Customer"), st.session_state.pop("cust_override", r.customer_id))
     # habits = the customer's past at the time of the open alert (same rule as the copilot; never later operations)
     prof = tools.get_customer_profile(cust, before_transaction_id=r.transaction_id if cust == r.customer_id else None)
     if "erreur" in prof:
@@ -688,7 +726,8 @@ studio.tour_hint(ctx, page)
  "deep": lambda: studio.page_deep(ctx), "proces": lambda: studio.page_proces(ctx), "replay": lambda: studio.page_replay(ctx), "contre": lambda: studio.page_contre(ctx),
  "galaxy": lambda: studio.page_galaxy(ctx), "impact": lambda: studio.page_impact(ctx),
  "market": lambda: market.page_market(ctx, src.mode), "perf": page_performance,
- "journal": page_journal, "pbi": page_powerbi}[page]()
+ "journal": page_journal, "pbi": page_powerbi,
+ "onboard": lambda: onboarding.page_onboarding(ctx, src.mode)}[page]()
 ui.footer(L("Hyson Detector · données 100 % synthétiques · Microsoft Fabric (Lakehouse lh_fraud) · Azure OpenAI · "
             "le modèle score, l'IA explique, l'analyste décide",
             "Hyson Detector · 100% synthetic data · Microsoft Fabric (Lakehouse lh_fraud) · Azure OpenAI · "

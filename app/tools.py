@@ -10,6 +10,7 @@ import numpy as np
 import pandas as pd
 
 import data_access as da
+from person_search import find_customers
 
 PHYSICAL = {"TPE", "DAB"}
 DECISIONS = {"BLOQUER", "ESCALADER", "VALIDER"}
@@ -493,6 +494,12 @@ TOOL_SCHEMAS = [
          "hours_before": {"type": "integer"}, "hours_after": {"type": "integer"}}, ["customer_id"]),
     _fn("find_related_cases", "Autres clients/cartes partageant le même commerçant, DAB, appareil ou bénéficiaire.",
         {**_TX, "days": {"type": "integer"}}, ["transaction_id"]),
+    _fn("find_customers", "Recherche de clients par description (ville, segment, profession, âge, KYC, alertes). "
+        "Lecture seule, filtres autorisés ; renvoie une liste courte de profils et leurs alertes.",
+        {"city": {"type": "string"}, "segment": {"type": "string", "enum": ["Etudiant", "Particulier", "Premium", "Professionnel", "Retraite"]},
+         "occupation": {"type": "string"}, "age_min": {"type": "integer"}, "age_max": {"type": "integer"},
+         "kyc": {"type": "string", "enum": ["Faible", "Moyen", "Eleve"]}, "digital": {"type": "boolean"},
+         "with_alerts": {"type": "boolean"}, "limit": {"type": "integer"}}),
     _fn("get_kpis", "Performance du modèle vs moteur de règles actuel (alertes évitées, fraudes détectées, par typologie).", {}),
     _fn("record_decision", "Enregistre la décision de l'analyste. À n'appeler que si l'analyste le demande explicitement.",
         {**_TX, "decision": {"type": "string", "enum": sorted(DECISIONS)},
@@ -502,7 +509,7 @@ TOOL_SCHEMAS = [
 DISPATCH = {"get_alert_queue": get_alert_queue, "get_transaction": get_transaction,
             "get_customer_profile": get_customer_profile, "compare_to_habits": compare_to_habits,
             "get_customer_history": get_customer_history, "get_digital_events": get_digital_events,
-            "find_related_cases": find_related_cases, "get_kpis": get_kpis, "record_decision": record_decision}
+            "find_related_cases": find_related_cases, "get_kpis": get_kpis, "find_customers": find_customers, "record_decision": record_decision}
 
 
 def run_tool(name, arguments):
