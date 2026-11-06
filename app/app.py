@@ -33,7 +33,6 @@ _secrets_to_env()
 import copilot  # noqa: E402  (after the secrets bridge on purpose)
 import data_access as da
 import deepsearch
-import fairness
 import features as fx
 import market
 import onboarding
@@ -719,8 +718,6 @@ def page_robustness():
                  "4 times on the past only) · intervals by whole-day bootstrap (1,000 resamples) · model registered in MLflow "
                  "(\"hyson-fraud-lightgbm\", identical to production scores: correlation 1.0) · retraining orchestrated by the Fabric "
                  "pipeline \"pl_hyson_retrain\"."))
-    fairness.render_fairness(L, src.mode)
-    fairness.render_limits(L)
 
 
 # ---------------------------------------------------------------- 5. journal
