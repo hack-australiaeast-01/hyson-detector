@@ -115,3 +115,35 @@ Results of the run on 2026-11-06 (table `quality.summary` in Fabric): **34 rules
 
 ### Data from another bank (universal integration)
 Problem formats are not fixed silently. They are **flagged for a person to confirm** before activation: dd/mm/yyyy dates, timestamps in milliseconds, amounts in cents, "1 234,500" decimal commas, 3-letter country codes, numeric status codes (0/1), fraud labels given only as a list of reports. An open flag **blocks** approval. Sensitive columns (gender, CVV, names, e-mail) are never mapped and are erased from the raw copy at activation.
+
+---
+
+## What happens when ERROR rows appear in the future
+
+No ERROR row exists in today's data, but the pipeline is built for the day it happens (a new load, another bank, a broken export).
+
+### What is already in place (runs on every load)
+1. **Detection:** every new load goes through the same 36 rules; each failing row is logged in `quality.issues` with the rule, column, value and message.
+2. **Quarantine, not deletion:** a row with an ERROR is marked REJECTED and copied to `quality.quarantine_<table>`. It does **not** reach the star schema, the AI assistant, the reports or the scores. The raw row stays in bronze, so nothing is lost and the fix can be replayed.
+3. **Visibility:** `quality.summary` gives the number and rate of failures per rule for each run, so a sudden jump (e.g. 2 % unknown cards instead of 0 %) is seen immediately.
+4. **Format change detection:** each bronze load is logged in `bronze_ingestion_log` with rows, columns and a **schema fingerprint**; if the bank changes its file format, the fingerprint changes.
+5. **Other banks (universal integration):** the readiness report turns errors into a **gate**: too many duplicate IDs (> 1 %), required fields below 90 % filled, unreadable dates (> 5 %) or broken links between tables (< 90 %) are **blockers** → the gate is red, the bank cannot be validated, approved or activated until the data is fixed.
+6. **Real-time events (webhook):** a transaction missing a required field (ID, date, amount) is refused with a clear error; a duplicate transaction ID is ignored (idempotent) and counted; every call is logged in the bank's audit trail.
+
+### The handling procedure for an ERROR row
+| Step | Who | What |
+|---|---|---|
+| 1. Alert | Data engineer | `quality.summary` shows a rule with failures above 0 (or above its usual rate) |
+| 2. Diagnose | Data engineer | Read the rows in `quality.issues` and `quality.quarantine_<table>`: which rule, which column, which value |
+| 3. Classify the cause | Data engineer + bank | **Source error** (bad export, unknown code, missing customer) → ask the bank to resend; **reference missing** (new merchant / card not yet in the reference tables) → load the reference data, then re-run; **rule too strict** (a new valid code) → update the rule's list of allowed values, document the change |
+| 4. Re-run | Pipeline | Re-running notebook 05 re-checks the quarantined rows; those that now pass go into the facts automatically |
+| 5. Score | Pipeline | Only after the data is clean: notebooks 01 → 02 rescore, so an error never produces a false alert |
+| 6. Trace | Automatic | Every run, failure and status stays in the quality tables; for other banks every step is in the tamper-evident audit trail |
+
+**Principle:** an ERROR row never reaches a score or an analyst; it waits in quarantine until the source is fixed. A WARNING row is used but visible. Nothing is ever deleted or silently corrected.
+
+### Planned next (not built yet)
+- **Automatic alert** (e-mail / Teams) when a rule's failure rate exceeds a threshold, instead of reading `quality.summary`.
+- **Run stop**: if ERROR rows exceed a set share of a load (for example 1 %), stop the retraining pipeline `pl_hyson_retrain` before scoring.
+- **Schema change stop**: compare the schema fingerprint with the previous load and stop on any change.
+- **Quarantine dashboard** in the app for the data team (rule, count, trend, rows to fix).
