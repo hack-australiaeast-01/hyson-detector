@@ -67,27 +67,51 @@
 
 ---
 
-## Problematic cases and how they were handled
+## How the problem rows were handled, step by step
 
-### Caught by the rules (checked in Fabric, run of 2026-11-06)
-Only 2 of the 36 rules found anything; the 34 others found 0 rows (no duplicate, no orphan key, no impossible code, no inconsistent status).
+Results of the run on 2026-11-06 (table `quality.summary` in Fabric): **34 rules found 0 rows**, **2 rules triggered**: T15 (11,717 rows) and T04 (39 rows). No row reached ERROR, so **nothing was quarantined**.
 
-| Rule | Rows | What it really was | How we handled it | Why |
-|---|---|---|---|---|
-| **T15** in-store / ATM operation with no location | 11,717 (0.61 %) | The **city is present**, only the GPS coordinates are missing (in the labelled period: 9,632 card-terminal payments + 1,105 ATM withdrawals) | **Kept** with status WARNING. City-based indicators (new city, country) still work; distance and travel speed stay **empty (missing), never invented**; LightGBM handles missing values natively and learns from them. In the star schema the place is marked "not geolocated" | Rejecting them would delete 11,717 genuine operations; inventing coordinates (e.g. the city centre) would create false travel speeds and false alerts |
-| **T04** extreme amount (> 50,000 TND) | 39 (0.002 %) | **All web or mobile transfers**, 50,558 → 197,718 TND; **none of the labelled ones is a fraud** | **Kept** with status WARNING, not capped, not deleted; visible for review | Large legitimate transfers exist (property, business). Deleting or capping them would teach the model that large = impossible and would hide real exposure |
+### The mechanism (notebook 05), for every rule
+1. Each rule is run on every row. Every failure becomes one line of `quality.issues`: table, record, rule, column, value, message.
+2. Each record gets a status in `quality.row_status`: **REJECTED** if it broke at least one ERROR rule, **WARNING** if it broke only WARNING rules, **OK** otherwise.
+3. **REJECTED** rows are copied to `quality.quarantine_<table>` and kept **out** of the star schema (`dq_status != 'REJECTED'`). Nothing is deleted: the raw row stays in bronze.
+4. **WARNING** rows go **into** the star schema with their status: `fact_transactions.dq_status = 'WARNING'`, so any query or report can filter them or show them.
+5. `quality.summary` gives the count and rate per rule, so we see the impact before using the data.
 
-**Rule of thumb applied:** ERROR → quarantine (the row is unusable); WARNING → keep, flag and let the analyst see it. Nothing is silently fixed or deleted: the raw data stays in bronze, every failure is a row of `quality.issues`, every record has a status in `quality.row_status`.
+### Case 1 — T15: in-store or ATM operation with no GPS coordinates (11,717 rows)
+**What was wrong:** for 9,632 card-terminal payments and 1,105 ATM withdrawals (labelled period), the city was filled but the latitude / longitude were empty.
 
-### Found while building the pipeline (not by the rules)
-| Problem | What happened | How we handled it |
-|---|---|---|
-| **Wrong time split** | The period was computed from the month only, ignoring the year: Aug–Sep **2025** labelled rows were tagged "test" (234 fake test frauds) | Split rebuilt on the full date: train Jan 2025 → May 2026, validation Jun → Jul 2026, test Aug → Sep 2026 |
-| **Data leak** | 3 features (`f_merchant_risk`, `f_device_risk`, `f_beneficiary_risk`) used fraud labels from the future | Removed; a check in notebook 02 stops the run if a label, scenario, report date or gender column becomes a feature |
-| **Test labels** | The test period must stay blind | Labels forced empty on test rows before writing any table (check = 0) |
-| **Infinite values** | Divisions such as distance ÷ time give infinity when two operations share the same second | Turned into missing values before training |
-| **Memory** | 1.9 M rows did not fit in memory for training | All frauds + 10 % of legitimate operations (weight × 10 so the balance stays real); validation and test kept complete |
-| **Dataset ≠ brief** | Bigger than the brief (1.9 M transactions, 3,500 customers) with different dates | Dates measured on the real data before any split; all figures reported on our own validation period |
+**How it was handled, exactly:**
+1. **Kept**, status WARNING; the row is flagged in `quality.issues` (rule T15).
+2. **No coordinates invented.** In notebook 01 the distance and the travel speed use **the last known position of the customer** (`last(latitude, ignorenulls=True)` over the past) and the time of that position:
+   - an operation **without** coordinates gets an **empty** distance and speed (missing, not 0);
+   - the **next** operation that has coordinates is compared with the last real position, not with the empty one, so no fake jump is created.
+3. **City-based features still work:** "first time in this city" and "first time in this country" use the city and country fields, which are filled.
+4. **Speed protected from near-zero time gaps:** the time between two positions is floored at 3 minutes (0.05 h), so two payments in the same minute never produce an absurd speed.
+5. **The model:** LightGBM handles missing values natively; it learns which side of each split the missing values belong to. Infinite values are turned into missing values before training.
+6. **Star schema:** the place is marked `est_localise` (located or not), so the AI assistant and the reports can say when an operation has no location.
 
-### Other banks' data (universal integration)
-Formats that would break a pipeline are detected and **flagged for a human to confirm** before anything goes live: dd/mm/yyyy dates, timestamps in milliseconds, amounts in cents, "1 234,500" decimal commas, 3-letter country codes, numeric status codes (0/1), labels given only as a list of fraud reports. Sensitive columns (gender, CVV, names, e-mail) are never used and are erased at activation.
+**Why:** deleting would lose 11,717 real operations; putting the city centre or 0 would create false "impossible travel" alerts; a missing value keeps the truth (we don't know where it happened).
+
+### Case 2 — T04: amount above 50,000 TND (39 rows)
+**What was wrong:** nothing, in fact. All 39 are web or mobile **transfers** (50,558 → 197,718 TND), and **none of the labelled ones is a fraud**.
+
+**How it was handled, exactly:**
+1. **Kept**, status WARNING, flagged in `quality.issues` (rule T04). **Not capped, not deleted.**
+2. Used by the model **as they are**: the amount features compare each amount with the customer's own habits (ratio, statistical distance, previous maximum), so one very large transfer only stands out for a customer who never makes large transfers.
+3. Visible in the star schema with `dq_status = 'WARNING'`, so they can be reviewed.
+
+**Why:** large legitimate transfers exist (property, business). Capping them would hide the real amount exposed; deleting them would teach the model that large transfers never happen.
+
+### Problems found outside the rules, and the exact fix
+| Problem | Exact fix |
+|---|---|
+| **Wrong time split**: the period was taken from the month only, so Aug–Sep **2025** labelled rows were tagged "test" (234 fake test frauds) | The original `split` column is kept; validation = the 2 months before the last labelled month, computed on the full date → train Jan 2025 → May 2026 (1,542,647 rows), validation Jun → Jul 2026 (177,953), test Aug → Sep 2026 (187,628, labels empty) |
+| **Data leak**: `f_merchant_risk`, `f_device_risk`, `f_beneficiary_risk` were built with fraud labels from the future | Excluded in notebook 02 (`LEAKY` set). An `assert` stops the run if any feature name contains `is_fraud`, `scenario`, `reported` or `gender` |
+| **Test labels** must stay blind | Forced to empty on test rows in Spark **before** any table is written; checked = 0 |
+| **Infinite values** (a distance divided by an almost-zero time) | Floor of 3 minutes on the time gap, then `±inf → missing` before training |
+| **Memory**: 1.9 M rows did not fit for training | Training on all frauds + 10 % of legitimate operations, each legitimate row weighted × 10 so the real balance is kept; validation and test kept **complete** so the reported figures are on the real data |
+| **Dataset ≠ brief** (bigger, other dates) | Date ranges measured on the real tables before choosing the split; all figures reported on our own validation period |
+
+### Data from another bank (universal integration)
+Problem formats are not fixed silently. They are **flagged for a person to confirm** before activation: dd/mm/yyyy dates, timestamps in milliseconds, amounts in cents, "1 234,500" decimal commas, 3-letter country codes, numeric status codes (0/1), fraud labels given only as a list of reports. An open flag **blocks** approval. Sensitive columns (gender, CVV, names, e-mail) are never mapped and are erased from the raw copy at activation.
