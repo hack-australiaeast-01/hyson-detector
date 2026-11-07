@@ -64,3 +64,30 @@
 | E04 | WARNING | Unknown event type or status |
 
 **Total: 36 rules (20 ERROR, 16 WARNING).** They check that every record is complete, unique, valid, points to things that exist (customer, card, merchant) and is consistent with itself (status vs reason, type vs channel, currency vs country, age vs segment).
+
+---
+
+## Problematic cases and how they were handled
+
+### Caught by the rules (checked in Fabric, run of 2026-11-06)
+Only 2 of the 36 rules found anything; the 34 others found 0 rows (no duplicate, no orphan key, no impossible code, no inconsistent status).
+
+| Rule | Rows | What it really was | How we handled it | Why |
+|---|---|---|---|---|
+| **T15** in-store / ATM operation with no location | 11,717 (0.61 %) | The **city is present**, only the GPS coordinates are missing (in the labelled period: 9,632 card-terminal payments + 1,105 ATM withdrawals) | **Kept** with status WARNING. City-based indicators (new city, country) still work; distance and travel speed stay **empty (missing), never invented**; LightGBM handles missing values natively and learns from them. In the star schema the place is marked "not geolocated" | Rejecting them would delete 11,717 genuine operations; inventing coordinates (e.g. the city centre) would create false travel speeds and false alerts |
+| **T04** extreme amount (> 50,000 TND) | 39 (0.002 %) | **All web or mobile transfers**, 50,558 → 197,718 TND; **none of the labelled ones is a fraud** | **Kept** with status WARNING, not capped, not deleted; visible for review | Large legitimate transfers exist (property, business). Deleting or capping them would teach the model that large = impossible and would hide real exposure |
+
+**Rule of thumb applied:** ERROR → quarantine (the row is unusable); WARNING → keep, flag and let the analyst see it. Nothing is silently fixed or deleted: the raw data stays in bronze, every failure is a row of `quality.issues`, every record has a status in `quality.row_status`.
+
+### Found while building the pipeline (not by the rules)
+| Problem | What happened | How we handled it |
+|---|---|---|
+| **Wrong time split** | The period was computed from the month only, ignoring the year: Aug–Sep **2025** labelled rows were tagged "test" (234 fake test frauds) | Split rebuilt on the full date: train Jan 2025 → May 2026, validation Jun → Jul 2026, test Aug → Sep 2026 |
+| **Data leak** | 3 features (`f_merchant_risk`, `f_device_risk`, `f_beneficiary_risk`) used fraud labels from the future | Removed; a check in notebook 02 stops the run if a label, scenario, report date or gender column becomes a feature |
+| **Test labels** | The test period must stay blind | Labels forced empty on test rows before writing any table (check = 0) |
+| **Infinite values** | Divisions such as distance ÷ time give infinity when two operations share the same second | Turned into missing values before training |
+| **Memory** | 1.9 M rows did not fit in memory for training | All frauds + 10 % of legitimate operations (weight × 10 so the balance stays real); validation and test kept complete |
+| **Dataset ≠ brief** | Bigger than the brief (1.9 M transactions, 3,500 customers) with different dates | Dates measured on the real data before any split; all figures reported on our own validation period |
+
+### Other banks' data (universal integration)
+Formats that would break a pipeline are detected and **flagged for a human to confirm** before anything goes live: dd/mm/yyyy dates, timestamps in milliseconds, amounts in cents, "1 234,500" decimal commas, 3-letter country codes, numeric status codes (0/1), labels given only as a list of fraud reports. Sensitive columns (gender, CVV, names, e-mail) are never used and are erased at activation.
