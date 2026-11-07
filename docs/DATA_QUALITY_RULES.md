@@ -7,6 +7,61 @@
 
 **Result:** 0 rows rejected · 11,756 warnings (11,717 in-store payments with no location, T15 · 39 amounts above 50,000 TND, T04).
 
+## The process at a glance
+
+```
+New data from the bank
+        │
+        ▼
+BRONZE: raw file stored untouched + load logged (rows, columns, schema fingerprint)
+        │
+        ▼
+36 RULES run on every row  ──►  each failure logged in quality.issues (rule, column, value)
+        │
+        ▼
+Each row gets a status
+        │
+        ├──► OK ──────────────► used normally
+        │
+        ├──► WARNING ─────────► KEPT and FLAGGED (dq_status = WARNING)
+        │                         │
+        │                         ├─ missing GPS (T15, 11,717) → distance / speed left empty, never invented
+        │                         └─ amount > 50,000 TND (T04, 39) → kept as is, compared with that customer's habits
+        │
+        └──► ERROR ───────────► QUARANTINE (quality.quarantine_…), never deleted
+                                  │   (0 rows today)
+                                  ▼
+                          Alert: quality.summary shows the jump
+                                  │
+                                  ▼
+                          Diagnose: which rule, column, value?
+                                  │
+                                  ├─ bad file from the bank   → bank resends
+                                  ├─ missing reference data   → load it
+                                  └─ rule too strict          → update the rule, document it
+                                  │
+                                  ▼
+                          Re-run → the row passes → leaves quarantine automatically
+        │
+        ▼
+SILVER: clean transactions + 73 features (past only, time split, leak checks)
+        │
+        ▼
+GOLD: LightGBM score → top 1 % = alerts → reasons (SHAP)
+        │
+        ▼
+App: copilot explains → ANALYST DECIDES → decision logged → back to the lakehouse for retraining
+```
+
+**Rule in one line:** OK → used · WARNING → used and flagged · ERROR → quarantined until fixed. Nothing deleted, nothing invented.
+
+**For another bank (universal integration):**
+```
+Upload → discover tables → map columns → readiness check
+        │
+        ├─ too many errors (duplicates > 1 %, required fields < 90 %, unreadable dates > 5 %) → RED gate → blocked
+        └─ clean → validate → named approval → active
+```
 ## Transactions (17)
 | # | Level | Rule |
 |---|---|---|
