@@ -118,7 +118,7 @@ Upload → discover tables → map columns → readiness check
 | E03 | ERROR | Date unreadable or outside the data period |
 | E04 | WARNING | Unknown event type or status |
 
-**Total: 36 rules (20 ERROR, 16 WARNING).** They check that every record is complete, unique, valid, points to things that exist (customer, card, merchant) and is consistent with itself (status vs reason, type vs channel, currency vs country, age vs segment).
+**Total: 36 rules (21 ERROR, 15 WARNING).** They check that every record is complete, unique, valid, points to things that exist (customer, card, merchant) and is consistent with itself (status vs reason, type vs channel, currency vs country, age vs segment).
 
 ---
 
