@@ -534,13 +534,9 @@ def panel(ctx):
     m1, m2 = st.columns(2)
     mode = m1.segmented_control(L("Mode", "Mode"), [L("💬 Chat", "💬 Chat"), L("🎙 Voix", "🎙 Voice")], default=L("💬 Chat", "💬 Chat"),
                                 key=f"nz_mode_{lang}", width="stretch")
-    brain = m2.segmented_control(L("Cerveau", "Brain"), ["🧿 Nazar", "✨ GPT-5 mini"], default="🧿 Nazar", key="nz_brain", width="stretch",
-                                 help=L("Nazar : commandes (0 token) + discussion fraude avec les chiffres de la banque. "
-                                        "GPT-5 mini : discussion libre, sans accès aux données de la banque.",
-                                        "Nazar: commands (0 tokens) + fraud talk with the bank's figures. "
-                                        "GPT-5 mini: free chat, no access to the bank's data."))
+    brain = "🧿 Nazar"            # the general GPT-5 mini brain is switched off: Nazar only does fraud work
     voice = bool(mode) and mode.endswith(("Voix", "Voice"))
-    gpt = bool(brain) and "GPT" in brain
+    gpt = False
     avatar_slot = st.container()                               # filled after the command runs, so it says the newest answer
     cmd = cmd or st.session_state.pop("nz_heard_text", None)   # what the analyst said into the mic
     qc = st.columns(len(QUICK))
